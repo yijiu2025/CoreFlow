@@ -18,8 +18,10 @@
  */
 import { computed, ref, watch } from 'vue';
 import { CircleAlert, Download, FileUp, Upload, X } from 'lucide-vue-next';
-import { importUsers } from '@/api/system';
+import { createUserImportChallenge, importUsers } from '@/api/system';
 import type { UserImportResult, UserImportRow } from '@/api/system';
+import type { StepUpChallenge } from '@/api/types';
+import StepUpField from '@/components/business/StepUpField.vue';
 
 const props = defineProps<{ open: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'done', created: number): void }>();
@@ -77,9 +79,36 @@ const validRows = computed(() => rows.value.filter(row => row.errors.length === 
 const invalidCount = computed(() => rows.value.length - validRows.value.length);
 
 /** 能否提交：有有效行，且没有结构错误（有错先改文件，避免"部分导入"说不清） */
-const canSubmit = computed(
-  () => !submitting.value && validRows.value.length > 0 && invalidCount.value === 0
+const canSubmit = computed(() => !submitting.value && validRows.value.length > 0 && invalidCount.value === 0);
+
+/** 二次验证组件（导入与"删除账号"同级：一次能建 500 个可登录账号） */
+const stepUpRef = ref<InstanceType<typeof StepUpField> | null>(null);
+
+/**
+ * 本批内容的变更指纹（**只用于前端**"换了文件就作废旧凭据"）
+ *
+ * 与后端算法无关 —— 服务端是自己从 rows 派生的，前端这个只需要在内容变化时
+ * 变掉，让 `StepUpField` 重置并重新领凭据。
+ */
+const stepUpKey = computed(() =>
+  validRows.value.map(row => `${row.username}|${row.dept}|${row.roles.join(',')}`).join('\n')
 );
+
+/** 提交给后端的结构化行（签发凭据与执行导入**必须**是同一份） */
+function payloadRows(): UserImportRow[] {
+  return validRows.value.map(row => ({
+    username: row.username,
+    email: row.email || undefined,
+    password: row.password,
+    dept: row.dept || undefined,
+    roles: row.roles
+  }));
+}
+
+/** 领凭据：把当前这批行交给服务端，它会把内容指纹写进挑战记录 */
+function issueImportChallenge(method: 'email' | 'password'): Promise<StepUpChallenge & { matched: number }> {
+  return createUserImportChallenge(payloadRows(), method);
+}
 
 /** 关闭时重置，下一次打开是干净状态 */
 watch(
@@ -92,6 +121,8 @@ watch(
     submitError.value = '';
     result.value = null;
     parsing.value = false;
+    // 关窗即销毁凭据（服务端那份 600s 后自己过期，这里只是别让 UI 留着旧验证码）
+    stepUpRef.value?.reset();
   }
 );
 
@@ -203,7 +234,12 @@ function loadText(text: string, name: string): void {
   const parsed: ParsedRow[] = [];
   body.forEach((cells, index) => {
     // 以 # 开头的是说明/示例行，不参与导入
-    if (String(cells[0] || '').trim().startsWith('#')) return;
+    if (
+      String(cells[0] || '')
+        .trim()
+        .startsWith('#')
+    )
+      return;
     const get = (key: ColumnKey): string => {
       const pos = order.indexOf(key);
       return pos >= 0 ? String(cells[pos] ?? '').trim() : '';
@@ -252,8 +288,8 @@ async function onPick(event: Event): Promise<void> {
 function downloadTemplate(): void {
   const lines = [
     '账号,邮箱,初始密码,部门,角色',
-    '# 说明：账号与初始密码必填（密码至少 8 位）；部门与角色写名称，多个角色用 | 分隔；以 # 开头的行会被忽略',
-    '#zhangsan,zhangsan@example.com,Passw0rd!,技术部,普通用户'
+    '# 说明：账号与初始密码必填（密码至少 8 位）；部门与角色写名称，多个角色用 | 分隔；角色名重名时改填编码（如 posecraft_user）；以 # 开头的行会被忽略',
+    '#zhangsan,zhangsan@example.com,Passw0rd!,技术部,posecraft_user'
   ];
   const blob = new Blob([`\uFEFF${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -267,20 +303,27 @@ function downloadTemplate(): void {
 /** 提交导入 */
 async function submit(): Promise<void> {
   if (!canSubmit.value) return;
+
+  const stepUp = stepUpRef.value?.buildPayload();
+  if (!stepUp) {
+    submitError.value = stepUpRef.value?.hint() ?? '请先完成二次验证';
+    return;
+  }
+
   submitting.value = true;
   submitError.value = '';
   try {
-    const payload: UserImportRow[] = validRows.value.map(row => ({
-      username: row.username,
-      email: row.email || undefined,
-      password: row.password,
-      dept: row.dept || undefined,
-      roles: row.roles
-    }));
-    result.value = await importUsers(payload);
+    result.value = await importUsers(payloadRows(), stepUp);
+    stepUpRef.value?.reset();
     emit('done', result.value.created);
   } catch (err) {
-    submitError.value = err instanceof Error ? err.message : '导入失败';
+    const message = err instanceof Error ? err.message : '导入失败';
+    submitError.value = message;
+    /*
+     * 凭据是一次性的：过期/已被消费时还留着输入框，用户会对着同一堵墙反复点。
+     * 码输错（"密码不正确"/"验证码错误"）则保留输入，让他改一个字符就行。
+     */
+    if (/过期|重新获取|已失效/.test(message)) stepUpRef.value?.reset();
   } finally {
     submitting.value = false;
   }
@@ -323,7 +366,8 @@ async function submit(): Promise<void> {
         <template v-else>
           <p class="form-hint">
             支持 UTF-8 编码的 CSV。列顺序：账号、邮箱、初始密码、部门、角色；有表头时按表头名称识别。
-            部门与角色写名称即可，多个角色用 <code class="mono">|</code> 分隔。
+            部门与角色写名称即可，多个角色用 <code class="mono">|</code> 分隔；
+            角色名在多个应用下重名（如「普通用户」）时，请改填角色编码，例如 <code class="mono">posecraft_user</code>。
           </p>
 
           <div class="import-actions">
@@ -333,13 +377,7 @@ async function submit(): Promise<void> {
             <button class="btn btn--sm" type="button" :disabled="parsing" @click="fileInput?.click()">
               <FileUp :size="14" /> {{ parsing ? '读取中…' : '选择 CSV 文件' }}
             </button>
-            <input
-              ref="fileInput"
-              type="file"
-              accept=".csv,text/csv"
-              class="import-input"
-              @change="onPick"
-            />
+            <input ref="fileInput" type="file" accept=".csv,text/csv" class="import-input" @change="onPick" />
           </div>
 
           <p v-if="parseError" class="field__error">{{ parseError }}</p>
@@ -353,6 +391,14 @@ async function submit(): Promise<void> {
 
             <div class="import-preview">
               <table class="table">
+                <colgroup>
+                  <col style="width: 40px" />
+                  <col style="width: 118px" />
+                  <col style="width: 176px" />
+                  <col style="width: 96px" />
+                  <col style="width: 146px" />
+                  <col style="width: 210px" />
+                </colgroup>
                 <thead>
                   <tr>
                     <th class="col-line">行</th>
@@ -370,7 +416,7 @@ async function submit(): Promise<void> {
                     <td class="mono">{{ row.email || '—' }}</td>
                     <td>{{ row.dept || '—' }}</td>
                     <td>{{ row.roles.length ? row.roles.join(' / ') : '—' }}</td>
-                    <td>
+                    <td :title="row.errors.length ? row.errors.join('；') : ''">
                       <span v-if="row.errors.length" class="import-bad">
                         <CircleAlert :size="13" /> {{ row.errors.join('；') }}
                       </span>
@@ -384,12 +430,34 @@ async function submit(): Promise<void> {
           </template>
 
           <p v-if="submitError" class="field__error">{{ submitError }}</p>
+
+          <!--
+            二次验证：一次导入能建 500 个可登录账号，和"删除账号"同级的高危写操作。
+            凭据绑到本批内容上（:issue 走 /users/import/challenge），换文件就自动作废。
+          -->
+          <StepUpField
+            v-if="validRows.length > 0 && invalidCount === 0"
+            ref="stepUpRef"
+            action="user.import"
+            :target-id="null"
+            :target-key="stepUpKey"
+            :issue="issueImportChallenge"
+            :disabled="submitting"
+          />
         </template>
       </div>
 
       <footer class="modal__foot">
         <template v-if="result">
-          <button class="btn btn--ghost" type="button" @click="rows = []; result = null; fileName = ''">
+          <button
+            class="btn btn--ghost"
+            type="button"
+            @click="
+              rows = [];
+              result = null;
+              fileName = '';
+            "
+          >
             再导入一批
           </button>
           <button class="btn btn--primary" type="button" @click="emit('close')">完成</button>

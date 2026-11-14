@@ -500,6 +500,12 @@ async function copyIssued(): Promise<void> {
             </p>
 
             <table v-if="appRows.length" class="table danger-apps">
+              <colgroup>
+                <col style="width: 180px" />
+                <col style="width: 96px" />
+                <col style="width: 110px" />
+                <col style="width: 110px" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>应用</th>

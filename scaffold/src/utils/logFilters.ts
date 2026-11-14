@@ -13,7 +13,17 @@
 import type { LogFilters } from '@/api/types';
 
 /** 筛选键（与后端 FILTER_KEYS 保持一致；多传的键会被后端丢弃） */
-const FILTER_KEYS = ['keyword', 'status', 'startTime', 'endTime', 'username', 'ip', 'event', 'action'] as const;
+const FILTER_KEYS = [
+  'keyword',
+  'status',
+  'startTime',
+  'endTime',
+  'username',
+  'ip',
+  'deviceId',
+  'event',
+  'action'
+] as const;
 
 /**
  * 规范化时间字面量
@@ -85,6 +95,7 @@ export function describeLogFilters(filters: LogFilters): string {
   }
   if (filters.username) parts.push(`账号含「${filters.username}」`);
   if (filters.ip) parts.push(`IP 以 ${filters.ip} 开头`);
+  if (filters.deviceId) parts.push(`设备码含「${filters.deviceId}」`);
   if (filters.action) parts.push(`操作 ${filters.action}`);
   if (filters.event) parts.push(`事件 ${filters.event}`);
   if (filters.status === 1) parts.push('仅成功记录');

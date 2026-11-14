@@ -253,9 +253,13 @@ loadPulse();
 </template>
 
 <style scoped>
-/* ── 卡面：青柠三层面（左上漫射 / 右下珍珠 / 150° 渐变）+ 内描边高光 ──
+/* ── 卡面：三层漫射（左上主色 / 右下珍珠 / 150° 渐变）+ 内描边高光 ──
    与工作台其它卡的区别只有配色一层 —— 语义色守住"青柠 = 状态与能力"，
-   结构（圆角、内描边、阴影层级）与普通卡完全一致。 */
+   结构（圆角、内描边、阴影层级）与普通卡完全一致。
+
+   🔴 底色混的是 `--mauth-tint` 而不是 `--mauth-primary`：主色为了"白字压在上面"
+      必须压深，拿它按 26% 混白只会得到发灰的绿；`tint` 是同一株色的鲜档，
+      混出来才是参考站点那种清透的青柠（无色相差异的主题两者同值）。 */
 .pulse {
   --px: 50%;
   --py: 50%;
@@ -273,12 +277,12 @@ loadPulse();
   border: 1px solid color-mix(in srgb, var(--mauth-primary) 22%, var(--mauth-border-strong));
   border-radius: var(--mauth-radius-xl);
   background:
-    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--mauth-primary) 26%, transparent), transparent 58%),
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--mauth-tint) 31%, transparent), transparent 58%),
     radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--mauth-surface) 92%, transparent), transparent 60%),
     linear-gradient(
       150deg,
-      color-mix(in srgb, var(--mauth-primary) 9%, var(--mauth-surface)),
-      color-mix(in srgb, var(--mauth-primary) 3%, var(--mauth-surface)) 55%,
+      color-mix(in srgb, var(--mauth-tint) 12%, var(--mauth-surface)),
+      color-mix(in srgb, var(--mauth-tint) 4%, var(--mauth-surface)) 55%,
       var(--mauth-surface)
     );
   box-shadow:
@@ -289,8 +293,8 @@ loadPulse();
 .dark .pulse {
   border-color: color-mix(in srgb, var(--mauth-primary) 16%, var(--mauth-border-strong));
   background:
-    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--mauth-primary) 15%, transparent), transparent 58%),
-    linear-gradient(150deg, color-mix(in srgb, var(--mauth-primary) 6%, var(--mauth-surface)), var(--mauth-surface) 62%);
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--mauth-tint) 18%, transparent), transparent 58%),
+    linear-gradient(150deg, color-mix(in srgb, var(--mauth-tint) 7%, var(--mauth-surface)), var(--mauth-surface) 62%);
 }
 
 /* 指针光：一道柔光照亮材质（`screen` 混合；深色下 `screen` 会发灰，换普通混合） */
@@ -304,7 +308,7 @@ loadPulse();
   background: radial-gradient(
     circle 120px at var(--px) var(--py),
     color-mix(in srgb, #ffffff 90%, transparent),
-    color-mix(in srgb, var(--mauth-primary) 8%, transparent) 42%,
+    color-mix(in srgb, var(--mauth-tint) 8%, transparent) 42%,
     transparent 72%
   );
   mix-blend-mode: screen;

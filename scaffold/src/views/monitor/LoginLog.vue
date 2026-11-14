@@ -29,9 +29,18 @@ import LogPurgeDialog from '@/components/business/LogPurgeDialog.vue';
 import { hasLogFilter, pickLogFilters } from '@/utils/logFilters';
 import { describeLoginEvent, loginEventLabel } from '@/utils/loginLogSummary';
 import type { LogFilters, LogStats, LoginLogRow } from '@/api/types';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
+
+/**
+ * 当前渲染设备
+ *
+ * 登录日志 9 列，手机上横滚时"详情"在最后一列 —— 够不到。手机上换成一行一条：
+ * 事件名 + 账号 + 时间/IP，整行可点开详情（完整 UA、设备码、失败原因都在弹窗里）。
+ */
+const device = useRenderDevice();
 
 const rows = ref<LoginLogRow[]>([]);
 const total = ref(0);
@@ -140,6 +149,24 @@ function locationText(row: LoginLogRow): string {
   const ip = String(row.ip || '').trim();
   if (ip === '127.0.0.1' || ip === '::1' || ip === 'localhost') return '本地';
   return '—';
+}
+
+/**
+ * 把时间拆成「日期」「时分秒」两段
+ *
+ * 表格里一行放两段（上下排）：定宽布局下列宽是硬约束，单行完整时间要 145px，
+ * 会挤掉说明列；拆开后 100px 就能同时保住日期与秒级精度。
+ *
+ * @param value ISO 时间串
+ * @returns 日期与时间两段文本
+ */
+function timeParts(value: string): { date: string; time: string } {
+  const d = new Date(value);
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  };
 }
 
 /** 加载全部数据 */
@@ -334,7 +361,7 @@ onMounted(load);
   <div>
     <div class="page__head">
       <h2 class="page__title">登录日志</h2>
-      <span class="page__sub">共 {{ total }} 条 · 数据源 session_logs</span>
+      <span class="page__sub">共 {{ total }} 条</span>
     </div>
 
     <div class="stats">
@@ -494,9 +521,6 @@ onMounted(load);
         <option value="FORBIDDEN">访问被拒</option>
       </select>
       <button class="btn btn--sm" type="button" @click="search"><Search :size="15" /> 查询</button>
-      <button class="btn btn--ghost btn--sm" type="button" :disabled="loading" @click="load">
-        <RefreshCw :size="15" /> 刷新
-      </button>
 
       <!--
           精确条件（账号 / IP / 起止）收进「高级」：它们与关键词是同一件事的不同粒度，
@@ -516,6 +540,10 @@ onMounted(load);
       <button class="btn btn--ghost btn--sm" type="button" @click="resetFilters">清空</button>
 
       <span class="toolbar__actions">
+        <!-- 刷新放在动作组首位：它是"重查一遍"，与导出/删除同属动作，不跟筛选项混排 -->
+        <button class="btn btn--sm" type="button" :disabled="loading" @click="load">
+          <RefreshCw :size="15" /> 刷新
+        </button>
         <button
           v-if="auth.hasPermission('admin:log:read')"
           class="btn btn--sm"
@@ -564,8 +592,18 @@ onMounted(load);
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
     <section class="panel">
-      <div class="table-wrap">
+      <div v-if="device !== 'mobile'" class="table-wrap">
         <table class="table">
+          <colgroup>
+            <col style="width: 100px" />
+            <col style="width: 76px" />
+            <col style="width: 100px" />
+            <col style="width: 80px" />
+            <col style="width: 150px" />
+            <col style="width: 56px" />
+            <col style="width: 118px" />
+            <col style="width: 96px" />
+          </colgroup>
           <thead>
             <tr>
               <th>时间</th>
@@ -578,16 +616,26 @@ onMounted(load);
               </th>
               <th>事件</th>
               <th>应用</th>
-              <th>IP</th>
-              <th>归属地</th>
+              <!-- IP 与归属地合并成一列：9 列在 800px 内容区里放不下，
+                   单独一列"归属地"只能显示"本地/北京"两三个字却占 70px，
+                   并把说明列压到只剩 3 个字。合并后说明列回到 118px。 -->
+              <th title="来源 IP 与归属地（长 IP 会省略，完整值见行详情）">IP / 归属地</th>
               <th>结果</th>
               <th>说明</th>
-              <th class="log-col-act"></th>
+              <th class="log-col-act">详情</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="row in rows" :key="`${row.id}-${row.created_at}`" class="log-row" @click="activeRow = row">
-              <td class="mono">{{ new Date(row.created_at).toLocaleString('zh-CN') }}</td>
+              <!--
+                时间两行：日期在上、时分秒在下。
+                时间列独占 145px 会把说明列压到看不见；两行后只要 100px，
+                且日期与时间各自完整（比"2026/11/14 18:1…"这种截断好用得多）。
+              -->
+              <td class="mono log-time" :title="new Date(row.created_at).toLocaleString('zh-CN')">
+                <span>{{ timeParts(row.created_at).date }}</span>
+                <span class="log-time__hms">{{ timeParts(row.created_at).time }}</span>
+              </td>
               <!-- 已注销账号：显示「注销-注销前用户名」。注销执行时 username 被换成
                    「已注销用户#N」（PII 擦除），只剩占位名根本看不出是谁；
                    快照功能上线前注销的拿不到原名，如实保留占位名并给悬停说明。 -->
@@ -609,14 +657,16 @@ onMounted(load);
                 <span class="mono log-code">{{ row.event }}</span>
               </td>
               <td>{{ row.app_id || '—' }}</td>
-              <td class="mono">{{ row.ip || '—' }}</td>
-              <td>{{ locationText(row) }}</td>
+              <td class="mono log-net" :title="`${row.ip || '—'} ${locationText(row)}`">
+                <span>{{ row.ip || '—' }}</span>
+                <span v-if="locationText(row) !== '—'" class="log-net__region">{{ locationText(row) }}</span>
+              </td>
               <td>
                 <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">{{
                   row.status === 1 ? '成功' : '失败'
                 }}</span>
               </td>
-              <td class="log-desc">{{ describeLoginEvent(row) }}</td>
+              <td class="log-desc" :title="describeLoginEvent(row)">{{ describeLoginEvent(row) }}</td>
               <td class="log-col-act">
                 <button
                   class="log-open"
@@ -634,6 +684,48 @@ onMounted(load);
           </tbody>
         </table>
       </div>
+
+      <!--
+        手机端：一条记录一张卡，整行可点开详情。
+        标题行是"事件名 + 结果"，副标题是账号与时间，元信息放 IP 与应用 ——
+        UA / 设备码 / 失败原因这些长字段只在详情弹窗里出现，列表里放不下也没必要。
+      -->
+      <ul v-else class="mlist">
+        <li
+          v-for="row in rows"
+          :key="`${row.id}-${row.created_at}`"
+          class="mcard is-tappable"
+          role="button"
+          tabindex="0"
+          @click="activeRow = row"
+          @keydown.enter.prevent="activeRow = row"
+        >
+          <div class="mcard__head">
+            <div class="mcard__main">
+              <span class="mcard__title">
+                <span class="mcard__title-text">{{ loginEventLabel(row.event) }}</span>
+              </span>
+              <span class="mcard__sub">
+                <span v-if="row.user_status === -1 && row.prev_username" class="log-prev">
+                  <i class="log-prev__tag">注销-</i>{{ row.prev_username }}
+                </span>
+                <template v-else>{{ row.username || '—' }}</template>
+                · {{ timeParts(row.created_at).date }} {{ timeParts(row.created_at).time }}
+              </span>
+              <span class="mcard__meta">
+                <span class="mono">{{ row.ip || '无 IP' }}</span>
+                <span v-if="locationText(row) !== '—'">{{ locationText(row) }}</span>
+                <span>{{ row.app_id || '—' }}</span>
+              </span>
+            </div>
+            <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
+              {{ row.status === 1 ? '成功' : '失败' }}
+            </span>
+          </div>
+        </li>
+        <li v-if="loading" class="mlist__hint">加载中…</li>
+        <li v-else-if="rows.length === 0" class="mlist__hint">该条件下没有登录记录</li>
+      </ul>
 
       <div class="pager">
         <span class="mono">第 {{ query.pageNum }} / {{ pageCount }} 页</span>
@@ -678,12 +770,40 @@ onMounted(load);
   color: var(--mauth-text-faint);
 }
 
+/*
+ * 说明：**单行省略**，不换行。
+ *
+ * 这类文本动辄几十字，一旦换行整张表的行高会在 40–90px 之间跳（相邻行忽高忽低，
+ * 扫读时找不到对齐线）；而且 `white-space: normal` 还会盖掉全局 `.table td` 的
+ * nowrap，让定宽布局下的列被人为撑开 —— 文字就"挤"到右侧详情列上了。
+ * 全文由模板上的 `:title` 提供（悬停可看）。
+ */
+/* IP 与归属地同格：归属地用弱化小字跟在 IP 后面，扫读时先看 IP、需要时再看地区 */
+.log-net__region {
+  margin-left: 8px;
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+}
+
+/* 时间两行：日期 / 时分秒 —— 单行要 145px，两行只要 100px */
+.log-time {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.2;
+  font-size: 11.5px;
+}
+
+.log-time__hms {
+  color: var(--mauth-text-soft);
+}
+
 .log-desc {
-  max-width: 300px;
-  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12.5px;
   color: var(--mauth-text-soft);
-  line-height: 1.5;
 }
 
 /* 整行可点：悬停给反馈，否则用户不会知道这行能打开 */

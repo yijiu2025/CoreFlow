@@ -1,0 +1,548 @@
+/**
+ * 微信设计层 · 逐页差异
+ *
+ * 前面四个文件解决"全站通用"，这里只写**每页独有的结构问题**。
+ * 页面身份由壳挂在根节点上（`data-page` = 路由 name），因此：
+ *
+ *   · 页面文件不需要加任何类、不需要判设备
+ *   · 新增一页 = 这里加一段，或者什么都不加（默认继承通用公理）
+ *
+ * 这也是"适配放进主题包"的判据：`views/*.vue` 里不该出现微信相关的东西。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+
+/* ── 通用页头 ─────────────────────────────────────────────── */
+/*
+ * 标题已经搬到导航栏（44px 居中），内容区再写一遍 = 一屏两个标题。
+ *
+ * `.page__sub` 保留，但约定它为**计数**（"共 N 人"）或状态，不写说明性长句 ——
+ * 微信的页面里没有"这一段是干什么的"这种副标题。历史遗留的那几句（"数据源
+ * audit_logs"、"改动会被审计"）已在 2026-11-15 从页面里删掉了。
+ *
+ * 副标题与只读标记都没有的页头整块不占位，否则会留一条 10px 的空白带。
+ */
+.wx .wxbody .page__head {
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 4px 8px;
+}
+
+.wx .wxbody .page__title {
+  display: none;
+}
+
+.wx .wxbody .page__head:not(:has(.page__sub, .readonly-tag)) {
+  display: none;
+}
+
+.wx .wxbody .page__sub {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--mauth-text-soft);
+}
+
+/* ── 工作台（/dashboard）───────────────────────────────────── */
+
+.wx[data-page='dashboard'] .dash__head {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.wx[data-page='dashboard'] .dash__greet {
+  font-size: var(--wx-fs-row);
+  font-weight: 500;
+}
+
+.wx[data-page='dashboard'] .dash__date {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/*
+ * 页头的刷新按钮不在 toolbar 里，单独把它降成文字（白块在灰底上太抢眼），
+ * 并搬到日期行右端 —— 让它独占一行既占高度又抢注意力，而它是个低频动作。
+ */
+.wx[data-page='dashboard'] .dash__head .btn {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  height: 24px;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--mauth-text-soft);
+  font-size: var(--wx-fs-note);
+}
+
+/* 日期行右侧要给刷新让位，否则长星期名会被按到按钮底下 */
+.wx[data-page='dashboard'] .dash__date {
+  padding-right: 44px;
+}
+
+/* 状态胶囊（系统健康度）退成一行灰字，不抢主卡的注意力 */
+.wx[data-page='dashboard'] .dash__status {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--mauth-surface-2);
+  font-size: var(--wx-fs-note);
+}
+
+.wx[data-page='dashboard'] .side__label {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx[data-page='dashboard'] .side__value {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.wx[data-page='dashboard'] .side__hint {
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-faint);
+}
+
+.wx[data-page='dashboard'] .bars__labels {
+  font-size: 10px;
+  color: var(--mauth-text-faint);
+}
+
+.wx[data-page='dashboard'] .bars__readout {
+  font-size: var(--wx-fs-note);
+}
+
+/* ── 用户管理（/system/user）──────────────────────────────── */
+
+/* 手机上左栏部门树与右栏列表不能并排：并排后列表只剩 200px */
+.wx[data-page='system-user'] .users-body {
+  display: block;
+}
+
+.wx[data-page='system-user'] .dept {
+  margin-bottom: var(--wx-gap);
+  border-radius: var(--wx-radius);
+  overflow: hidden;
+}
+
+/* 部门树默认折叠成一行"当前部门"，点开才展开（微信里这是"筛选器"） */
+.wx[data-page='system-user'] .dept__head {
+  min-height: var(--wx-row);
+  padding: 0 var(--wx-pad);
+  border-bottom: var(--wx-hairline);
+}
+
+.wx[data-page='system-user'] .dept__current {
+  font-size: var(--wx-fs-body);
+  font-weight: 500;
+}
+
+.wx[data-page='system-user'] .user-search {
+  margin-bottom: var(--wx-gap);
+}
+
+.wx[data-page='system-user'] .m-user__state {
+  font-size: var(--wx-fs-tag);
+}
+
+.wx[data-page='system-user'] .m-user__arrow {
+  color: var(--mauth-text-faint);
+}
+
+/* ── 用户详情（/system/user/:id）──────────────────────────── */
+
+.wx[data-page='system-user-detail'] .who__avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+}
+
+.wx[data-page='system-user-detail'] .who__sub {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/*
+ * 页签：文字 + 下划线，横向可滚
+ *
+ * 这一页的页签由 `UserProfileDrawer` 自带 scoped 样式（选中是绿色实心胶囊）。
+ * 要压过它必须把特异性做到 0,5,0 以上 —— 所以这里带了 `.drawer--page`，
+ * 而不是只写 `.wx .wxbody .tab`（那条会被组件自己的规则盖掉）。
+ */
+.wx[data-page='system-user-detail'] .drawer--page .tabbar {
+  position: sticky;
+  top: 44px;
+  z-index: 5;
+  display: flex;
+  gap: 18px;
+  height: auto;
+  margin-bottom: 0;
+  padding: 0 2px;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: var(--wx-hairline);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--mauth-bg) 94%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-overflow-scrolling: touch;
+}
+
+.wx[data-page='system-user-detail'] .drawer--page .tabbar .tab {
+  flex: none;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mauth-text-mid);
+  font-size: var(--wx-fs-body);
+  font-weight: 400;
+}
+
+.wx[data-page='system-user-detail'] .drawer--page .tabbar .tab.is-on,
+.wx[data-page='system-user-detail'] .drawer--page .tabbar .tab.is-on:hover {
+  background: transparent;
+  box-shadow: none;
+  color: var(--mauth-primary);
+  font-weight: 500;
+}
+
+.wx[data-page='system-user-detail'] .drawer--page .tabbar .tab.is-on::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--mauth-primary);
+}
+
+/* 页签需要定位基（下划线挂在它身上） */
+.wx[data-page='system-user-detail'] .drawer--page .tabbar .tab {
+  position: relative;
+}
+
+/*
+ * 概览的键值对：**白块**
+ *
+ * 组件里 `.kv` 只是"两列 dl"，靠页面底色分层；微信必须落在一张白块上，
+ * 否则一屏十几行字浮在灰底里，看不出这是一组信息。
+ */
+.wx[data-page='system-user-detail'] .drawer--page .kv {
+  margin: 0;
+  padding: 0 var(--wx-pad);
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+}
+
+.wx[data-page='system-user-detail'] .drawer--page .kv > div {
+  padding: 11px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx[data-page='system-user-detail'] .drawer--page .kv > div:last-child {
+  border-bottom: 0;
+}
+
+.wx[data-page='system-user-detail'] .drawer--page .kv dt {
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-text-soft);
+}
+
+.wx[data-page='system-user-detail'] .drawer--page .kv dd {
+  font-size: var(--wx-fs-body);
+  color: var(--mauth-text);
+}
+
+/* 详情页的区块（角色 / 权限 / 设备 / 最近动态）之间留 10px */
+.wx[data-page='system-user-detail'] .drawer--page .block + .block {
+  margin-top: var(--wx-gap);
+}
+
+/* ── 角色管理（/system/role）──────────────────────────────── */
+
+/*
+ * 三个页签（列表 / 权限矩阵 / 授权溯源）与搜索框挤一行时，每个页签只剩 80px，
+ * "授权溯源"会贴住输入框。让页签吃满一行、搜索落到下一行 —— 页签是这一屏的
+ * 一级切换，本来就该单独占一行。
+ */
+.wx[data-page='system-role'] .filterbar__views {
+  flex: 1 0 100%;
+}
+
+.wx[data-page='system-role'] .menu-list {
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  overflow: hidden;
+}
+
+.wx[data-page='system-role'] .menu-item {
+  min-height: var(--wx-row);
+  padding: 0 var(--wx-pad);
+  border-bottom: var(--wx-hairline);
+  font-size: var(--wx-fs-body);
+}
+
+.wx[data-page='system-role'] .menu-item.is-on {
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+}
+
+.wx[data-page='system-role'] .role-del,
+.wx[data-page='system-role'] .btn--icon.is-danger {
+  color: var(--mauth-danger);
+}
+
+.wx[data-page='system-role'] .cell-zero {
+  color: var(--mauth-text-faint);
+}
+
+.wx[data-page='system-role'] .scope__dept {
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--mauth-surface-2);
+  font-size: var(--wx-fs-tag);
+}
+
+/* 权限项在弹窗里通常是两列网格，手机上改单列（否则每条只剩 12px 文字宽） */
+.wx .wxbody .perm-items {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ── 部门管理（/system/dept）──────────────────────────────── */
+
+.wx[data-page='system-dept'] .dept-stats {
+  gap: 8px;
+  margin-bottom: var(--wx-gap);
+}
+
+.wx[data-page='system-dept'] .dept-cell {
+  padding: 12px var(--wx-pad);
+  border-bottom: var(--wx-hairline);
+}
+
+.wx[data-page='system-dept'] .dept-cell:last-child {
+  border-bottom: 0;
+}
+
+.wx[data-page='system-dept'] .dept-cell__title {
+  font-size: var(--wx-fs-row);
+  font-weight: 500;
+}
+
+.wx[data-page='system-dept'] .dept-cell__sub {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx[data-page='system-dept'] .dept-members__bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mauth-surface-2);
+}
+
+.wx[data-page='system-dept'] .dept-badge {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--mauth-surface-2);
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-mid);
+}
+
+/* ── 菜单管理（/system/menu）──────────────────────────────── */
+
+.wx[data-page='system-menu'] .filterbar__app,
+.wx[data-page='system-menu'] .app-tag {
+  border: 0;
+  border-radius: 999px;
+  background: var(--mauth-surface);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx[data-page='system-menu'] .menu-twist {
+  color: var(--mauth-text-faint);
+}
+
+.wx[data-page='system-menu'] .icon-pick__preview {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--mauth-surface-2);
+}
+
+/* ── 岗位管理（/system/post）──────────────────────────────── */
+
+.wx[data-page='system-post'] .pager {
+  margin-top: var(--wx-gap);
+}
+
+/* ── 日志三页（操作 / 登录 / 防火墙）──────────────────────── */
+
+/* 高级筛选展开后的提示行：一条灰字，不要背景块 */
+.wx[data-page='monitor-oper-log'] .filter-hint,
+.wx[data-page='monitor-login-log'] .filter-hint,
+.wx[data-page='monitor-firewall'] .filter-hint {
+  margin: 0 4px 8px;
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx[data-page='monitor-oper-log'] .adv-caret,
+.wx[data-page='monitor-login-log'] .adv-caret {
+  color: var(--mauth-text-faint);
+}
+
+/* 日志行的动作列：手机上收成右侧箭头，不铺按钮 */
+.wx[data-page='monitor-oper-log'] .log-col-act,
+.wx[data-page='monitor-oper-log'] .oper-col-act,
+.wx[data-page='monitor-login-log'] .log-col-act {
+  width: 28px;
+  color: var(--mauth-text-faint);
+}
+
+.wx[data-page='monitor-oper-log'] .oper-pathtext {
+  font-family: var(--font-mono);
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-soft);
+}
+
+/* 操作日志在平板上仍会出表格：表头吸顶，行高收到 48 */
+.wx[data-page='monitor-oper-log'] .oper-table th {
+  position: sticky;
+  top: 44px;
+  z-index: 2;
+}
+
+.wx[data-page='monitor-oper-log'] .oper-table td {
+  padding: 10px 12px;
+}
+
+/* ── 个人设置（/settings/profile）────────────────────────── */
+
+.wx[data-page='settings-profile'] .identity {
+  padding: var(--wx-pad);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+.wx[data-page='settings-profile'] .identity__avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+}
+
+.wx[data-page='settings-profile'] .avatar-actions {
+  gap: 8px;
+}
+
+.wx[data-page='settings-profile'] .avatar-hint {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* 主题色：手机上横向滚动的色卡，不折成 3 行 */
+.wx[data-page='settings-profile'] .accents {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.wx[data-page='settings-profile'] .accent-card {
+  flex: 0 0 auto;
+  width: 92px;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+}
+
+.wx[data-page='settings-profile'] .accent-card.is-on {
+  outline: 2px solid var(--mauth-primary);
+  outline-offset: -2px;
+}
+
+.wx[data-page='settings-profile'] .accent-card__name {
+  font-size: var(--wx-fs-note);
+}
+
+/* 界面风格：一列（两列时说明文字被切成三行） */
+.wx[data-page='settings-profile'] .styles {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  overflow: hidden;
+}
+
+.wx[data-page='settings-profile'] .style-card {
+  padding: 13px var(--wx-pad);
+  border: 0;
+  border-bottom: var(--wx-hairline);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.wx[data-page='settings-profile'] .style-card:last-child {
+  border-bottom: 0;
+}
+
+.wx[data-page='settings-profile'] .style-card.is-on {
+  background: var(--mauth-primary-soft);
+}
+
+.wx[data-page='settings-profile'] .style-card__name {
+  font-size: var(--wx-fs-row);
+  font-weight: 500;
+}
+
+.wx[data-page='settings-profile'] .style-card__desc {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx[data-page='settings-profile'] .dev-tools {
+  padding: var(--wx-pad);
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+}
+
+.wx[data-page='settings-profile'] .hint {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* ── 通讯录 / 发现 / 我 ──────────────────────────────────── */
+/*
+ * 这三页现在住在**本包内部**（`../pages/<id>/index.vue`），已经直接用 `.wxcells`
+ * 写好了，块间距由 `lists.css` 的 `.wxcells` / `.wxcells__head` 负责 ——
+ * 这里不再补丁。留这段是为了让"改这三页该去哪"有个指路牌。
+ */
+
+/* ── 无权限页（/no-access）───────────────────────────────── */
+
+.wx[data-page='no-access'] .denied__card {
+  padding: 28px 20px;
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+.wx[data-page='no-access'] .denied__title {
+  font-size: var(--wx-fs-row);
+  font-weight: 600;
+}
+
+.wx[data-page='no-access'] .denied__text,
+.wx[data-page='no-access'] .denied__hint {
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-text-soft);
+}

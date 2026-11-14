@@ -4,7 +4,7 @@
  *
  * 整齐树布局铺满内容区，四角留给页面放浮动玻璃面板（`#tl` / `#tr` / `#bl` / `#br`）。
  *
- * - 拖拽平移；Ctrl / ⌘ + 滚轮以指针为中心缩放，普通滚轮平移
+ * - 拖拽平移；滚轮以指针为中心缩放（Ctrl / ⌘ 同样缩放）
  * - 连线先画到，节点才点亮（按层级逐层入场）
  * - 单击选中（节点抬起），双击聚焦居中；方向键在节点间移动，Enter 聚焦
  * - 分支颜色取分类色，只用于区分一级分支；选中路径的连线点亮并走脉冲
@@ -29,8 +29,14 @@ import type { DeptNode } from '@/api/types';
 const props = defineProps<{
   tree: DeptNode[];
   selectedId: number | null;
+  /** 是否允许在节点上直接新建下级（由宿主按权限传入，画布本身不认权限） */
+  creatable?: boolean;
 }>();
-const emit = defineEmits<{ (e: 'select', dept: DeptNode): void }>();
+const emit = defineEmits<{
+  (e: 'select', dept: DeptNode): void;
+  (e: 'create', dept: DeptNode): void;
+  (e: 'refresh'): void;
+}>();
 
 const NODE_W = 196;
 const NODE_H = 72;
@@ -49,11 +55,21 @@ const {
   unbind: unbindViewport,
   onPointerDown,
   onPointerMove,
-  onPointerUp
+  onPointerUp,
+  didPan
 } = useViewportPan({
   el: () => viewport.value,
   apply: (_v, animate) => apply(animate),
-  exclude: '.org-node, .org-controls, .org-panel'
+  /*
+   * 节点**不再排除**：在节点上按住也能拖动画布（图很大时用户的第一反应就是抓住
+   * 眼前的东西拖）。点击选中靠 `didPan()` 区分 —— 位移超过阈值就不当成点击。
+   * 控件与浮动面板仍排除，它们本身要接收点击/输入。
+   */
+  exclude: '.org-controls, .org-panel',
+  // 滚轮直接缩放：页面已经是一屏不滚动，滚轮再用来平移只会让人以为"滚不动"
+  wheelZooms: true,
+  minK: 0.3,
+  maxK: 2
 });
 
 interface LaidNode {
@@ -71,7 +87,7 @@ const layout = computed(() => {
   const nodes: LaidNode[] = [];
   let cursor = 0;
   const place = (dept: DeptNode, depth: number, branch: number, parentId: number | null): number => {
-    const kids = collapsed.value.has(dept.id) ? [] : dept.children ?? [];
+    const kids = collapsed.value.has(dept.id) ? [] : (dept.children ?? []);
     let x: number;
     if (!kids.length) {
       x = cursor;
@@ -116,24 +132,32 @@ const layout = computed(() => {
 });
 
 /* ── 视图变换：只动 layer 的 transform ── */
-let setX: ((v: number) => void) | null = null;
-let setY: ((v: number) => void) | null = null;
-let setK: ((v: number) => void) | null = null;
 
 /**
  * 应用视口变换
  *
- * @param animate 是否走动画（拖拽时直写，避免每帧起补间）
+ * @param animate 是否走动画（拖拽 / 滚轮时直写，避免每帧起补间）
  */
 function apply(animate = true): void {
   if (!layer.value) return;
-  if (!animate || motionSkipped() || !setX) {
+  if (!animate || motionSkipped()) {
     gsap.set(layer.value, { x: view.x, y: view.y, scale: view.k });
     return;
   }
-  setX(view.x);
-  setY?.(view.y);
-  setK?.(view.k);
+  /*
+   * 这里用 `gsap.to` 而不是 `quickTo`：
+   * quickTo 分别绑 x / y / scale 三个属性时，x、y 会动而 `scale` 不落值 ——
+   * 表现就是"点 ± 按钮、或按 Ctrl 滚轮，画面没变大变小"。
+   * 一条 tween 同时写三个属性反而更稳，`overwrite: 'auto'` 保证连续操作不叠补间。
+   */
+  gsap.to(layer.value, {
+    x: view.x,
+    y: view.y,
+    scale: view.k,
+    duration: 0.55,
+    ease: 'power3.out',
+    overwrite: 'auto'
+  });
 }
 
 /** 视口尺寸取布局像素（clientWidth / Height），页面进场缩放期间量到的包围盒会偏小 */
@@ -149,7 +173,11 @@ function fit(animate = true): void {
   const box = viewportBox();
   const { width, height } = layout.value;
   if (!box || !width) return;
-  const pad = 96;
+  /*
+   * 留白跟着画布走，不能写死 96：画布被压到 290px 时，96×2.4 的竖向留白就要占掉 230px，
+   * 算出来必然撞到 0.35 的下限 —— 节点缩成一排小方块，看着像画布坏了。
+   */
+  const pad = Math.min(96, box.width * 0.08, box.height * 0.16);
   view.k = Math.min(1.2, Math.max(0.35, Math.min((box.width - pad * 2) / width, (box.height - pad * 2.4) / height)));
   view.x = (box.width - width * view.k) / 2;
   view.y = Math.max(pad, (box.height - height * view.k) / 2);
@@ -189,6 +217,30 @@ function toggle(id: number): void {
  * @param event 键盘事件
  * @param node 当前节点
  */
+/**
+ * 点击节点（选中）
+ *
+ * 拖拽结束后浏览器仍会补一个 click；位移过就不该顺手选中鼠标下面的节点。
+ *
+ * @param dept 部门
+ * @returns {void}
+ */
+function onNodeClick(dept: DeptNode): void {
+  if (didPan()) return;
+  emit('select', dept);
+}
+
+/**
+ * 双击节点（聚焦居中）
+ *
+ * @param id 部门 ID
+ * @returns {void}
+ */
+function onNodeDblClick(id: number): void {
+  if (didPan()) return;
+  focusNode(id);
+}
+
 function onKey(event: KeyboardEvent, node: LaidNode): void {
   const nodes = layout.value.nodes;
   let target: LaidNode | undefined;
@@ -309,22 +361,44 @@ function playEntrance(): void {
 let observer: ResizeObserver | null = null;
 let played = false;
 
+/**
+ * 让画布正好填满「标题之下 → 视口底部」这段空间
+ *
+ * 原先 CSS 写的是 `max(560px, calc(100dvh - 252px))`：252px 是估出来的头部高度，
+ * 而 560px 的保底在小屏上会把整页顶出视口 —— 用户得滚动才能看全画布，而画布本身
+ * 已经支持平移缩放，页面再滚一层就纯粹是别扭。
+ *
+ * 这里实测画布顶部距文档顶部的距离（加 scrollY 换算成文档坐标，与当前滚动位置无关），
+ * 头部换行、统计卡变高、窗口缩放都自动跟上，不需要再维护那个魔法数字。
+ *
+ * @returns {void}
+ */
+function syncHeight(): void {
+  const el = viewport.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  // 页面容器自带 padding-bottom（`.page` 是 40px），不减掉它的话画布底边正好把页面撑出滚动条
+  const page = el.closest('.page');
+  const padBottom = page ? Number.parseFloat(getComputedStyle(page).paddingBottom) || 0 : 16;
+  const available = document.documentElement.clientHeight - rect.top - padBottom - 8;
+  // 200 是下限：再矮就没有可视区域了；此时宁可让画布矮一点，也不要页面出现滚动
+  el.style.setProperty('--org-canvas-h', `${Math.max(200, Math.round(available))}px`);
+}
+
 onMounted(() => {
-  if (layer.value) {
-    setX = gsap.quickTo(layer.value, 'x', { duration: 0.55, ease: 'power3.out' });
-    setY = gsap.quickTo(layer.value, 'y', { duration: 0.55, ease: 'power3.out' });
-    setK = gsap.quickTo(layer.value, 'scale', { duration: 0.55, ease: 'power3.out' });
-  }
   observer = new ResizeObserver(() => fit(false));
   if (viewport.value) observer.observe(viewport.value);
   bindViewport();
   pulseLoop.start(viewport.value);
+  syncHeight();
+  window.addEventListener('resize', syncHeight);
 });
 
 onBeforeUnmount(() => {
   observer?.disconnect();
   unbindViewport();
   pulseLoop.stop();
+  window.removeEventListener('resize', syncHeight);
   if (layer.value) gsap.killTweensOf(layer.value);
 });
 
@@ -334,6 +408,7 @@ watch(
     if (!n) return;
     pathLens.clear();
     await nextTick();
+    syncHeight();
     fit(played);
     if (!played) {
       played = true;
@@ -390,8 +465,8 @@ defineExpose({ fit, focusNode });
           { 'is-selected': n.dept.id === selectedId, 'is-root': n.depth === 0, 'is-off': n.dept.status === 0 }
         ]"
         :style="{ left: `${n.x}px`, top: `${n.y}px`, width: `${NODE_W}px`, height: `${NODE_H}px` }"
-        @click="emit('select', n.dept)"
-        @dblclick="focusNode(n.dept.id)"
+        @click="onNodeClick(n.dept)"
+        @dblclick="onNodeDblClick(n.dept.id)"
         @keydown="onKey($event, n)"
       >
         <span class="org-strip" aria-hidden="true" />
@@ -400,6 +475,20 @@ defineExpose({ fit, focusNode });
           <span class="org-leader">{{ n.dept.leader || '未设负责人' }}</span>
           <span class="org-count tnum">{{ n.dept.user_count ?? 0 }} 人</span>
         </span>
+        <!--
+          快捷「+」：加下级不用"先选中 → 再去右下角点"，卡片角上就能开。
+          只在悬停 / 键盘聚焦 / 选中时露出，避免满屏 + 号盖住部门名。
+        -->
+        <button
+          v-if="props.creatable"
+          type="button"
+          class="org-add"
+          :aria-label="`在「${n.dept.name}」下新建部门`"
+          :title="`在「${n.dept.name}」下新建部门`"
+          @click.stop="emit('create', n.dept)"
+        >
+          <AppIcon name="plus" :size="12" />
+        </button>
         <button
           v-if="n.hasChildren"
           type="button"
@@ -407,7 +496,7 @@ defineExpose({ fit, focusNode });
           :aria-label="collapsed.has(n.dept.id) ? '展开下级' : '收起下级'"
           @click.stop="toggle(n.dept.id)"
         >
-          {{ collapsed.has(n.dept.id) ? n.dept.children?.length ?? 0 : '−' }}
+          {{ collapsed.has(n.dept.id) ? (n.dept.children?.length ?? 0) : '−' }}
         </button>
       </div>
     </div>
@@ -418,9 +507,20 @@ defineExpose({ fit, focusNode });
     <div class="org-panel is-br"><slot name="br" /></div>
 
     <div class="org-controls m-float" role="group" aria-label="画布缩放">
-      <button class="org-ctl" type="button" aria-label="放大" @click="zoomAt(1.2)"><AppIcon name="plus" :size="14" /></button>
-      <button class="org-ctl" type="button" aria-label="缩小" @click="zoomAt(1 / 1.2)"><AppIcon name="minus" :size="14" /></button>
-      <button class="org-ctl" type="button" aria-label="适应画布" @click="fit()"><AppIcon name="fit" :size="14" /></button>
+      <button class="org-ctl" type="button" aria-label="放大" @click="zoomAt(1.2)">
+        <AppIcon name="plus" :size="14" />
+      </button>
+      <button class="org-ctl" type="button" aria-label="缩小" @click="zoomAt(1 / 1.2)">
+        <AppIcon name="minus" :size="14" />
+      </button>
+      <button class="org-ctl" type="button" aria-label="适应画布" @click="fit()">
+        <AppIcon name="fit" :size="14" />
+      </button>
+      <span class="org-ctl-sep" aria-hidden="true" />
+      <!-- 画布视图没有工具栏，刷新只能放这儿：多标签页并行改部门时很需要 -->
+      <button class="org-ctl" type="button" aria-label="刷新" title="刷新" @click="emit('refresh')">
+        <AppIcon name="refresh" :size="14" />
+      </button>
     </div>
   </div>
 </template>

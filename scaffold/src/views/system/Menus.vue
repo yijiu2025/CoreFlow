@@ -15,11 +15,21 @@ import AppIcon from '@/components/ui/AppIcon.vue';
 import AppSwitch from '@/components/ui/AppSwitch.vue';
 import ReadOnlyTag from '@/components/ui/ReadOnlyTag.vue';
 import { ICON_NAMES } from '@/components/ui/icon-registry';
-import { createMenu, menuPermissionOptions, menuTree, removeMenu, updateMenu } from '@/api/system';
+import { createMenu, menuApps, menuPermissionOptions, menuTree, removeMenu, updateMenu } from '@/api/system';
 import type { MenuNode } from '@/api/types';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
+
+/**
+ * 当前渲染设备
+ *
+ * 菜单表 8 列（名称 / 类型 / 路由 / 权限码 / 排序 / 显示 / 状态 / 操作），
+ * 手机上必然横滚，而操作列在最右 —— 够不到。手机上换成"缩进卡片"：
+ * 名称与类型在标题行、「显示」开关留在右侧、路由/权限码/排序压进第二行。
+ */
+const device = useRenderDevice();
 
 /**
  * 本应用可用的权限码（只含 `admin:` 开头的）
@@ -32,6 +42,31 @@ const auth = useAuthStore();
  */
 const permissionOptions = ref<Array<{ code: string; label: string; type: string }>>([]);
 const permissionSet = computed(() => new Set(permissionOptions.value.map(item => item.code)));
+
+/**
+ * 可配置的应用
+ *
+ * 只有注册过权限码的应用才在这里 —— 没有码就没有可授权的界面元素，
+ * 列出来只会是一个永远为空的分档。
+ */
+const apps = ref<Array<{ id: string; name: string; writable: boolean }>>([]);
+
+/** 当前查看的应用（'' = 全部应用） */
+const appFilter = ref('');
+
+/** 当前账号可配置的应用（表单下拉只列这些，避免选了才 403） */
+const writableApps = computed(() => apps.value.filter(app => app.writable !== false));
+
+/** 当前视图对应的应用是否可写（分档在"全部"时按 admin 判断） */
+const currentAppWritable = computed(() => {
+  const id = appFilter.value || 'admin';
+  return apps.value.find(app => app.id === id)?.writable !== false;
+});
+
+/** 应用显示名 */
+function appLabelOf(id: string): string {
+  return apps.value.find(item => item.id === id)?.name || (id === 'admin' ? '管理后台' : id);
+}
 
 /**
  * 导航星系：异步加载
@@ -53,6 +88,8 @@ const dialogOpen = ref(false);
 const editingId = ref<number | null>(null);
 const form = reactive({
   parentId: 0,
+  /** 归属应用：决定权限码命名空间与树的归属 */
+  appId: 'admin',
   name: '',
   /*
    * 标注成联合类型而不是让它推断成 string：
@@ -208,7 +245,7 @@ async function load(): Promise<void> {
   loading.value = true;
   errorMessage.value = '';
   try {
-    const result = await menuTree();
+    const result = await menuTree(appFilter.value || undefined);
     /*
      * 必须是数组。
      *
@@ -238,11 +275,25 @@ async function load(): Promise<void> {
  *
  * @param parent 上级菜单（未传则为根）
  */
+/**
+ * 切换归属应用
+ *
+ * 换应用后原来的权限码属于旧命名空间，留着必被后端拒写，所以直接清空。
+ *
+ * @returns {void}
+ */
+function onAppChange(): void {
+  form.permission = '';
+  void loadPermissionOptions(form.appId);
+}
+
 function openCreate(parent?: MenuNode): void {
   const childType: MenuNode['type'] = parent?.type === 'menu' ? 'btn' : 'menu';
   editingId.value = null;
+  const appId = parent?.app_id || appFilter.value || 'admin';
   Object.assign(form, {
     parentId: parent?.id ?? 0,
+    appId,
     name: '',
     type: childType,
     icon: 'Circle',
@@ -253,6 +304,7 @@ function openCreate(parent?: MenuNode): void {
     visible: 1,
     status: 1
   });
+  void loadPermissionOptions(appId);
   dialogOpen.value = true;
 }
 
@@ -265,6 +317,7 @@ function openEdit(node: MenuNode): void {
   editingId.value = node.id;
   Object.assign(form, {
     parentId: node.parent_id,
+    appId: node.app_id || 'admin',
     name: node.name,
     type: node.type,
     icon: node.icon || 'Circle',
@@ -275,6 +328,7 @@ function openEdit(node: MenuNode): void {
     visible: node.visible,
     status: node.status
   });
+  void loadPermissionOptions(node.app_id || 'admin');
   dialogOpen.value = true;
 }
 
@@ -442,17 +496,52 @@ async function toggleVisible(node: MenuNode, value: boolean): Promise<void> {
  *
  * 失败静默：拿不到候选不该阻断菜单编辑，非法码仍由后端 `assertOwnPermission` 拒写。
  */
-async function loadPermissionOptions(): Promise<void> {
+async function loadPermissionOptions(appId = 'admin'): Promise<void> {
   try {
-    const result = await menuPermissionOptions();
+    const result = await menuPermissionOptions(appId);
     permissionOptions.value = result.options || [];
   } catch {
     permissionOptions.value = [];
   }
 }
 
+/** 拉应用列表（失败不阻断：只影响分档与显示名，树仍可看） */
+async function loadApps(): Promise<void> {
+  try {
+    const result = await menuApps();
+    apps.value = Array.isArray(result) ? result : [];
+  } catch {
+    apps.value = [{ id: 'admin', name: '管理后台', writable: true }];
+  }
+}
+
+/**
+ * 切换应用分档
+ *
+ * @param id 应用标识（'' = 全部）
+ */
+function switchApp(id: string): void {
+  if (appFilter.value === id) return;
+  appFilter.value = id;
+  collapsedInitialized = false;
+  void load();
+}
+
+/**
+ * 应用下拉的 change 处理
+ *
+ * 刻意**不用** `v-model`：`switchApp` 里"值没变就直接 return"是防重复请求的逻辑，
+ * 而 `v-model` 会先把 `appFilter` 改掉，让它永远命中那句 return、树不再重新加载。
+ *
+ * @param event 原生 select 事件
+ */
+function onPickApp(event: Event): void {
+  switchApp((event.target as HTMLSelectElement).value);
+}
+
 onMounted(() => {
-  loadPermissionOptions();
+  loadApps();
+  loadPermissionOptions('admin');
   load();
 });
 </script>
@@ -461,65 +550,108 @@ onMounted(() => {
   <div>
     <div class="page__head">
       <h2 class="page__title">菜单管理</h2>
-      <span class="page__sub">共 {{ totalCount }} 项 · 谁能看到由角色矩阵决定</span>
+      <span class="page__sub">共 {{ totalCount }} 项</span>
       <ReadOnlyTag code="admin:menu:update" scope="菜单" />
     </div>
 
-    <div class="tabbar" role="tablist" aria-label="视图">
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="altView === 'table'"
-        :class="['tab', { 'is-on': altView === 'table' }]"
-        @click="altView = 'table'"
-      >
-        列表
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="altView === 'star'"
-        :class="['tab', { 'is-on': altView === 'star' }]"
-        @click="altView = 'star'"
-      >
-        导航星系
-      </button>
-    </div>
+    <!--
+      筛选条：视图切换 + 应用分档 + 动作压成一行。
+      应用分档原来是 9 个 chip（占一整行，换行后还把刷新/折叠挤到第三行），
+      改成下拉后与视图切换、右侧动作同排；不可写的应用在下拉里标「只读」。
+    -->
+    <div class="filterbar">
+      <div class="tabbar filterbar__views" role="tablist" aria-label="视图">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="altView === 'table'"
+          :class="['tab', { 'is-on': altView === 'table' }]"
+          @click="altView = 'table'"
+        >
+          列表
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="altView === 'star'"
+          :class="['tab', { 'is-on': altView === 'star' }]"
+          @click="altView = 'star'"
+        >
+          导航星系
+        </button>
+      </div>
 
-    <div v-show="altView === 'table'" class="toolbar">
-      <button class="btn btn--sm" type="button" :disabled="loading" @click="refreshAll">
-        <RefreshCw :size="15" /> 刷新
-      </button>
-      <!-- 有子项可折时才显示：没有层级时这两个按钮点了也没反应 -->
-      <button v-if="expandableIds.length > 0" class="btn btn--ghost btn--sm" type="button" @click="toggleAll">
+      <!-- 应用分档：支持多应用后，不同应用的菜单混在一棵树里会没法找 -->
+      <select
+        v-if="altView === 'table'"
+        :value="appFilter"
+        class="select filterbar__app"
+        aria-label="按应用筛选"
+        @change="onPickApp"
+      >
+        <option value="">全部应用（{{ totalCount }}）</option>
+        <option v-for="app in apps" :key="app.id" :value="app.id">
+          {{ app.name }}{{ app.writable === false ? '（只读）' : '' }}
+        </option>
+      </select>
+
+      <!--
+        展开/折叠全部放在**左侧控件区**（视图切换 + 应用分档之后），不进右侧动作组。
+        它改的是「这张表怎么显示」，和「列表 / 导航星系」是同一类东西；
+        右侧只留刷新、新建菜单这种"会打接口 / 改数据"的动作，边界才清楚。
+        实边框（不是 `btn--ghost`）：左边紧挨着有边框的下拉，无框会显得残缺。
+      -->
+      <button
+        v-if="altView === 'table' && expandableIds.length > 0"
+        class="btn btn--sm"
+        type="button"
+        @click="toggleAll"
+      >
         <AppIcon name="chevronRight" :size="14" :class="{ 'is-open': !allCollapsed }" />
         {{ allCollapsed ? '展开全部' : '折叠全部' }}
       </button>
-      <span class="toolbar__spacer"></span>
-      <button
-        v-if="auth.hasPermission('admin:menu:create')"
-        class="btn btn--primary btn--sm"
-        type="button"
-        @click="openCreate()"
-      >
-        <Plus :size="15" /> 新建菜单
-      </button>
+
+      <div class="filterbar__actions">
+        <button class="btn btn--sm" type="button" :disabled="loading" @click="refreshAll">
+          <RefreshCw :size="15" /> 刷新
+        </button>
+        <button
+          v-if="altView === 'table' && auth.hasPermission('admin:menu:create')"
+          class="btn btn--primary btn--sm"
+          type="button"
+          :disabled="!currentAppWritable"
+          :title="currentAppWritable ? '' : '你没有该应用的管理权限'"
+          @click="openCreate()"
+        >
+          <Plus :size="15" /> 新建菜单
+        </button>
+      </div>
     </div>
 
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
     <section v-if="altView === 'table'" class="panel">
-      <div class="table-wrap">
+      <div v-if="device !== 'mobile'" class="table-wrap">
         <table class="table">
+          <colgroup>
+            <col style="width: 148px" />
+            <col style="width: 58px" />
+            <col style="width: 120px" />
+            <col style="width: 148px" />
+            <col style="width: 58px" />
+            <col style="width: 58px" />
+            <col style="width: 58px" />
+            <col style="width: 130px" />
+          </colgroup>
           <thead>
             <tr>
               <th>名称</th>
               <th>类型</th>
               <th>路由</th>
               <th>权限码</th>
-              <th class="col-center">排序</th>
-              <th class="col-center">显示</th>
-              <th class="col-center">状态</th>
+              <th>排序</th>
+              <th>显示</th>
+              <th>状态</th>
               <th class="col-actions">操作</th>
             </tr>
           </thead>
@@ -543,6 +675,9 @@ onMounted(() => {
                   </button>
                   <span v-else class="menu-twist is-leaf" aria-hidden="true" />
                   <span class="menu-name" :class="{ 'is-btn': item.node.type === 'btn' }">{{ item.node.name }}</span>
+                  <span v-if="appFilter === '' && item.depth === 0" class="tag tag--info app-tag">
+                    {{ appLabelOf(item.node.app_id) }}
+                  </span>
                   <span v-if="item.hasChildren" class="menu-count" :title="`${item.node.children?.length} 个子项`">
                     {{ item.node.children?.length }}
                   </span>
@@ -555,8 +690,8 @@ onMounted(() => {
               </td>
               <td class="mono">{{ item.node.path || '—' }}</td>
               <td class="mono">{{ item.node.permission || '—' }}</td>
-              <td class="mono col-center">{{ item.node.sort }}</td>
-              <td class="col-center">
+              <td class="mono">{{ item.node.sort }}</td>
+              <td>
                 <!--
                   所有类型（含按钮）都由「显示」开关控制是否展示：
                   目录/页面 = 侧栏是否出现；按钮 = 是否出现在页面工具栏。
@@ -569,7 +704,7 @@ onMounted(() => {
                   @update:model-value="value => toggleVisible(item.node, value)"
                 />
               </td>
-              <td class="col-center">
+              <td>
                 <!-- 状态是记录（正常 / 停用），不是开关；停用后连授权都判否 -->
                 <span :class="['tag', item.node.status === 1 ? 'tag--ok' : 'tag--off']">
                   {{ item.node.status === 1 ? '正常' : '停用' }}
@@ -614,6 +749,83 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
+
+      <!--
+        手机端：缩进卡片。层级靠缩进（每层 14px）+ 折叠箭头表达，
+        「显示」开关留在右侧（它是这一屏最常点的控件），其余字段压成一行副标题。
+      -->
+      <ul v-else class="mlist">
+        <li v-for="item in flat" :key="item.node.id" class="mcard">
+          <div class="mcard__head">
+            <div class="mcard__main">
+              <span class="mcard__title" :style="{ paddingLeft: `${item.depth * 14}px` }">
+                <button
+                  v-if="item.hasChildren"
+                  class="mgroup__twist"
+                  type="button"
+                  :aria-expanded="!item.isCollapsed"
+                  :aria-label="item.isCollapsed ? `展开 ${item.node.name}` : `收起 ${item.node.name}`"
+                  @click="toggleCollapse(item.node.id)"
+                >
+                  <AppIcon name="chevronRight" :size="12" :class="{ 'is-open': !item.isCollapsed }" />
+                </button>
+                <span v-else class="mcard__indent" aria-hidden="true"></span>
+                <span class="mcard__title-text" :class="{ 'menu-name--btn': item.node.type === 'btn' }">
+                  {{ item.node.name }}
+                </span>
+                <span :class="['tag', item.node.type === 'btn' ? 'tag--off' : 'tag--info']">
+                  {{ TYPE_TEXT[item.node.type] }}
+                </span>
+                <span v-if="item.hasChildren" class="menu-count">{{ item.node.children?.length }}</span>
+              </span>
+              <span class="mcard__sub mono" :style="{ paddingLeft: `${20 + item.depth * 14}px` }">
+                {{ item.node.path || '无路由' }} · {{ item.node.permission || '无权限码' }}
+              </span>
+              <span class="mcard__meta" :style="{ paddingLeft: `${20 + item.depth * 14}px` }">
+                <span>排序 {{ item.node.sort }}</span>
+                <span v-if="appFilter === '' && item.depth === 0">{{ appLabelOf(item.node.app_id) }}</span>
+                <span :class="['tag', item.node.status === 1 ? 'tag--ok' : 'tag--off']">
+                  {{ item.node.status === 1 ? '正常' : '停用' }}
+                </span>
+              </span>
+            </div>
+            <!-- 显示开关：手机上它比"状态"更常用，单独留在右侧不参与换行 -->
+            <AppSwitch
+              :model-value="item.node.visible === 1"
+              :label="`显示 ${item.node.name}`"
+              :disabled="!auth.hasPermission('admin:menu:update')"
+              @update:model-value="value => toggleVisible(item.node, value)"
+            />
+          </div>
+          <div class="mcard__acts">
+            <button
+              v-if="auth.hasPermission('admin:menu:create') && item.node.type !== 'btn'"
+              class="btn btn--sm"
+              type="button"
+              @click="openCreate(item.node)"
+            >
+              <Plus :size="13" /> {{ item.node.type === 'menu' ? '按钮' : '下级' }}
+            </button>
+            <button
+              v-if="auth.hasPermission('admin:menu:update')"
+              class="btn btn--sm"
+              type="button"
+              @click="openEdit(item.node)"
+            >
+              <Pencil :size="13" /> 编辑
+            </button>
+            <button
+              v-if="auth.hasPermission('admin:menu:delete')"
+              class="btn btn--danger btn--sm"
+              type="button"
+              @click="remove(item.node)"
+            >
+              <Trash2 :size="13" /> 删除
+            </button>
+          </div>
+        </li>
+        <li v-if="!loading && flat.length === 0" class="mlist__hint">暂无菜单</li>
+      </ul>
     </section>
 
     <!-- 导航星系：目录 / 页面 / 按钮的三层星图（复用同一份菜单树） -->
@@ -627,6 +839,19 @@ onMounted(() => {
           <span class="modal__title">{{ dialogTitle }}</span>
         </header>
         <div class="modal__body">
+          <!--
+            归属应用决定权限码的命名空间。新建时可选；已有节点禁用 ——
+            换应用要连父子一起换，单条换会造出跨应用的父子关系。
+          -->
+          <label class="field">
+            <span class="field__label">归属应用</span>
+            <select v-model="form.appId" class="select" :disabled="editingId !== null" @change="onAppChange">
+              <option v-for="app in writableApps" :key="app.id" :value="app.id">{{ app.name }}</option>
+            </select>
+            <p v-if="editingId !== null" class="form-hint">
+              已有菜单不能直接更换应用（父子必须同属一个应用），需要更换请删除后重建。
+            </p>
+          </label>
           <label class="field">
             <span class="field__label">上级菜单</span>
             <select v-model.number="form.parentId" class="select">
@@ -718,6 +943,18 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* 筛选条骨架在 components.css（`.filterbar`），这里只钉应用下拉的宽度：
+   最长的应用名是「RetroWeb 逆合成工作台」，200px 才不截断。 */
+.filterbar__app {
+  flex: 0 0 200px;
+}
+
+/* 顶层行标注归属应用（"全部"视图下才有意义，分档后冗余） */
+.app-tag {
+  margin-left: 6px;
+  flex: none;
+}
+
 /* 图标选择：左边实时预览，右边下拉 —— 选之前就能看见长什么样 */
 .icon-pick {
   display: flex;
@@ -740,15 +977,6 @@ onMounted(() => {
 .icon-pick .select {
   flex: 1;
   min-width: 0;
-}
-
-/* 数值 / 开关 / 状态列居中：表格里这些是"指标"，左对齐会显得散 */
-.col-center {
-  text-align: center;
-}
-
-.col-center .tag {
-  margin: 0 auto;
 }
 
 /* 操作列三个图标按钮：删除单独给红色，其余保持幽灵态 */

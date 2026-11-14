@@ -11,6 +11,7 @@ import { nextTick, watch } from 'vue';
 import { ThemeRoot } from 'skinsuite/vue';
 import { useThemeStore } from '@/stores/theme';
 import { useAccentStore } from '@/stores/accent';
+import { alignAccentToPackage } from '@/composables/useThemePackage';
 
 /** <ThemeRoot> 的 props 类型（库未导出 ThemeStoreLike，从其 props 反推最稳妥） */
 type ThemeRootProps = InstanceType<typeof ThemeRoot>['$props'];
@@ -40,6 +41,8 @@ watch(
   () => [themeStore.mode, themeStore.packageId].join('|'),
   async () => {
     await nextTick();
+    // 先让"主色跟上主题包"（用户没选过色时），再写变量 —— 顺序反了就白写一次
+    alignAccentToPackage();
     accentStore.sync();
   },
   { immediate: true, flush: 'post' }

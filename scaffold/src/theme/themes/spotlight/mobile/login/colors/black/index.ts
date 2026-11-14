@@ -8,7 +8,7 @@
  * @since 2026-11-10
  */
 import type { MauthThemeColor } from 'skinsuite';
-import { DARK_TOKENS } from '@/theme/palette';
+import { DARK_TOKENS, MOBILE_TOKENS } from '@/theme/palette';
 
 export default {
   meta: {
@@ -18,5 +18,5 @@ export default {
     author: 'console'
   },
   tone: 'dark',
-  tokens: { ...DARK_TOKENS }
+  tokens: { ...DARK_TOKENS, ...MOBILE_TOKENS }
 } satisfies MauthThemeColor;

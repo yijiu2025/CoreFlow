@@ -44,6 +44,8 @@ export interface CurrentUser {
 export interface MenuNode {
   id: number;
   parent_id: number;
+  /** 归属应用：admin = 管理后台，其它应用用其标识（如 firewall） */
+  app_id: string;
   name: string;
   type: 'dir' | 'menu' | 'btn';
   icon: string | null;
@@ -97,6 +99,8 @@ export interface LogFilters {
   username?: string;
   /** 来源 IP（前缀匹配） */
   ip?: string;
+  /** 设备码（子串匹配；audit_logs.device_id） */
+  deviceId?: string;
   /** 事件码（登录日志） */
   event?: string;
   /** 事件码（操作日志） */
@@ -168,6 +172,15 @@ export interface UserProfile {
     deptId: number | null;
     deptName: string;
     postNames: string[];
+    /** 岗位 ID（编辑回填用；岗位名会重名 / 可改名，反查必错） */
+    postIds: number[];
+    /**
+     * 完整角色 ID（编辑回填用）
+     *
+     * 🔴 与 `access.roles` **不是**同一份：那边只含当前操作者看得见的角色，
+     *    拿它回填表单再保存，会把看不见的角色当成"被摘掉"整片删除。
+     */
+    roleIds: number[];
     createdAt: string | null;
     deleteVersion: number;
   };
@@ -353,6 +366,24 @@ export interface UserOptions {
   posts: PostOption[];
   apps?: Array<{ id: string; label: string }>;
   scope?: ActorScope;
+}
+
+/**
+ * 用户编辑表单的初始值
+ *
+ * 两个入口共用同一份结构：列表行（`UserRow`）与本页详情（`UserProfile`）都能挤出
+ * 这几项。**角色 / 岗位只收 ID**，理由见 `UserRow.role_ids` 的注释。
+ *
+ * `null` 表示"新建"：没有目标，表单只剩账号 / 邮箱 / 初始密码。
+ */
+export interface UserEditTarget {
+  id: number;
+  username: string;
+  email: string;
+  deptId: number | null;
+  status: number;
+  roleIds: number[];
+  postIds: number[];
 }
 
 /** 角色行 */

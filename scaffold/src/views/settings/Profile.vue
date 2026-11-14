@@ -15,7 +15,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Check, LogOut, MonitorSmartphone, PowerOff, Trash2 } from 'lucide-vue-next';
+import { Check, Layers, LogOut, MonitorSmartphone, PowerOff, Trash2 } from 'lucide-vue-next';
 import {
   kickMyDevice,
   kickOtherDevices,
@@ -26,9 +26,19 @@ import {
 } from '@/api/session';
 import type { MyDeviceRow } from '@/api/types';
 import { useAccentStore } from '@/stores/accent';
+import { useThemePackage } from '@/composables/useThemePackage';
 import { useAuthStore } from '@/stores/auth';
 
 const accentStore = useAccentStore();
+
+/**
+ * 界面风格（主题包）选择器
+ *
+ * 与主题色的分工：**风格**决定壳长什么样（侧栏 / TabBar / cell 列表），
+ * **主题色**只换主色。两者互不冲突，但"微信"包会顺手把主色切到配套绿
+ * （见 `useThemePackage` 文件头）。
+ */
+const { packages: stylePackages, current: currentStyle, pick: pickStyle } = useThemePackage();
 const auth = useAuthStore();
 const router = useRouter();
 
@@ -348,13 +358,11 @@ onMounted(loadDevices);
   <div class="profile">
     <div class="page__head">
       <h2 class="page__title">个人设置</h2>
-      <span class="page__sub">主题偏好与登录设备都只影响你自己的账号</span>
     </div>
 
     <section class="panel">
       <header class="panel__head">
         <span class="panel__title">个人资料</span>
-        <span class="panel__sub">只影响后台管理内的显示</span>
       </header>
 
       <div class="panel__body">
@@ -404,12 +412,40 @@ onMounted(loadDevices);
 
     <section class="panel">
       <header class="panel__head">
-        <span class="panel__title">主题设置</span>
-        <span class="panel__sub">改完自动保存</span>
+        <span class="panel__title">界面风格</span>
       </header>
 
       <div class="panel__body">
-        <p class="hint">主题色影响按钮、链接、选中态与工作台图表；明暗仍走右上角切换。</p>
+        <p class="hint">换一种排布方式，数据与权限都不变。</p>
+
+        <div class="styles" role="radiogroup" aria-label="界面风格">
+          <button
+            v-for="item in stylePackages"
+            :key="item.id"
+            type="button"
+            role="radio"
+            :aria-checked="currentStyle === item.id"
+            :class="['style-card', { 'is-on': currentStyle === item.id }]"
+            @click="pickStyle(item.id)"
+          >
+            <Layers :size="17" class="style-card__ico" />
+            <span>
+              <span class="style-card__name">{{ item.name }}</span>
+              <span class="style-card__desc">{{ item.description }}</span>
+            </span>
+            <Check v-if="currentStyle === item.id" :size="15" class="style-card__check" />
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel__head">
+        <span class="panel__title">主题设置</span>
+      </header>
+
+      <div class="panel__body">
+        <p class="hint">选中后会记住，明暗在右上角切换。</p>
 
         <div class="accents" role="radiogroup" aria-label="主题色">
           <button
@@ -585,6 +621,65 @@ onMounted(loadDevices);
 .accent-card__name {
   font-size: 12.5px;
   color: var(--mauth-text);
+}
+
+/* 界面风格卡：两列起，一行能放下"名字 + 一句说明" */
+.styles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.style-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--mauth-border);
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+
+.style-card:hover {
+  border-color: var(--mauth-border-strong);
+  box-shadow: var(--e1);
+}
+
+.style-card.is-on {
+  border-color: var(--mauth-primary);
+  box-shadow: inset 0 0 0 1px var(--mauth-primary);
+}
+
+.style-card__ico {
+  flex: none;
+  margin-top: 1px;
+  color: var(--mauth-text-soft);
+}
+
+.style-card__name {
+  display: block;
+  font-size: 13px;
+  font-weight: 620;
+  color: var(--mauth-text);
+}
+
+.style-card__desc {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--mauth-text-soft);
+}
+
+.style-card__check {
+  flex: none;
+  margin-left: auto;
+  color: var(--mauth-primary);
 }
 
 .status {

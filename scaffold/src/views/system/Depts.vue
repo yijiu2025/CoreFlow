@@ -20,6 +20,7 @@ import { ChevronRight, History, Pencil, Plus, RefreshCw, Search, Trash2 } from '
 import { createDept, deptTree, removeDept, updateDept } from '@/api/system';
 import type { DeptNode, UserRow } from '@/api/types';
 import { listUsers } from '@/api/system';
+import UserPicker from '@/components/ui/UserPicker.vue';
 
 /**
  * 组织架构画布：异步加载
@@ -30,9 +31,19 @@ import { listUsers } from '@/api/system';
 const OrgCanvas = defineAsyncComponent(() => import('@/components/business/OrgCanvas.vue'));
 import DeptHistoryDialog from '@/components/business/DeptHistoryDialog.vue';
 import ReadOnlyTag from '@/components/ui/ReadOnlyTag.vue';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
+
+/**
+ * 当前渲染设备
+ *
+ * 部门树在手机上不能横着滚：左侧层级靠缩进表达，一屏放得下四五个层级，
+ * 但表格 4 列（部门 / 成员 / 状态 / 操作）在 390px 上必然要横滚 —— 操作列
+ * 够不到，等于没有。所以手机上换成"缩进卡片 + 独立操作行"。
+ */
+const device = useRenderDevice();
 
 const trees = ref<DeptNode[]>([]);
 const loading = ref(false);
@@ -301,7 +312,9 @@ function collectIds(node: DeptNode): number[] {
 
 /** 上级部门选项（树形缩进；编辑时排除自身与后代） */
 const parentOptions = computed(() => {
-  const exclude = new Set<number>(editingId.value === null ? [] : collectIds(findNode(trees.value, editingId.value) ?? ({} as DeptNode)));
+  const exclude = new Set<number>(
+    editingId.value === null ? [] : collectIds(findNode(trees.value, editingId.value) ?? ({} as DeptNode))
+  );
   const out: Array<{ id: number; label: string; depth: number }> = [];
   const walk = (nodes: DeptNode[], depth: number): void => {
     for (const node of nodes) {
@@ -450,12 +463,15 @@ onMounted(load);
   <div>
     <div class="page__head">
       <h2 class="page__title">部门管理</h2>
-      <span class="page__sub">组织层级决定「本部门及以下」的数据权限范围，改动会被审计</span>
       <ReadOnlyTag code="admin:dept:update" scope="部门" />
     </div>
 
-    <!-- 读数：先给整棵树的概况，再让人往下看细节 -->
-    <div class="stats dept-stats">
+    <!--
+      读数：先给整棵树的概况，再让人往下看细节。
+      组织架构视图不显示这一排 —— 画布吃满剩余高度，而"部门读数"面板里已经有同口径的数字；
+      两条信息重复，还各占一行高度。
+    -->
+    <div v-if="altView === 'table'" class="stats dept-stats">
       <div class="stat">
         <div class="stat__label">部门总数</div>
         <div class="stat__value">{{ summary.count }}</div>
@@ -464,7 +480,7 @@ onMounted(load);
       <div class="stat">
         <div class="stat__label">成员合计</div>
         <div class="stat__value">{{ summary.members }}</div>
-        <div class="stat__hint">按直属人数累加</div>
+        <div class="stat__hint">含下属成员</div>
       </div>
       <div class="stat">
         <div class="stat__label">最大层级</div>
@@ -474,55 +490,86 @@ onMounted(load);
       <div class="stat">
         <div class="stat__label">停用部门</div>
         <div class="stat__value">{{ summary.disabled }}</div>
-        <div class="stat__hint">停用后不出现在可选项里</div>
+        <div class="stat__hint">停用后不可选</div>
       </div>
     </div>
 
-    <div class="tabbar" role="tablist" aria-label="视图">
-      <button type="button" role="tab" :aria-selected="altView === 'table'" :class="['tab', { 'is-on': altView === 'table' }]" @click="altView = 'table'">列表</button>
-      <button type="button" role="tab" :aria-selected="altView === 'canvas'" :class="['tab', { 'is-on': altView === 'canvas' }]" @click="altView = 'canvas'">组织架构</button>
-    </div>
-
-    <div v-show="altView === 'table'" class="toolbar">
-      <span class="input-wrap">
-        <Search :size="14" class="input-wrap__icon" />
-        <input
-          v-model="query.keyword"
-          class="input"
-          style="width: 220px"
-          placeholder="部门名称 / 负责人 / 电话"
-        />
-      </span>
-      <select v-model="query.status" class="select" style="width: 118px">
-        <option value="">全部状态</option>
-        <option :value="1">启用</option>
-        <option :value="0">停用</option>
-      </select>
-      <button
-        v-if="query.keyword || query.status !== ''"
-        class="btn btn--ghost btn--sm"
-        type="button"
-        @click="query.keyword = ''; query.status = ''"
-      >
-        清空
-      </button>
-      <span class="toolbar__spacer"></span>
-      <span class="toolbar__group">
-        <button class="btn btn--ghost btn--sm" type="button" @click="expandAll">展开</button>
-        <button class="btn btn--ghost btn--sm" type="button" @click="collapseAll">收起</button>
-      </span>
-      <button class="btn btn--sm btn--icon" type="button" :disabled="loading" aria-label="刷新" title="刷新" @click="load">
-        <RefreshCw :size="15" />
-      </button>
-      <button v-if="auth.hasPermission('admin:dept:create')" class="btn btn--primary btn--sm" type="button" @click="openCreate()">
-        <Plus :size="15" /> 新建部门
-      </button>
+    <!--
+      视图切换与筛选/操作放在同一行：分两行时一行只有一个分段控件、一行只有搜索框，
+      中间还各带一段下边距，占的高度比内容还多。
+      分段控件必须始终渲染（组织架构视图也要靠它切回来），所以只对其它控件用 v-if。
+    -->
+    <div class="toolbar dept-bar">
+      <div class="tabbar" role="tablist" aria-label="视图">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="altView === 'table'"
+          :class="['tab', { 'is-on': altView === 'table' }]"
+          @click="altView = 'table'"
+        >
+          列表
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="altView === 'canvas'"
+          :class="['tab', { 'is-on': altView === 'canvas' }]"
+          @click="altView = 'canvas'"
+        >
+          组织架构
+        </button>
+      </div>
+      <template v-if="altView === 'table'">
+        <span class="input-wrap">
+          <Search :size="14" class="input-wrap__icon" />
+          <input v-model="query.keyword" class="input" style="width: 220px" placeholder="部门名称 / 负责人 / 电话" />
+        </span>
+        <select v-model="query.status" class="select" style="width: 118px">
+          <option value="">全部状态</option>
+          <option :value="1">启用</option>
+          <option :value="0">停用</option>
+        </select>
+        <button
+          v-if="query.keyword || query.status !== ''"
+          class="btn btn--ghost btn--sm"
+          type="button"
+          @click="
+            query.keyword = '';
+            query.status = '';
+          "
+        >
+          清空
+        </button>
+        <!--
+          展开 / 收起放在**左侧控件区**（与「列表 / 组织架构」同侧），不进右侧动作组：
+          它们改的是"这棵树怎么显示"，跟视图切换是一类；右侧只留刷新、新建部门这种
+          会打接口 / 改数据的动作。与菜单页的「展开全部」同一套位置与边框。
+        -->
+        <span class="toolbar__group">
+          <button class="btn btn--sm" type="button" @click="expandAll">展开</button>
+          <button class="btn btn--sm" type="button" @click="collapseAll">收起</button>
+        </span>
+        <span class="toolbar__spacer"></span>
+        <!-- 刷新：实边框 + 图标文字，与其它页同一形态（纯图标只留给行内小操作） -->
+        <button class="btn btn--sm dept-refresh" type="button" :disabled="loading" @click="load">
+          <RefreshCw :size="15" :class="{ 'is-spinning': loading }" /> 刷新
+        </button>
+        <button
+          v-if="auth.hasPermission('admin:dept:create')"
+          class="btn btn--primary btn--sm"
+          type="button"
+          @click="openCreate()"
+        >
+          <Plus :size="15" /> 新建部门
+        </button>
+      </template>
     </div>
 
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
     <section v-if="altView === 'table'" class="panel">
-      <div class="table-wrap">
+      <div v-if="device !== 'mobile'" class="table-wrap">
         <table class="table dept-table">
           <thead>
             <tr>
@@ -628,14 +675,98 @@ onMounted(load);
           </tbody>
         </table>
       </div>
+
+      <!--
+        手机端：一行一张"缩进卡片"。
+        层级仍靠缩进表达（每层 12px），展开箭头留在名字左边，
+        成员数与状态压进标题行，操作单独一行 —— 4 个按钮在 390px 上排得下。
+      -->
+      <ul v-else class="mlist">
+        <li v-for="item in rows" :key="item.node.id" class="mcard">
+          <div class="mcard__head">
+            <div class="mcard__main">
+              <span class="mcard__title" :style="{ paddingLeft: `${item.depth * 12}px` }">
+                <button
+                  v-if="item.hasChildren"
+                  class="mgroup__twist"
+                  type="button"
+                  :aria-expanded="filtering || !collapsed.has(item.node.id)"
+                  :aria-label="`展开或收起 ${item.node.name}`"
+                  @click="toggle(item.node.id)"
+                >
+                  <ChevronRight :size="14" :class="{ 'is-open': filtering || !collapsed.has(item.node.id) }" />
+                </button>
+                <span v-else class="mcard__indent" aria-hidden="true"></span>
+                <span class="mcard__title-text">{{ item.node.name }}</span>
+                <span v-if="item.hasChildren" class="dept-badge">{{ item.node.children.length }}</span>
+                <span class="tag" :class="item.node.status === 1 ? 'tag--ok' : 'tag--off'">
+                  {{ item.node.status === 1 ? '启用' : '停用' }}
+                </span>
+              </span>
+              <span class="mcard__sub" :style="{ paddingLeft: `${12 + item.depth * 12}px` }">
+                {{ item.node.leader || '未指定负责人' }}
+                <template v-if="item.node.phone"> · {{ item.node.phone }}</template>
+              </span>
+              <span class="mcard__meta" :style="{ paddingLeft: `${12 + item.depth * 12}px` }">
+                <span>直属 <b class="tnum">{{ item.node.user_count }}</b> 人</span>
+                <span>含下级 <b class="tnum">{{ membersOf(item.node) }}</b> 人</span>
+              </span>
+            </div>
+          </div>
+          <div class="mcard__acts">
+            <button
+              v-if="auth.hasPermission('admin:dept:create')"
+              class="btn btn--sm"
+              type="button"
+              @click="openCreate(item.node)"
+            >
+              <Plus :size="13" /> 下级
+            </button>
+            <button
+              v-if="auth.hasPermission('admin:dept:update')"
+              class="btn btn--sm"
+              type="button"
+              @click="openEdit(item.node)"
+            >
+              <Pencil :size="13" /> 编辑
+            </button>
+            <button class="btn btn--sm" type="button" @click="historyTarget = item.node">
+              <History :size="13" /> 历史
+            </button>
+            <button
+              v-if="auth.hasPermission('admin:dept:delete')"
+              class="btn btn--danger btn--sm"
+              type="button"
+              @click="remove(item.node)"
+            >
+              <Trash2 :size="13" /> 删除
+            </button>
+          </div>
+        </li>
+        <li v-if="!loading && rows.length === 0" class="mlist__hint">
+          {{ filtering ? '没有匹配的部门' : '暂无部门' }}
+        </li>
+      </ul>
     </section>
 
-    <!-- 组织架构画布：拖拽平移 / Ctrl 滚轮缩放，四角浮动面板 -->
+    <!-- 组织架构画布：拖拽平移 / 滚轮缩放，四角浮动面板 -->
     <section v-if="altView === 'canvas'">
-      <OrgCanvas :tree="trees" :selected-id="selectedId" @select="selectedId = $event.id">
+      <OrgCanvas
+        :tree="trees"
+        :selected-id="selectedId"
+        :creatable="auth.hasPermission('admin:dept:create')"
+        @select="selectedId = $event.id"
+        @create="openCreate"
+        @refresh="load"
+      >
         <template #tl>
           <section v-if="selected" class="org-card m-float">
-            <span class="dept-eyebrow">{{ selectedPath?.slice(0, -1).map(d => d.name).join(' / ') || '根部门' }}</span>
+            <span class="dept-eyebrow">{{
+              selectedPath
+                ?.slice(0, -1)
+                .map(d => d.name)
+                .join(' / ') || '根部门'
+            }}</span>
             <h2 class="org-card-title">{{ selected.name }}</h2>
             <dl class="org-card-rows">
               <dt>负责人</dt>
@@ -686,17 +817,30 @@ onMounted(load);
         </template>
 
         <template #br>
-          <section v-if="selected" class="org-card org-actions m-float">
+          <!--
+            🔴 面板不能整体挂在 `v-if="selected"` 上：组织架构视图里没选中任何节点
+            （包括"一个部门都还没有"的首次使用）时，就没有任何新建入口，只能切回列表页。
+            所以「新建部门」（根级）常驻；「新增下级 / 编辑 / 删除」才依赖选中项。
+          -->
+          <section v-if="auth.hasPermission('admin:dept:create') || selected" class="org-card org-actions m-float">
             <button
               v-if="auth.hasPermission('admin:dept:create')"
               class="btn btn--primary btn--sm"
+              type="button"
+              @click="openCreate()"
+            >
+              <Plus :size="14" /> 新建部门
+            </button>
+            <button
+              v-if="selected && auth.hasPermission('admin:dept:create')"
+              class="btn btn--ghost btn--sm"
               type="button"
               @click="openCreate(selected)"
             >
               <Plus :size="14" /> 新增下级
             </button>
             <button
-              v-if="auth.hasPermission('admin:dept:update')"
+              v-if="selected && auth.hasPermission('admin:dept:update')"
               class="btn btn--ghost btn--sm"
               type="button"
               @click="openEdit(selected)"
@@ -704,7 +848,7 @@ onMounted(load);
               <Pencil :size="14" /> 编辑
             </button>
             <button
-              v-if="auth.hasPermission('admin:dept:delete')"
+              v-if="selected && auth.hasPermission('admin:dept:delete')"
               class="btn btn--danger btn--sm"
               type="button"
               @click="remove(selected)"
@@ -737,10 +881,16 @@ onMounted(load);
             <input v-model="form.name" class="input" maxlength="50" placeholder="如：研发中心" />
             <span v-if="errors.name" class="field__error">{{ errors.name }}</span>
           </label>
-          <label class="field">
+          <div class="field">
             <span class="field__label">负责人</span>
-            <input v-model="form.leader" class="input" maxlength="50" placeholder="选填" />
-          </label>
+            <!--
+              从系统里选人，不再是"凭记忆手打一个名字"：下拉里给账号 + 部门做辨认，
+              但**仍允许自由输入** —— 历史数据存的是真名，也有"临时负责人还没建账号"的情况，
+              一律禁止手填会把已有数据逼成脏值。
+            -->
+            <UserPicker v-model="form.leader" :maxlength="50" placeholder="搜索账号选人，或直接输入姓名" />
+            <span class="field__hint">存的是用户账号（登录名）；选不到人时可以直接填写姓名</span>
+          </div>
           <label class="field">
             <span class="field__label">联系电话</span>
             <input v-model="form.phone" class="input" maxlength="20" placeholder="选填" />
@@ -819,6 +969,37 @@ onMounted(load);
 
 .dept-stats {
   margin-bottom: 2px;
+}
+
+/*
+ * 视图切换 + 筛选/操作同一行。
+ * 上边距比默认工具条更大：这一行紧贴读数卡，贴太近会让人以为筛选属于卡片的一部分。
+ */
+.dept-bar {
+  margin-top: 18px;
+  row-gap: 8px;
+}
+
+/* 工具条按钮高度由全局 `.toolbar .btn--sm` 统一到 `--control-h`，这里不再单钉 */
+
+/*
+ * 刷新中的旋转：点击之后图标必须动起来，否则"点了没反应"与"正在加载"分不清。
+ * 0.9s 一圈偏慢但足够稳；减少动效偏好下直接停转。
+ */
+.dept-refresh .is-spinning {
+  animation: dept-spin 0.9s linear infinite;
+}
+
+@keyframes dept-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dept-refresh .is-spinning {
+    animation: none;
+  }
 }
 
 .dept-col-members {

@@ -1,0 +1,624 @@
+/**
+ * 微信设计层 · 列表
+ *
+ * 微信的列表是"整块 + 发丝线切行"，不是"每行一张卡"。
+ * 这条差别决定了三件事：块圆角只在外层、行间用 border-bottom、最后一行去线。
+ *
+ * 覆盖两类：共享列表（`.mlist/.mcard/.mgroup`，全站通用）
+ * 与各页自己写的行结构（`.m-user/.dept__item/.menu-cell/...`）。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+
+/* ── 共享列表 ─────────────────────────────────────────────── */
+
+.wx .wxbody .mlist {
+  margin: 0 0 var(--wx-gap);
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  overflow: hidden;
+}
+
+.wx .wxbody .mcard {
+  padding: 13px var(--wx-pad);
+  border-bottom: var(--wx-hairline);
+  background: transparent;
+}
+
+.wx .wxbody .mcard:last-child {
+  border-bottom: 0;
+}
+
+/* 行标题：16/500（不是粗体片——微信的列表标题靠字号建立层级） */
+.wx .wxbody .mcard__title,
+.wx .wxbody .mcard__title-text {
+  font-size: var(--wx-fs-row);
+  font-weight: 500;
+  color: var(--mauth-text);
+}
+
+.wx .wxbody .mcard__sub {
+  margin-top: 2px;
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .mcard__meta {
+  gap: 2px 10px;
+  margin-top: 6px;
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .mcard__meta b {
+  font-weight: 500;
+  color: var(--mauth-text-mid);
+}
+
+/* 行内动作：微信把动作收进"行 → 详情"，留在行上的只做小号（≥28px 可点） */
+.wx .wxbody .mcard__acts {
+  gap: 6px;
+}
+
+/*
+ * 卡片底部的动作（编辑 / 菜单 / 删除）
+ *
+ * 微信不会把三个动作做成三枚浅灰小方块 —— 那看起来像"标签"。这里是文字动作：
+ * 主色字、无底、按压给一层底色。禁用态退成灰字（不换底色，否则又变回方块）。
+ */
+.wx .wxbody .mcard__acts .btn {
+  height: 30px;
+  padding: 0 8px;
+  background: transparent;
+  color: var(--mauth-primary);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .mcard__acts .btn:disabled {
+  background: transparent;
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .mcard__acts .btn:not(:disabled):active {
+  background: var(--wx-press);
+}
+
+/* 删除是破坏性动作：红字，且不与前两个挤在一起（微信里它与"编辑"分组放） */
+.wx .wxbody .mcard__acts .btn--danger,
+.wx .wxbody .mcard__acts .btn.is-danger {
+  margin-left: auto;
+  color: var(--mauth-danger);
+}
+
+.wx .wxbody .mcard__acts .btn--icon {
+  width: 30px;
+  height: 30px;
+  background: transparent;
+}
+
+.wx .wxbody .mcard.is-tappable:active {
+  background: var(--wx-press);
+}
+
+/* 分组标题：灰底那条太"后台"，微信是页面底上的一行浅灰小字 */
+.wx .wxbody .mgroup {
+  padding: 10px 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--mauth-text-soft);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .mgroup__count {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .mgroup__id {
+  font-family: var(--font-mono);
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-faint);
+}
+
+/* ── 用户列表行（Users.vue / OrgHome.vue）─────────────────── */
+
+.wx .wxbody .m-user {
+  gap: 12px;
+  padding: 12px var(--wx-pad);
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .m-user:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .m-user__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background: var(--mauth-surface-2);
+  font-size: 15px;
+}
+
+/* 昵称与邮箱分两行 —— 组件自己的 `.m-user__main` 是横向基线对齐（桌面窄列表
+   为了省高度），在手机上会把"zhangwei zhangwei@corp.cn"挤成一行、邮箱被压到
+   只剩几个字。微信的联系人列表天然是"名字一行、备注一行"。 */
+.wx .wxbody .m-user__main {
+  display: block;
+  min-width: 0;
+}
+
+.wx .wxbody .m-user__name {
+  display: block;
+  max-width: none;
+  font-size: var(--wx-fs-row);
+  font-weight: 500;
+}
+
+.wx .wxbody .m-user__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .m-user:active {
+  background: var(--wx-press);
+}
+
+/* ── 部门树（Users.vue 左栏 / Depts.vue）──────────────────── */
+
+.wx .wxbody .dept,
+.wx .wxbody .dept__list {
+  border: 0;
+  background: var(--mauth-surface);
+  border-radius: var(--wx-radius);
+}
+
+.wx .wxbody .dept__head,
+.wx .wxbody .dept__title {
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .dept__item {
+  height: var(--wx-row);
+  padding: 0 var(--wx-pad);
+  border-radius: 0;
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .dept__item.is-on {
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+}
+
+.wx .wxbody .dept__item:active {
+  background: var(--wx-press);
+}
+
+/* ── 菜单列表（Menus.vue）────────────────────────────────── */
+
+.wx .wxbody .menu-cell {
+  min-height: var(--wx-row);
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .menu-name {
+  font-size: var(--wx-fs-row);
+  font-weight: 400;
+}
+
+.wx .wxbody .menu-count {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+/* ── 角色分组（Roles.vue）────────────────────────────────── */
+
+.wx .wxbody .role-group {
+  background: var(--mauth-surface);
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .role-group__label {
+  font-size: var(--wx-fs-row);
+  font-weight: 500;
+}
+
+.wx .wxbody .role-group__count,
+.wx .wxbody .role-group__id {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .role-name__text {
+  font-size: var(--wx-fs-row);
+}
+
+/* ── 日志行（OperLog / LoginLog）─────────────────────────── */
+
+.wx .wxbody .log-row,
+.wx .wxbody .oper-row {
+  padding: 12px var(--wx-pad);
+  border-bottom: var(--wx-hairline);
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .log-row:active,
+.wx .wxbody .oper-row:active {
+  background: var(--wx-press);
+}
+
+.wx .wxbody .log-code,
+.wx .wxbody .oper-method {
+  font-family: var(--font-mono);
+  font-size: var(--wx-fs-note);
+}
+
+.wx .wxbody .log-time,
+.wx .wxbody .oper-time {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .oper-event,
+.wx .wxbody .log-desc {
+  font-size: var(--wx-fs-body);
+  color: var(--mauth-text);
+}
+
+.wx .wxbody .oper-module,
+.wx .wxbody .oper-origin {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* ── 工作台：最近动态 / 快捷入口 ─────────────────────────── */
+
+.wx .wxbody .recent__item {
+  padding: 11px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .recent__item:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .recent__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+}
+
+.wx .wxbody .recent__user {
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .recent__meta,
+.wx .wxbody .recent__time {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .quick__link {
+  padding: 12px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .quick__link:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .quick__title {
+  font-size: var(--wx-fs-row);
+  font-weight: 400;
+}
+
+.wx .wxbody .quick__sub {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .quick__ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+}
+
+/* ── 时间线 / 设备列表（UserProfileDrawer）───────────────── */
+
+.wx .wxbody .feed {
+  padding: 12px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .feed:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .feed__time,
+.wx .wxbody .feed__meta {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .dev {
+  padding: 12px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .dev:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .dev__kind {
+  font-size: var(--wx-fs-body);
+  font-weight: 500;
+}
+
+.wx .wxbody .dev__code {
+  font-family: var(--font-mono);
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .dev__meta,
+.wx .wxbody .dev__ua {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* ── 入口 cell 族（通讯录 / 发现 / 我）─────────────────────
+ *
+ * 与上面的 `.mlist` 分工：`.mlist` 是"一条数据"（标题 + 副标题 + 操作行，来自接口），
+ * 这里是"一个入口"（彩色方块图标 + 标题 + 右侧说明 + chevron，结构写死在页面里）。
+ *
+ * 2026-11-15 从全局 `assets/styles/components.css` 整体搬进来：那 170 行是微信
+ * 版式独有的视觉语言（彩色小方块 + 发丝线切行），留在全局等于给"珍珠玻璃也要加载
+ * 一份微信样式"开绿灯，而且没有前缀隔离 —— 与"主题私有视觉住主题包"的约定相悖。
+ */
+/* ── 微信风格 cell 列表（通讯录 / 发现 / 我） ──────────────────────────
+ *
+ * 与 `.mlist` 的分工：`.mlist` 是"一条数据"（标题 + 副标题 + 操作行，数据来自接口），
+ * 这里是"一个入口"（图标 + 标题 + 右侧说明 + chevron，结构写死在页面里）。
+ * 共同点：都靠 1px 发丝线分隔、都**不包媒体查询** —— 只在微信版式的栏目根页挂载。
+ *
+ * 在珍珠玻璃下也能用（白块 + 细边），只是没有那块"整块列表"的观感 ——
+ * 主题差异由 token 承担，不在这里写 if。 */
+.wx .wxcells {
+  margin: 0 0 10px;
+  border-radius: var(--mauth-radius-md);
+  background: var(--mauth-surface);
+  overflow: hidden;
+}
+
+/* 组标题在块外上侧（微信的"标签分组"就是这么排的，不是块内表头） */
+.wx .wxcells__head {
+  padding: 0 4px 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mauth-text-soft);
+}
+
+/* 组与组之间：上一块的下边距 10 + 这里 6 = 16px，比块内行距大、比页面分区间距小 */
+.wx .wxcells + .wxcells__head {
+  margin-top: 6px;
+}
+
+/* 首组上方不要多出一段空白（导航栏下面就该直接是内容） */
+.wx .wxbody > .wxcells:first-child {
+  margin-top: 0;
+}
+
+/* 空态：整块白底 + 一行灰字，不要留一片空白让人以为没加载完 */
+.wx .wxcells__empty {
+  padding: 40px 16px;
+  font-size: 13px;
+  color: var(--mauth-text-faint);
+  text-align: center;
+}
+
+.wx .wxcell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--mauth-text);
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 发丝线从图标右侧起（微信也是这条起止线），不与左侧图标对齐。
+   没有图标的那一行（「我」页的界面风格、设置类列表）线要回到内容起点，
+   否则左侧会空出 52px 的一段"断头线"。 */
+.wx .wxcell + .wxcell::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 52px;
+  height: 1px;
+  background: var(--mauth-border);
+}
+
+.wx .wxcell:not(:has(.wxcell__ico))::after {
+  left: 14px;
+}
+
+.wx .wxcell:active {
+  background: var(--mauth-press);
+}
+
+/* 彩色圆角方块图标：微信用"一列彩色小方块"承担识别，比线条图标好认 */
+.wx .wxcell__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--mauth-primary);
+}
+
+.wx .wxcell__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx .wxcell__note {
+  flex: none;
+  max-width: 46%;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--mauth-text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx .wxcell__chev {
+  flex: none;
+  color: var(--mauth-text-faint);
+}
+
+/* 两行式 cell（标题 + 一句说明）：需要解释的选项（界面风格）用它，
+   一行装不下就换行，而不是把说明截成「桌面侧栏 + 顶栏，手机…」 */
+.wx .wxcell--stack {
+  align-items: flex-start;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.wx .wxcell--stack .wxcell__ico {
+  margin-top: 2px;
+}
+
+.wx .wxcell__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.wx .wxcell__desc {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--mauth-text-soft);
+}
+
+/* 危险项（退出登录）：整行居中、无图标、红字 —— 微信的"退出登录"就是这个位 */
+.wx .wxcell--danger {
+  justify-content: center;
+  color: var(--mauth-danger);
+}
+
+.wx .wxcell--danger .wxcell__title {
+  flex: none;
+}
+
+/* 「我」页的身份头：大圆角头像 + 名字 + 账号
+   （元素是 `<button>` —— 整块可点进个人资料，所以要按 button 重置一遍） */
+.wx .wxme {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 20px 16px;
+  border: 0;
+  border-radius: var(--mauth-radius-md);
+  background: var(--mauth-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wx .wxme:active {
+  background: var(--mauth-press);
+}
+
+/* 文字块吃满剩余宽：名字过长时省略，不把右侧箭头挤出去 */
+.wx .wxme__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.wx .wxme__avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+  font-size: 20px;
+  font-weight: 600;
+  object-fit: cover;
+  overflow: hidden;
+}
+
+.wx .wxme__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 名字与账号是 `<span>`（身份头已改成 button，里面不能塞 div） */
+.wx .wxme__name {
+  display: block;
+  overflow: hidden;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx .wxme__sub {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--mauth-text-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wx .wxme__act {
+  margin-left: auto;
+  flex: none;
+}
+
+/* 不可点的 cell（右侧是开关的那种）：去掉手指光标与按压反馈，
+   否则用户点一下以为"点坏了" */
+.wx .wxcell--static {
+  cursor: default;
+}
+
+.wx .wxcell--static:active {
+  background: transparent;
+}
+
+/* 右侧对勾（选项类 cell 的选中态：微信里就是一枚绿勾，不是整行填色） */
+.wx .wxcell__tick {
+  flex: none;
+  margin-left: auto;
+  color: var(--mauth-primary);
+}

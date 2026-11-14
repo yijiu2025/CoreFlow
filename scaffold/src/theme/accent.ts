@@ -32,6 +32,17 @@ export interface AccentPreset {
   soft: string;
   /** 焦点环 */
   focus: string;
+  /**
+   * 大面积浅底用的**饱和版**主色（卡面渐变、图表填充、光斑）
+   *
+   * 与 `primary` 分开的理由：主色还要承担"白字落在它上面"（实心按钮）和
+   * "它落在白底上"（链接、选中文字）两个任务，因此必须压深；但把压深后的值
+   * 直接按 26% 混进白底，得到的是一层**发灰的绿**（饱和度只剩一半）。
+   * 参考站点的卡面之所以是清透的青柠，是因为它混的是鲜色而不是深色。
+   *
+   * 不换色的主题一律填 `primary`（行为与之前完全一致）。
+   */
+  tint: string;
 }
 
 /**
@@ -46,7 +57,8 @@ const ACCENTS: AccentPreset[] = [
     primary: '#236de9',
     hover: '#1d61d5',
     soft: 'rgba(35, 109, 233, 0.1)',
-    focus: 'rgba(35, 109, 233, 0.8)'
+    focus: 'rgba(35, 109, 233, 0.8)',
+    tint: '#236de9'
   },
   {
     id: 'teal',
@@ -54,7 +66,8 @@ const ACCENTS: AccentPreset[] = [
     primary: '#0d9b8a',
     hover: '#0b8476',
     soft: 'rgba(13, 155, 138, 0.12)',
-    focus: 'rgba(13, 155, 138, 0.8)'
+    focus: 'rgba(13, 155, 138, 0.8)',
+    tint: '#0d9b8a'
   },
   {
     id: 'violet',
@@ -62,7 +75,8 @@ const ACCENTS: AccentPreset[] = [
     primary: '#6d5ce7',
     hover: '#5b4bd1',
     soft: 'rgba(109, 92, 231, 0.12)',
-    focus: 'rgba(109, 92, 231, 0.8)'
+    focus: 'rgba(109, 92, 231, 0.8)',
+    tint: '#6d5ce7'
   },
   {
     id: 'amber',
@@ -70,7 +84,8 @@ const ACCENTS: AccentPreset[] = [
     primary: '#d98324',
     hover: '#bf7018',
     soft: 'rgba(217, 131, 36, 0.14)',
-    focus: 'rgba(217, 131, 36, 0.8)'
+    focus: 'rgba(217, 131, 36, 0.8)',
+    tint: '#d98324'
   },
   {
     id: 'rose',
@@ -78,16 +93,45 @@ const ACCENTS: AccentPreset[] = [
     primary: '#d84a76',
     hover: '#c03c65',
     soft: 'rgba(216, 74, 118, 0.13)',
-    focus: 'rgba(216, 74, 118, 0.8)'
+    focus: 'rgba(216, 74, 118, 0.8)',
+    tint: '#d84a76'
   },
   {
     id: 'leaf',
     name: '青绿',
-    // 绿色主色要压深一档：白字要落在它上面，青柠 #82dd2d 的对比度撑不住（那只适合做数据色）
-    primary: '#3f8f2a',
-    hover: '#34761f',
-    soft: 'rgba(63, 143, 42, 0.13)',
-    focus: 'rgba(63, 143, 42, 0.8)'
+    /*
+     * 与参考站点同一株青柠：**深色做墨、鲜色做底**。
+     *
+     * 旧值 `#3f8f2a`（色相 105°、饱和度 54%）按 26% 混进白卡后只剩一层
+     * 灰绿（实测 `rgb(206,228,201)`，饱和度 0.33），而参考站点的卡面是
+     * `rgb(211,240,183)`（色相 91°、饱和度 0.66）—— 同样的配方混出来的绿
+     * 明显"脏"一档，因为混的是深色而不是鲜色。
+     *
+     * 所以拆开：`primary` 取青柠家族的深档（白字/浅底上都能落，5.0:1），
+     * `tint` 取鲜青柠 `#82dd2d` 专供大面积浅底（卡面渐变、光斑）。
+     */
+    primary: '#4a7c14',
+    hover: '#3d6710',
+    soft: 'rgba(130, 221, 45, 0.18)',
+    focus: 'rgba(74, 124, 20, 0.8)',
+    tint: '#82dd2d'
+  },
+  {
+    id: 'wechat',
+    name: '微信绿',
+    /*
+     * 「微信」主题包配套色：**深档做墨、鲜档做底**（与 leaf 同一套办法）。
+     *
+     * 品牌绿 `#07C160` 在白底上只有 2.38:1，而主色在本站还要当文字色用；
+     * 直接拿它当 primary 会让链接、选中态、角色名都变得难以辨认。
+     * 所以 primary 取同色相深档 `#0b8f45`（白底 4.18:1），`tint` 保留品牌鲜绿 ——
+     * 大面积浅底（卡面渐变、光斑）用它，既有微信的绿，又不用在它上面落小字。
+     */
+    primary: '#0b8f45',
+    hover: '#097a3b',
+    soft: 'rgba(7, 193, 96, 0.12)',
+    focus: 'rgba(7, 193, 96, 0.7)',
+    tint: '#07c160'
   },
   {
     id: 'graphite',
@@ -95,7 +139,8 @@ const ACCENTS: AccentPreset[] = [
     primary: '#3f4a52',
     hover: '#2f3940',
     soft: 'rgba(63, 74, 82, 0.12)',
-    focus: 'rgba(63, 74, 82, 0.75)'
+    focus: 'rgba(63, 74, 82, 0.75)',
+    tint: '#3f4a52'
   }
 ];
 
@@ -129,6 +174,7 @@ function applyAccent(id: string): AccentPreset {
   root.style.setProperty('--mauth-primary', preset.primary);
   root.style.setProperty('--mauth-primary-hover', preset.hover);
   root.style.setProperty('--mauth-primary-soft', preset.soft);
+  root.style.setProperty('--mauth-tint', preset.tint);
   root.style.setProperty('--mauth-focus', preset.focus);
   root.dataset.accent = preset.id;
   return preset;

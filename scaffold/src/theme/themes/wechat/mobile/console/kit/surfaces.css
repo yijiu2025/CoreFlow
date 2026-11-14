@@ -1,0 +1,187 @@
+/**
+ * 微信设计层 · 表面（块）
+ *
+ * 一句话公理：**灰底上放白块，块不描边不投影，块内用发丝线切行。**
+ * 珍珠玻璃靠"描边 + 阴影 + 圆角"分层，微信靠"底色反差 + 留白"分层 ——
+ * 所以本文件做的第一件事就是把前者全部拆掉（`border: 0` / `box-shadow: none`）。
+ *
+ * 🔴 选择器统一 `.wx .wxbody` 前缀（0,3,0）：
+ *    页面 scoped 样式编译后是 `.dash__head[data-v-x]`（0,2,0），单类覆盖会输给它。
+ *    多一层 `.wxbody` 不只是"更具体"，它同时表达"只改内容区，不动壳"。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+
+/* ── 面板（最通用的白块）───────────────────────────────────── */
+
+.wx .wxbody .panel {
+  margin: 0 0 var(--wx-gap);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.wx .wxbody .panel__head {
+  padding: 13px var(--wx-pad) 7px;
+  /* 微信的分组标题是"深色小标题 + 右侧灰色动作"，不夹分隔线 */
+  border-bottom: 0;
+}
+
+.wx .wxbody .panel__title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--mauth-text);
+}
+
+.wx .wxbody .panel__sub,
+.wx .wxbody .panel__note {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .panel__body {
+  padding: 4px var(--wx-pad) var(--wx-pad);
+}
+
+/* 面板右上角的动作链接（"全部" / "刷新"）*/
+.wx .wxbody .panel__action {
+  height: 26px;
+  padding: 0 2px;
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-primary);
+  background: transparent;
+}
+
+/* ── 统计卡（工作台 / 日志页顶部）────────────────────────────── */
+
+.wx .wxbody .stats {
+  /* 2 × 2：手机上四张挤一行会把数字压成 15px，读不出量级 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: var(--wx-gap);
+}
+
+.wx .wxbody .stat {
+  padding: 12px var(--wx-pad);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+.wx .wxbody .stat__label {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .stat__value {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--mauth-text);
+}
+
+.wx .wxbody .stat__hint {
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-faint);
+}
+
+/* ── 工作台的 bento 网格 ───────────────────────────────────── */
+
+.wx .wxbody .bento-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--wx-gap);
+}
+
+.wx .wxbody .bento {
+  padding: var(--wx-pad);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+.wx .wxbody .bento__head {
+  margin-bottom: 10px;
+}
+
+.wx .wxbody .bento__title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.wx .wxbody .bento__meta {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .bento__link {
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-primary);
+}
+
+/* ── 空态 / 骨架 ───────────────────────────────────────────── */
+/* 空态在白块里（而不是裸在灰底上），否则看起来像"页面崩了" */
+.wx .wxbody .empty,
+.wx .wxbody .mlist__hint,
+.wx .wxbody .wxcells__empty {
+  padding: 44px 18px;
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  color: var(--mauth-text-soft);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .skeleton-row {
+  height: 48px;
+  margin-bottom: var(--wx-gap);
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+}
+
+/* ── 表格（桌面遗迹）──────────────────────────────────────── */
+/*
+ * 手机端不该出现"列很多的表"。已经做成 mlist 的页面不会命中这里；
+ * 仍用 table 的地方（导入预览、权限矩阵）只做两件事：给白块 + 允许横向滚动，
+ * 不做"每行变卡片"——那需要改 DOM，属于页面级改造，不在 CSS 层假装做到。
+ */
+.wx .wxbody .table-wrap {
+  margin: 0 0 var(--wx-gap);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wx .wxbody .table th {
+  padding: 10px 12px;
+  font-size: var(--wx-fs-note);
+  font-weight: 500;
+  color: var(--mauth-text-soft);
+  background: var(--mauth-surface-2);
+}
+
+.wx .wxbody .table td {
+  padding: 11px 12px;
+  font-size: var(--wx-fs-body);
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* 悬停抬升在触摸设备上是"卡住的脏点"，只保留按下态 */
+.wx .wxbody .table tbody tr:hover {
+  background: transparent;
+}
+
+.wx .wxbody .table tbody tr:active {
+  background: var(--wx-press);
+}

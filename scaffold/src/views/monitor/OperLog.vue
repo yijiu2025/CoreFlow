@@ -33,9 +33,19 @@ import OperLogDetailDialog from '@/components/business/OperLogDetailDialog.vue';
 import { summarizeOperEvent } from '@/utils/operLogSummary';
 import { hasLogFilter, pickLogFilters } from '@/utils/logFilters';
 import type { LogFilters, LogStats, OperLogRow } from '@/api/types';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
+
+/**
+ * 当前渲染设备
+ *
+ * 日志表 8 列（时间 / 操作者 / 模块 / 事件 / 路径 / 结果 / 来源 / 详情），
+ * 手机上横滚是免不了的 —— 但"详情"在最右，等于这条记录的完整信息够不到。
+ * 手机上换成一行一条：事件摘要 + 时间 + 操作者/IP，整行可点开详情。
+ */
+const device = useRenderDevice();
 
 const rows = ref<OperLogRow[]>([]);
 /** 详情弹窗当前展示的行（null = 关闭） */
@@ -89,6 +99,7 @@ const query = reactive({
   // 以下是筛选条件（独立维度，与列表 / 导出 / 清除共用）
   username: '',
   ip: '',
+  deviceId: '',
   action: '',
   startTime: '',
   endTime: ''
@@ -114,7 +125,9 @@ const advancedOpen = ref(false);
 
 /** 高级面板里有几项在生效（收起时用徽标提示，避免"条件藏在里面看不见"） */
 const advancedCount = computed(
-  () => [query.username, query.ip, query.action, query.startTime, query.endTime].filter(v => v !== '').length
+  () =>
+    [query.username, query.ip, query.deviceId, query.action, query.startTime, query.endTime].filter(v => v !== '')
+      .length
 );
 
 /** 清除弹窗用的条件快照（与列表不是同一个引用：打开弹窗后条件就固定） */
@@ -373,11 +386,14 @@ function onPurged(removed: number): void {
  * @param iso ISO 时间串
  * @returns 形如 `11-11 13:12:41`
  */
-function when(iso: string): string {
+function timeParts(iso: string): { date: string; time: string } {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (Number.isNaN(d.getTime())) return { date: '—', time: '' };
   const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return {
+    date: `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  };
 }
 
 /**
@@ -404,7 +420,7 @@ onMounted(load);
   <div>
     <div class="page__head">
       <h2 class="page__title">操作日志</h2>
-      <span class="page__sub">共 {{ total }} 条 · 数据源 audit_logs</span>
+      <span class="page__sub">共 {{ total }} 条</span>
     </div>
 
     <div class="stats">
@@ -548,7 +564,7 @@ onMounted(load);
         v-model="query.keyword"
         class="input"
         style="width: 190px"
-        placeholder="操作者 / 事件 / IP / 路径"
+        placeholder="操作者 / 事件 / IP / 路径 / 设备码"
         @keyup.enter="search"
       />
       <select v-model.number="query.status" class="select" style="width: 100px">
@@ -569,9 +585,6 @@ onMounted(load);
         <option value="custom">自定义时间</option>
       </select>
       <button class="btn btn--sm" type="button" @click="search"><Search :size="15" /> 查询</button>
-      <button class="btn btn--ghost btn--sm" type="button" :disabled="loading" @click="load">
-        <RefreshCw :size="15" /> 刷新
-      </button>
 
       <!--
           精确条件（账号 / IP / 操作码 / 起止）收进「高级」：它们和关键词是同一件事的
@@ -591,6 +604,10 @@ onMounted(load);
       <button class="btn btn--ghost btn--sm" type="button" @click="resetFilters">清空</button>
 
       <span class="toolbar__actions">
+        <!-- 刷新放在动作组首位：它是"重查一遍"，与导出/删除同属动作，不跟筛选项混排 -->
+        <button class="btn btn--sm" type="button" :disabled="loading" @click="load">
+          <RefreshCw :size="15" /> 刷新
+        </button>
         <button
           v-if="auth.hasPermission('admin:log:read')"
           class="btn btn--sm"
@@ -630,6 +647,14 @@ onMounted(load);
         @keyup.enter="search"
       />
       <input
+        v-model="query.deviceId"
+        class="input"
+        style="width: 200px"
+        placeholder="设备码（含片段即可）"
+        title="按设备码子串匹配，如 WEB-DaBOS 或整串；用于把同一台设备上的操作串起来"
+        @keyup.enter="search"
+      />
+      <input
         v-model="query.action"
         class="input"
         style="width: 150px"
@@ -665,8 +690,20 @@ onMounted(load);
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
     <section class="panel">
-      <div class="table-wrap">
+      <div v-if="device !== 'mobile'" class="table-wrap">
         <table class="table oper-table">
+          <colgroup>
+            <col style="width: 90px" />
+            <col style="width: 68px" />
+            <col style="width: 76px" />
+            <col style="width: 120px" />
+            <col style="width: 160px" />
+            <!-- 结果列 62：`tag` 高 22、左右各 8px 内边距，「成功」两字共 40px，
+                 52px 减去单元格左右 10px 只剩 32 ⇒ 标签被截成「成」 -->
+            <col style="width: 62px" />
+            <col style="width: 124px" />
+            <col style="width: 84px" />
+          </colgroup>
           <thead>
             <tr>
               <th>时间</th>
@@ -683,10 +720,14 @@ onMounted(load);
           </thead>
           <tbody>
             <tr v-for="row in rows" :key="row.id" class="oper-row" @click="activeRow = row">
-              <td class="mono">{{ when(row.created_at) }}</td>
+              <!-- 时间两行（日期 / 时分秒）：单行 14 个字符要 141px，会挤掉路径列 -->
+              <td class="mono oper-time" :title="`${timeParts(row.created_at).date} ${timeParts(row.created_at).time}`">
+                <span>{{ timeParts(row.created_at).date }}</span>
+                <span class="oper-time__hms">{{ timeParts(row.created_at).time }}</span>
+              </td>
               <!-- 悬停显示邮箱/uid：列表列宽有限，账号名重名时靠它区分 -->
               <td :title="row.email || row.uid || ''">{{ row.username || '—' }}</td>
-              <td class="oper-module">{{ row.module }}</td>
+              <td class="oper-module" :title="row.module">{{ row.module }}</td>
               <!--
                 事件列：**中文摘要为主、事件码为辅**。
                 原先反过来（`DEPT_UPDATE` 在上、`deptId=5, name=…` 在下），扫表时
@@ -736,6 +777,46 @@ onMounted(load);
           </tbody>
         </table>
       </div>
+
+      <!--
+        手机端：一条记录一张卡，整行可点开详情。
+        摘要（中文动词）比事件码重要，所以它占标题行；时间与操作者压进副标题；
+        「结果」用小胶囊贴在标题右端 —— 扫一眼先看成功/失败。
+      -->
+      <ul v-else class="mlist">
+        <li
+          v-for="row in rows"
+          :key="row.id"
+          class="mcard is-tappable"
+          role="button"
+          tabindex="0"
+          @click="activeRow = row"
+          @keydown.enter.prevent="activeRow = row"
+        >
+          <div class="mcard__head">
+            <div class="mcard__main">
+              <span class="mcard__title">
+                <span class="mcard__title-text">{{ summarizeOperEvent(row) }}</span>
+              </span>
+              <span class="mcard__sub mono">
+                {{ timeParts(row.created_at).date }} {{ timeParts(row.created_at).time }}
+                · {{ row.username || '—' }}
+                <template v-if="row.module"> · {{ row.module }}</template>
+              </span>
+              <span class="mcard__meta">
+                <span class="mono">{{ row.ip || '无 IP' }}</span>
+                <span v-if="row.device_id" class="mono">{{ shortDevice(row.device_id) }}</span>
+                <span class="mono">{{ row.action }}</span>
+              </span>
+            </div>
+            <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
+              {{ row.status === 1 ? '成功' : '失败' }}
+            </span>
+          </div>
+        </li>
+        <li v-if="loading" class="mlist__hint">加载中…</li>
+        <li v-else-if="rows.length === 0" class="mlist__hint">该条件下没有操作记录</li>
+      </ul>
 
       <div class="pager">
         <span class="mono">第 {{ query.pageNum }} / {{ pageCount }} 页</span>
@@ -880,8 +961,21 @@ onMounted(load);
 
 .oper-col-act {
   width: 1%;
-  text-align: right;
+  text-align: left;
   white-space: nowrap;
+}
+
+/* 时间两行：日期 / 时分秒（单行要 141px，两行 90px 就够） */
+.oper-time {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.2;
+  font-size: 11.5px;
+}
+
+.oper-time__hms {
+  color: var(--mauth-text-soft);
 }
 
 /* 9 列表格：单元格内边距比全局 16px 收窄到 10px，否则长路径会把

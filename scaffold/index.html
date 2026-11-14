@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>管理后台</title>
     <!--
+      样式排查提示（开发期）：全局样式走 `assets/styles/main.css` 的 `@import` 链，
+      改子文件（components.css 等）时热替换**可能不生效** —— 现象是"模板/组件内的
+      样式变了，全局样式没变"（例如表格该定宽却没定宽、说明列文字撑出列外）。
+      本文件一旦变化，Vite 会整页重载，所有样式重新编译请求，是最干净的复位手段。
+    -->
+    <!--
       暗色首帧预置：在样式加载前就把 .dark 类挂到 <html>，
       避免「先白后黑」的闪屏。取值键与 stores/theme.ts 的持久化键保持一致。
     -->
@@ -14,8 +20,7 @@
           // 键名与 skinsuite 默认持久化键一致（mode 单键存字符串，非 JSON）
           var mode = localStorage.getItem('mauth:mode') || 'system';
           var dark =
-            mode === 'dark' ||
-            (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           // 只挂 .dark 类：色值由主题包（skinsuite 注入的 --mauth-*）决定，
           // 不再自造 data-theme 属性 —— 那会成为与主题机制并行的第二套真相。
           if (dark) document.documentElement.classList.add('dark');

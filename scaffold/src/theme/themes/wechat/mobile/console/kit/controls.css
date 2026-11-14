@@ -1,0 +1,358 @@
+/**
+ * 微信设计层 · 控件
+ *
+ * 微信的控件语言：**能不加边框就不加**，层级靠底色和字色，动作用文字色（绿色）。
+ * 所以这里做的是"减法"——把珍珠玻璃的描边胶囊、阴影、玻璃感全部收掉，
+ * 只留下"能点准的尺寸 + 明确的按压反馈"。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+
+/* ── 按钮 ─────────────────────────────────────────────────── */
+
+.wx .wxbody .btn {
+  /* 不换行 + 不压缩：窄容器（如趋势卡右上的「热力 趋势 隐藏」）里
+     两字按钮被挤到只剩 14px 时会变成"隐/藏"上下堆叠，看着像坏了 */
+  flex: none;
+  white-space: nowrap;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
+  font-size: var(--wx-fs-body);
+  box-shadow: none;
+}
+
+.wx .wxbody .btn:hover {
+  /* 触摸设备没有 hover 语义；保留是为了桌面窄窗调试时不出现"玻璃高光" */
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+.wx .wxbody .btn:active {
+  background: var(--wx-press);
+}
+
+/* 主操作：微信的绿色实心按钮比正文大一号，且只有"整页唯一动作"用它 */
+.wx .wxbody .btn--primary {
+  height: 40px;
+  padding: 0 18px;
+  background: var(--mauth-primary);
+  color: #fff;
+  font-size: var(--wx-fs-row);
+  font-weight: 500;
+}
+
+.wx .wxbody .btn--primary:active {
+  background: var(--mauth-primary-hover);
+}
+
+/* 危险操作：微信是红字，不是红底（红底在列表里太抢眼） */
+.wx .wxbody .btn--danger {
+  background: var(--mauth-danger-soft);
+  color: var(--mauth-danger);
+}
+
+/* 次级动作：纯文字 + 绿色 */
+.wx .wxbody .btn--ghost {
+  padding: 0 8px;
+  background: transparent;
+  color: var(--mauth-primary);
+}
+
+.wx .wxbody .btn--ghost:active {
+  background: var(--wx-press);
+}
+
+.wx .wxbody .btn--sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .btn--icon,
+.wx .wxbody .btn--icon.btn--sm {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.wx .wxbody .btn:disabled {
+  opacity: 0.4;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-faint);
+}
+
+/* ── 输入控件 ─────────────────────────────────────────────── */
+
+.wx .wxbody .input,
+.wx .wxbody .select,
+.wx .wxbody .textarea {
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface);
+  font-size: var(--wx-fs-body);
+  box-shadow: none;
+}
+
+/* 白块内的输入框要靠"浅一档的底"才看得出边界（白压白会消失） */
+.wx .wxbody .panel .input,
+.wx .wxbody .panel .select,
+.wx .wxbody .bento .input,
+.wx .wxbody .modal .input,
+.wx .wxbody .modal .select {
+  background: var(--mauth-surface-2);
+}
+
+.wx .wxbody .input:focus,
+.wx .wxbody .select:focus,
+.wx .wxbody .textarea:focus {
+  outline: 2px solid var(--mauth-focus);
+  outline-offset: -1px;
+  border: 0;
+}
+
+.wx .wxbody .field__label {
+  font-size: var(--wx-fs-sub);
+  font-weight: 400;
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .field__hint,
+.wx .wxbody .field__error {
+  font-size: var(--wx-fs-note);
+}
+
+/* 搜索框：微信是浅灰胶囊，不是白底方块 */
+.wx .wxbody .input-wrap {
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+}
+
+.wx .wxbody .input-wrap .input {
+  background: transparent;
+}
+
+/* ── 工具条 / 筛选条 ──────────────────────────────────────── */
+/*
+ * 微信没有"工具条"这个概念：搜索在顶部，筛选是横向滚动的胶囊。
+ * 这里保持 DOM 不变，只把它压成一行、去掉容器感。
+ */
+.wx .wxbody .toolbar,
+.wx .wxbody .filterbar {
+  gap: 8px;
+  margin-bottom: var(--wx-gap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.wx .wxbody .toolbar--filters,
+.wx .wxbody .filterbar--wrap {
+  flex-wrap: wrap;
+}
+
+.wx .wxbody .filterbar__views,
+.wx .wxbody .toolbar__actions,
+.wx .wxbody .filterbar__actions {
+  gap: 6px;
+}
+
+/*
+ * 工具栏里的次要动作：**去掉白底块**
+ *
+ * 珍珠玻璃里工具栏按钮是"白底小方块"，一排四五个就成了一面按钮墙；
+ * 微信的工具栏只有一处实心（主操作），其余都是文字。按"是否主操作"分流即可，
+ * 不用改 DOM 也能得到同样的轻重关系。
+ */
+.wx .wxbody .toolbar .btn:not(.btn--primary):not(.btn--icon),
+.wx .wxbody .filterbar .btn:not(.btn--primary):not(.btn--icon) {
+  padding: 0 10px;
+  background: transparent;
+  color: var(--mauth-text-mid);
+}
+
+.wx .wxbody .toolbar .btn:not(.btn--primary):active,
+.wx .wxbody .filterbar .btn:not(.btn--primary):active {
+  background: var(--wx-press);
+}
+
+/* 主操作保持实心绿：一屏里只该有一个（工具栏与底部动作条各一） */
+.wx .wxbody .toolbar .btn--primary,
+.wx .wxbody .filterbar .btn--primary {
+  background: var(--mauth-primary);
+  color: #fff;
+}
+
+/* 下拉筛选：微信是"白胶囊"，不是白方块（方块会和列表块混成一片） */
+.wx .wxbody .toolbar .select,
+.wx .wxbody .filterbar .select {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--mauth-surface);
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-text-mid);
+}
+
+/* 分段视图切换（列表 / 热力 / 隐藏）：微信用文字，不用胶囊 */
+.wx .wxbody .view-switch {
+  height: 30px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: transparent;
+  font-size: var(--wx-fs-sub);
+  white-space: nowrap;
+}
+
+/*
+ * 视图切换里的每一项都不许被压成"一字一行"
+ *
+ * 曾经在操作日志的趋势卡右上角发生过：容器 ~120px、三项各带内边距，
+ * flex 默认 `shrink:1` 把文字压成竖排。`flex: none` 是这一条的关键。
+ */
+.wx .wxbody .view-switch > * {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ── 页签 ─────────────────────────────────────────────────── */
+
+.wx .wxbody .tabbar {
+  gap: 18px;
+  height: auto;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .tab {
+  position: relative;
+  /* 页签在窄容器里不许被压缩：5 个页签挤在 390px 时，shrink 会把文字竖排 */
+  flex: none;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mauth-text-mid);
+  font-size: var(--wx-fs-body);
+  font-weight: 400;
+}
+
+/*
+ * 选中态：**清掉底块与内高光**
+ *
+ * 共享样式里 `.tab.is-on` 是「白胶囊 + 两层 box-shadow」——那是分段控件的语言，
+ * 放在微信的"文字页签"上就成了截图里那个突兀的白方块。
+ * 这里必须显式归零，否则它会跟着字色一起留在页签上。
+ */
+.wx .wxbody .tab.is-on {
+  background: transparent;
+  box-shadow: none;
+  color: var(--mauth-primary);
+  font-weight: 500;
+}
+
+/* 选中指示：微信是靠字色 + 一条短下划线，不是整块填充 */
+.wx .wxbody .tab.is-on::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--mauth-primary);
+}
+
+.wx .wxbody .tab:hover {
+  background: transparent;
+  color: var(--mauth-text);
+}
+
+/* ── 标签 ─────────────────────────────────────────────────── */
+/* 微信的标签是"浅底 + 同色系深字"，没有描边 */
+.wx .wxbody .tag {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-mid);
+  font-size: var(--wx-fs-tag);
+  line-height: 18px;
+  /* 共享样式给 tag 带了 1px 投影；微信的标签是"纯色块"，有投影就变徽章 */
+  box-shadow: none;
+}
+
+.wx .wxbody .tag--ok {
+  background: var(--mauth-success-soft);
+  color: var(--mauth-success);
+}
+
+.wx .wxbody .tag--off {
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .tag--info {
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+}
+
+/* ── 分页 ─────────────────────────────────────────────────── */
+/* 手机上"上一页 / 下一页 + 当前页"比一排页码按钮更合理（页码按钮 28px 点不准） */
+.wx .wxbody .pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: var(--wx-gap) 0 0;
+  padding: 0;
+}
+
+.wx .wxbody .pager .btn {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--mauth-surface);
+}
+
+.wx .wxbody .pager__info,
+.wx .wxbody .pager__page {
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-text-soft);
+}
+
+/* ── 开关（AppSwitch）────────────────────────────────────── */
+/* iOS 形制：44×26 的胶囊，开是品牌绿，关是浅灰 */
+.wx .wxbody .switch {
+  width: 46px;
+  height: 27px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mauth-border-strong);
+  box-shadow: none;
+}
+
+.wx .wxbody .switch.is-on {
+  background: var(--mauth-tint);
+}
+
+.wx .wxbody .switch__knob {
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}

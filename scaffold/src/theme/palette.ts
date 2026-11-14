@@ -36,6 +36,9 @@ export const LIGHT_TOKENS = {
   '--mauth-primary': '#236de9',
   '--mauth-primary-hover': '#1d61d5',
   '--mauth-primary-soft': 'rgba(35, 109, 233, 0.1)',
+  /* 大面积浅底（卡面渐变、图表填充）用的**饱和版**主色：默认与主色同值，
+     只有绿色主题会把它换成更鲜的青柠（见 theme/accent.ts 的说明） */
+  '--mauth-tint': '#236de9',
   '--mauth-success': '#58a021',
   '--mauth-success-soft': 'rgba(88, 160, 33, 0.12)',
   '--mauth-danger': '#e0443b',
@@ -68,6 +71,22 @@ export const LIGHT_TOKENS = {
   '--mauth-cat-5-ink': '#2d7140'
 } as const;
 
+/**
+ * 手机端尺度微调（叠在 LIGHT / DARK 之后，**不含颜色**）
+ *
+ * 手机端不是"另一套配色"，只有尺度不同：卡片圆角收紧一档 ——
+ * 16px 圆角在 1400px 宽的桌面上显得柔和，在 390px 宽的手机上会吃掉
+ * 本来就不多的横向空间，列表看着"胖"。14px 更接近原生 App 的密度。
+ *
+ * 🔴 只放「与明暗无关、只与设备有关」的值；颜色一律仍由 LIGHT / DARK 决定。
+ * 🔴 token 名必须 `--mauth-` 前缀且值只接受 px / hex / rgba 这类单值
+ *    （skinsuite 注入前有白名单校验，复合值会被拦下）。
+ */
+export const MOBILE_TOKENS = {
+  '--mauth-radius-md': '14px',
+  '--mauth-radius-lg': '18px'
+};
+
 /** 深色（石墨夜） */
 export const DARK_TOKENS = {
   '--mauth-bg': '#0f1214',
@@ -87,6 +106,7 @@ export const DARK_TOKENS = {
   '--mauth-primary': '#6ea8ff',
   '--mauth-primary-hover': '#8bbaff',
   '--mauth-primary-soft': 'rgba(110, 168, 255, 0.16)',
+  '--mauth-tint': '#6ea8ff',
   '--mauth-success': '#8fd45a',
   '--mauth-success-soft': 'rgba(143, 212, 90, 0.16)',
   '--mauth-danger': '#ff7a70',

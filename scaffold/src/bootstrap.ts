@@ -17,6 +17,7 @@ import type { Plugin } from 'vue';
 import { theme } from 'skinsuite/vue';
 import App from './App.vue';
 import router from './router';
+import { restoreThemePackage } from './composables/useThemePackage';
 import { maskClose } from './utils/maskClose';
 
 // 0. 设备 ID 全局同步（跨标签页 storage 监听 + 变更回调注册）
@@ -40,7 +41,11 @@ app.directive('mask-close', maskClose);
 // 类型桥接：库的插件声明带可选 options 泛型，与 Vue 的 Plugin 重载不完全同形
 app.use(theme as unknown as Plugin, { router });
 
-// 3. 路由就绪后再挂载，避免首屏闪一个空壳
+// 3. 界面风格（主题包）恢复：必须在挂载前 —— 晚了会先闪一下默认壳再换过去
+//    （URL 带了 `?th=` 时这里自动让位，见 composable 文件头）
+restoreThemePackage();
+
+// 4. 路由就绪后再挂载，避免首屏闪一个空壳
 router
   .isReady()
   .then(() => app.mount('#app'))

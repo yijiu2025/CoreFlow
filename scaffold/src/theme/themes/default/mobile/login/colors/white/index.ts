@@ -11,7 +11,7 @@
  * @since 2026-11-09
  */
 import type { MauthThemeColor } from 'skinsuite';
-import { LIGHT_TOKENS } from '@/theme/palette';
+import { LIGHT_TOKENS, MOBILE_TOKENS } from '@/theme/palette';
 
 export default {
   meta: {
@@ -21,5 +21,5 @@ export default {
     author: 'console'
   },
   tone: 'light',
-  tokens: { ...LIGHT_TOKENS }
+  tokens: { ...LIGHT_TOKENS, ...MOBILE_TOKENS }
 } satisfies MauthThemeColor;

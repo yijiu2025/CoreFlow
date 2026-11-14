@@ -81,10 +81,23 @@ export const useAccentStore = defineStore('accent', () => {
     if (!accent) void persist();
   }
 
+  /**
+   * 采用某个预设，但**不落库、不写本地**
+   *
+   * 只给「主题包联动」用：选了某个包、而用户从没表达过主色偏好时，先把主色切到
+   * 配套色（否则微信风格进来是蓝色）。用户一旦自己点过色卡，`pick()` 会写
+   * `mauth:accent`，此后联动不再覆盖（见 `useThemePackage.alignAccentToPackage`）。
+   *
+   * @param id 预设 ID
+   */
+  function adopt(id: string): void {
+    currentId.value = applyAccent(id).id;
+  }
+
   /** 主题变化后重写变量（明暗/主题包切换会重写 token） */
   function sync(): void {
     applyAccent(currentId.value);
   }
 
-  return { presets, currentId, saveState, errorMessage, pick, hydrate, sync };
+  return { presets, currentId, saveState, errorMessage, pick, adopt, hydrate, sync };
 });

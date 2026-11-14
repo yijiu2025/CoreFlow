@@ -205,13 +205,31 @@ export interface UserImportResult {
 }
 
 /**
- * 批量导入用户
+ * 批量导入用户（第一步）：签发二次验证凭据
+ *
+ * 🔴 必须把**同一批 rows** 传上来：服务端会算一份内容指纹存进挑战记录，
+ *    执行时再用同一份指纹比对。前端换过任意一行都要重新领凭据。
  *
  * @param rows 解析后的行（最多 500）
+ * @param method 验证方式（缺省按账号可用因素推荐）
+ * @returns 挑战信息 + 本批行数
+ */
+export function createUserImportChallenge(
+  rows: UserImportRow[],
+  method?: 'email' | 'password'
+): Promise<StepUpChallenge & { matched: number }> {
+  return post(`${BASE}/users/import/challenge`, { rows, method });
+}
+
+/**
+ * 批量导入用户（第二步：带凭据执行）
+ *
+ * @param rows 解析后的行（最多 500）
+ * @param stepUp 一次性验证凭据
  * @returns 成功条数与失败明细
  */
-export function importUsers(rows: UserImportRow[]): Promise<UserImportResult> {
-  return post(`${BASE}/users/import`, { rows });
+export function importUsers(rows: UserImportRow[], stepUp: StepUpPayload): Promise<UserImportResult> {
+  return post(`${BASE}/users/import`, { rows, stepUp });
 }
 
 /* ── 角色 ─────────────────────────────────────────────────── */
@@ -288,8 +306,18 @@ export function kickUserSession(body: {
 /* ── 菜单 ─────────────────────────────────────────────────── */
 
 /** 菜单树 */
-export function menuTree(): Promise<MenuNode[]> {
-  return get(`${BASE}/menus/tree`);
+export function menuTree(appId?: string): Promise<MenuNode[]> {
+  return get(`${BASE}/menus/tree`, appId ? { appId } : undefined);
+}
+
+/**
+ * 可配置的应用（注册过权限码的那些）
+ *
+ * `writable` = 当前账号能否配置该应用的菜单。前端据此置灰/过滤，
+ * 真正的闸在写接口（`assertAppWritable`）。
+ */
+export function menuApps(): Promise<Array<{ id: string; name: string; writable: boolean }>> {
+  return get(`${BASE}/menus/apps`);
 }
 
 /**
@@ -299,8 +327,10 @@ export function menuTree(): Promise<MenuNode[]> {
  *    那是 8 个应用合并后的全量目录，拿它做菜单候选等于把"能用别的应用的码"
  *    摆到界面上；后端也会拒写非本应用的码。
  */
-export function menuPermissionOptions(): Promise<{ options: Array<{ code: string; label: string; type: string }> }> {
-  return get(`${BASE}/menus/permission-options`);
+export function menuPermissionOptions(
+  appId?: string
+): Promise<{ appId?: string; appName?: string; options: Array<{ code: string; label: string; type: string }> }> {
+  return get(`${BASE}/menus/permission-options`, appId ? { appId } : undefined);
 }
 
 /** 新建菜单 */

@@ -14,6 +14,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { setUnauthorizedHandler } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
+import { intendedPackageId } from '@/theme/packages';
 
 /** 公开路由（不需要登录） */
 const PUBLIC_PATHS = ['/login', '/access-denied'];
@@ -37,10 +38,61 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '工作台', permission: 'admin:dashboard:read' }
       },
       {
+        /*
+         * 通讯录 / 发现 / 我 —— 手机端「微信」外壳的三个栏目根页
+         *
+         * 它们**住在微信主题包里**（`theme/themes/wechat/mobile/console/pages/`），
+         * 不在 `views/`：这一屏是版式骨架的一部分，用的是微信的 cell 语言，
+         * 与"业务页面不知道自己长什么样"是相反的两类东西。路由仍然在这里静态声明 ——
+         * 页面文件的位置可以跟着主题走，路由表不行（见文件头"不做动态 addRoute"）。
+         *
+         * `meta.themePkg` 标出归属包：当前生效的包不是它时，这三条路径在本主题下
+         * 不存在（守卫送回工作台）。判据写在 meta 上而不是页面里，页面才能一行
+         * 主题判断都没有。
+         *
+         * 它们**不在菜单表里**，所以桌面侧栏不会出现（菜单只决定"看得见什么"，
+         * 而这三页是版式骨架的一部分，由微信壳的 TabBar 带过来）。深链进来照样能开：
+         * 页面内部自己按权限码过滤入口，进不去的条目不渲染。
+         *
+         * 不给 `meta.permission`：能否进入由页面里的入口决定，而不是"整页踢到 /no-access"。
+         */
+        path: 'org',
+        name: 'org',
+        component: () => import('@/theme/themes/wechat/mobile/console/pages/org/index.vue'),
+        meta: { title: '通讯录', themePkg: 'wechat' }
+      },
+      {
+        path: 'discover',
+        name: 'discover',
+        component: () => import('@/theme/themes/wechat/mobile/console/pages/discover/index.vue'),
+        meta: { title: '发现', themePkg: 'wechat' }
+      },
+      {
+        path: 'me',
+        name: 'me',
+        component: () => import('@/theme/themes/wechat/mobile/console/pages/me/index.vue'),
+        meta: { title: '我', themePkg: 'wechat' }
+      },
+      {
         path: 'system/user',
         name: 'system-user',
         component: () => import('@/views/system/Users.vue'),
         meta: { title: '用户管理', permission: 'admin:user:read' }
+      },
+      {
+        /*
+         * 用户详情（手机端的"进新页面看完整信息"）
+         *
+         * 桌面上详情是抽屉（`UserProfileDrawer`），手机上抽屉只会盖住半屏、
+         * 而且退不回"刚才那一屏" —— 换成真路由：能深链、能按返回键、能进历史栈。
+         * `meta.stack: true` 让外壳把左上角的汉堡换成返回箭头（见 AppShell）。
+         *
+         * 与列表用同一个权限码：能看列表就能看这条详情，接口仍由后端 PBAC 判定。
+         */
+        path: 'system/user/:id(\\d+)',
+        name: 'system-user-detail',
+        component: () => import('@/views/system/UserDetail.vue'),
+        meta: { title: '用户详情', permission: 'admin:user:read', stack: true }
       },
       {
         path: 'system/role',
@@ -148,6 +200,27 @@ router.beforeEach(async to => {
     // 用户只会以为是自己密码错了（见 views/error/AccessDenied.vue 文件头）
     if (auth.denied) return { path: '/access-denied' };
     return { path: '/login', query: { redirect: to.fullPath } };
+  }
+
+  /*
+   * 主题私有页面（`meta.themePkg`）：当前生效的版式不是它的归属包时，这条路径在本
+   * 主题下**不存在** —— 送回工作台。
+   *
+   * 为什么要有这一条：通讯录 / 发现 / 我住在微信主题包里，用的是微信的导航结构与
+   * cell 语言。如果在珍珠玻璃下还能打开，用户会看到"一个不属于这个主题的页面"，
+   * 而且它没有任何入口能到达（菜单表里没有），只能靠手输地址或旧收藏撞进来。
+   *
+   * 🔴 判据必须走 `intendedPackageId()`，不能用 `themeStore.packageId`：后者由
+   *    `activeView` 解析而来，而 `activeView` 是 `<ThemeView>` **渲染时**才写进去的。
+   *    守卫跑在渲染之前，读到的是上一个页面的值 —— `?th=wechat` 深链会被误判成
+   *    default，把用户弹回工作台（踩过一次）。
+   *
+   * 🔴 跳转要带上 `query`：不带的话 `?th=wechat&device=mobile` 会一起丢掉 ——
+   *    用户看到的是"跳回工作台并且主题变了"。
+   */
+  const themePkg = to.meta?.themePkg as string | undefined;
+  if (themePkg && intendedPackageId() !== themePkg) {
+    return { path: '/dashboard', query: to.query };
   }
 
   const permission = to.meta?.permission as string | undefined;

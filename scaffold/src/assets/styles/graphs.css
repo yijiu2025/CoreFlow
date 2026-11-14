@@ -1013,7 +1013,14 @@ button.trace-crumb:hover { color: var(--mauth-primary); }
    从参考项目 instruments.css 的「组织架构画布」段提取，只做变量名映射。 */
 .org-canvas {
   position: relative;
-  height: max(560px, calc(100dvh - 252px));
+  /*
+   * 高度由组件实测写入（`OrgCanvas` 的 syncHeight）：填满「标题之下 → 视口底部」。
+   * 这里只留一个兜底值 —— 组件挂载前/测量失败时用，不能再用 `max(560px, …)`：
+   * 那个保底会在小屏上把整页顶出视口。
+   */
+  height: var(--org-canvas-h, 520px);
+  min-height: 200px;
+  max-height: 1400px;
   overflow: hidden;
   border-radius: var(--mauth-radius-xl);
   border: 1px solid var(--mauth-border-strong);
@@ -1028,6 +1035,11 @@ button.trace-crumb:hover { color: var(--mauth-primary); }
 }
 
 .org-canvas.is-panning {
+  cursor: grabbing;
+}
+
+/* 节点上也能按住拖动，拖起来时光标要跟着变成"抓着"，否则看不出在拖 */
+.org-canvas.is-panning .org-node {
   cursor: grabbing;
 }
 
@@ -1175,6 +1187,48 @@ button.trace-crumb:hover { color: var(--mauth-primary); }
   background: var(--cat-bg);
 }
 
+/* 节点快捷「+」：悬停 / 聚焦 / 选中时露出，平时不占视觉注意力 */
+.org-add {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--mauth-border-strong);
+  border-radius: 999px;
+  background: var(--surface-solid);
+  color: var(--mauth-text-mid);
+  box-shadow: var(--e1);
+  opacity: 0;
+  transition:
+    opacity 0.14s var(--ease),
+    color 0.14s var(--ease);
+  cursor: pointer;
+}
+
+.org-node:hover .org-add,
+.org-node:focus-visible .org-add,
+.org-node.is-selected .org-add {
+  opacity: 1;
+}
+
+.org-add:hover {
+  color: var(--mauth-primary);
+  border-color: var(--mauth-primary);
+}
+
+/* 缩放控件组里的分隔线：刷新与缩放是两类动作，别连成一片 */
+.org-ctl-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: var(--mauth-border);
+}
+
 .org-toggle {
   position: absolute;
   left: 50%;
@@ -1297,9 +1351,21 @@ button.trace-crumb:hover { color: var(--mauth-primary); }
   }
 }
 
+/*
+ * 矮视口（笔记本 768 以下、或缩放过的浏览器）收起左下详情卡：
+ * 画布本身只剩 250~300px，一张 200px 高的卡片会把可视区域吃掉大半。
+ * 详情在列表视图与右侧读数面板里仍能看到。
+ */
+@media (max-height: 760px) {
+  .org-panel.is-bl {
+    display: none;
+  }
+}
+
 @media (max-width: 720px) {
+  /* 高度已由 JS 实测，这里不再写死：写死会盖掉变量、又把页面撑出滚动 */
   .org-canvas {
-    height: 520px;
+    min-height: 200px;
   }
 
   .org-panel.is-tr {

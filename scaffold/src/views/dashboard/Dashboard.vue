@@ -58,11 +58,11 @@ const greeting = computed(() => {
   return '晚上好';
 });
 
-/** 今天（本地时区，带星期） */
+/** 今天（本地时区，带星期；不写年份 —— 天天看的东西越短越好） */
 const today = computed(() => {
   const now = new Date();
   const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
-  return `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日 · ${week}`;
+  return `${now.getMonth() + 1}月${now.getDate()}日 ${week}`;
 });
 
 /** 一句话状态：把"今天发生了什么"讲清楚，而不是堆四个数字 */
@@ -206,7 +206,8 @@ onMounted(load);
           {{ statusLine || '正在读取系统状态…' }}
         </p>
       </div>
-      <button class="btn btn--ghost btn--sm" type="button" :disabled="loading" @click="load">
+      <!-- 刷新统一为实边框：全站九处刷新按钮同一形态，只有"刷新中…"时文案变、外形不变 -->
+      <button class="btn btn--sm" type="button" :disabled="loading" @click="load">
         <RefreshCw :size="14" :class="{ spin: loading }" />
         {{ loading ? '刷新中…' : '刷新' }}
       </button>
@@ -986,7 +987,14 @@ onMounted(load);
   }
 }
 
-@media (max-width: 760px) {
+/*
+ * 窄屏单列。
+ *
+ * 断点取 820px，与其它页（外壳侧栏、表格卡片化、设备判定）同一个值 ——
+ * 曾经这里是 760px，结果 760~820 这段宽度上"已经按手机给了移动端 token，
+ * 网格却还是两列"，卡片被压成一条窄缝。
+ */
+@media (max-width: 820px) {
   .bento-grid {
     gap: 12px;
   }

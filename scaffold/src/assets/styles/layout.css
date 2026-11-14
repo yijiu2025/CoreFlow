@@ -50,7 +50,8 @@
   width: 28px;
   height: 28px;
   border-radius: 9px;
-  background: linear-gradient(145deg, var(--mauth-primary), #164fb8);
+  /* 深档由主色自己压出来：写死蓝色会在换配色/换主题包（如微信绿）时露出马脚 */
+  background: linear-gradient(145deg, var(--mauth-primary), color-mix(in srgb, var(--mauth-primary) 72%, #000));
   color: #fff;
   font-size: 13px;
   font-weight: 700;
@@ -207,6 +208,17 @@
 
   .page {
     padding: 16px 14px 32px;
+  }
+
+  /*
+   * 栈页（手机端详情）：整页内容贴边。
+   *
+   * 列表页需要页边距把内容框起来；详情页是"这一屏就是这个人"，
+   * 顶部的头像栏与页签要通栏，留 14px 会看着像一张浮在灰底上的卡片。
+   * 只作用于 `meta.stack` 的页面（AppShell 加的类），其它页不受影响。
+   */
+  .page--stack {
+    padding: 0;
   }
 }
 

@@ -14,16 +14,49 @@
  */
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Loader2, ShieldCheck, Smartphone, History, MonitorSmartphone, PowerOff, UserRound, X } from 'lucide-vue-next';
-import { kickUserSession, listUserSessions, userProfile } from '@/api/system';
-import type { UserProfile, UserSessionRow } from '@/api/types';
+import {
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  ShieldAlert,
+  ShieldCheck,
+  Smartphone,
+  History,
+  MonitorSmartphone,
+  PowerOff,
+  UserCheck,
+  UserRound,
+  UserX,
+  X
+} from 'lucide-vue-next';
+import { kickUserSession, listUserSessions, updateUserStatus, userOptions, userProfile } from '@/api/system';
+import type { UserEditTarget, UserOptions, UserProfile, UserRow, UserSessionRow } from '@/api/types';
+import UserEditDialog from '@/components/business/UserEditDialog.vue';
+import GrantHistoryDialog from '@/components/business/GrantHistoryDialog.vue';
+import UserDangerDialog from '@/components/business/UserDangerDialog.vue';
+import { canManageUser, indexRoles } from '@/utils/scope';
 import { useAuthStore } from '@/stores/auth';
 
 const auth = useAuthStore();
 const router = useRouter();
 
-const props = defineProps<{ userId: number | null }>();
+/**
+ * `mode`：`drawer` 侧滑抽屉（桌面）/ `page` 整页（手机端从列表点进来的"新页面"）
+ *
+ * 两档共用同一套内容（五个页签、设备会话、踢下线），只是外壳不同：
+ * 抽屉有遮罩与右上角关闭，整页没有遮罩、关闭交给外壳顶栏的返回箭头。
+ * 这样手机端不必再写一遍"这个人是谁 / 有哪些角色 / 在哪登录着"。
+ */
+const props = defineProps<{ userId: number | null; mode?: 'drawer' | 'page' }>();
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>();
+
+/** 整页模式：不画遮罩、不接 Esc/点击遮罩关闭（返回由外壳负责） */
+const isPage = computed(() => props.mode === 'page');
+
+/** 遮罩点击 / Esc：只有抽屉模式才关，整页模式下这两个手势不该把页面关掉 */
+function closeIfDrawer(): void {
+  if (!isPage.value) emit('close');
+}
 
 type Tab = 'overview' | 'apps' | 'perms' | 'records' | 'devices';
 
@@ -44,28 +77,36 @@ const kicking = ref('');
 /** 踢完的一次性提示 */
 const kickNotice = ref('');
 
-watch(
-  () => props.userId,
-  async id => {
+/**
+ * 拉这个人详情
+ *
+ * 编辑保存后要再拉一次（资料/角色/设备都可能在一次保存里变），所以抽成函数而不是
+ * 写在 watch 里。`reset` 只给"换人"用：同一个人刷新时不该把页签打回概览 ——
+ * 用户在「设备」页点了下线、或刚保存完资料，视线应当留在原地。
+ *
+ * @param id 用户 ID
+ * @param reset 是否复位页签与设备列表
+ * @returns 无
+ */
+async function fetchProfile(id: number, reset: boolean): Promise<void> {
+  errorMessage.value = '';
+  if (reset) {
     data.value = null;
-    errorMessage.value = '';
     tab.value = 'overview';
     // 换人必须清掉上一个人的设备：留着会让人以为"这个人也在这台机器上登录过"
     sessions.value = [];
     kickNotice.value = '';
     sessionsError.value = '';
-    if (id === null) return;
-    loading.value = true;
-    try {
-      data.value = await userProfile(id);
-    } catch (err) {
-      errorMessage.value = err instanceof Error ? err.message : '加载失败';
-    } finally {
-      loading.value = false;
-    }
-  },
-  { immediate: true }
-);
+  }
+  loading.value = true;
+  try {
+    data.value = await userProfile(id);
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : '加载失败';
+  } finally {
+    loading.value = false;
+  }
+}
 
 /** 拉设备会话 */
 async function loadSessions(): Promise<void> {
@@ -266,11 +307,188 @@ const statusText = computed(() => {
   if (status === -1) return '已注销';
   return '已禁用';
 });
+
+/* ── 操作区（仅整页模式） ──────────────────────────────────────
+ *
+ * 手机端列表只留「谁 + 是否可用」，行内那排图标按钮（授权记录 / 高危 / 编辑 /
+ * 冻结）在 390px 上根本放不下 —— 它们现在都收在详情页底部：一个主按钮「编辑」，
+ * 其余进「更多」面板。
+ *
+ * 抽屉模式不显示这排按钮：桌面上同一行已经有它们，抽屉里再来一套等于同一动作
+ * 两个入口，还容易被误点（抽屉是"看一眼就走"的地方）。
+ */
+
+/** 角色 / 部门 / 岗位选项（判定"能不能改这个人"要用职级） */
+const options = ref<UserOptions>({ depts: [], roles: [], posts: [] });
+
+/**
+ * 拉选项
+ *
+ * 失败就保持空 —— `canManageUser` 拿不到 `scope` 时会放行（交给后端裁决），
+ * 最坏是多一次 403 提示，而不是把按钮全灰掉让人以为没权限。
+ */
+async function loadOptions(): Promise<void> {
+  try {
+    options.value = await userOptions();
+  } catch {
+    options.value = { depts: [], roles: [], posts: [] };
+  }
+}
+
+/**
+ * 当前操作者能否管理这个人
+ *
+ * 用详情数据拼一个最小 `UserRow`（只喂 `canManageUser` 需要的字段）：
+ * 判定口径与列表行**同一份实现**，不在这里重写一遍职级规则。
+ */
+const manageVerdict = computed(() => {
+  const d = data.value;
+  if (!d) return { ok: false, reason: '' };
+  const row: UserRow = {
+    id: d.user.id,
+    uid: d.user.uid,
+    username: d.user.username,
+    email: d.user.email,
+    avatar: d.user.avatar,
+    status: d.user.status,
+    dept_id: d.user.deptId,
+    dept_name: d.user.deptName,
+    role_names: null,
+    post_names: null,
+    // 完整角色 ID：裁剪过的 `access.roles` 会让职级判定偏低，把"其实不能改"判成能改
+    role_ids: (d.user.roleIds ?? []).join(','),
+    post_ids: (d.user.postIds ?? []).join(','),
+    created_at: d.user.createdAt ?? ''
+  };
+  return canManageUser(options.value.scope, row, indexRoles(options.value.roles), auth.me?.id, '操作');
+});
+
+/** 能否编辑（权限码 + 可管理；待注销的人不让改资料，改要走撤销注销） */
+const canEditUser = computed(() => auth.hasPermission('admin:user:update') && manageVerdict.value.ok);
+/** 能否冻结 / 启用 */
+const canToggleStatus = computed(() => canEditUser.value && data.value?.user.status !== -2);
+/** 能否看授权记录 */
+const canViewGrants = computed(() => auth.hasPermission('admin:user:grants'));
+/** 高危操作的三项能力（与列表页同一判据：超管 + 权限码） */
+const canDeleteUser = computed(() => options.value.scope?.isSuper === true && auth.hasPermission('admin:user:purge'));
+const canTempPassword = computed(
+  () => options.value.scope?.isSuper === true && auth.hasPermission('admin:user:temp-password')
+);
+const canDeactivateApp = computed(() => auth.hasPermission('admin:user:deactivate'));
+/** 是否有「更多」里的动作可点 */
+const hasMoreActions = computed(
+  () => canToggleStatus.value || canViewGrants.value || canDeleteUser.value || canTempPassword.value || canDeactivateApp.value
+);
+
+/** 编辑弹窗开关 */
+const editOpen = ref(false);
+/** 编辑目标（详情数据 → 表单初值） */
+const editTarget = computed<UserEditTarget | null>(() => {
+  const u = data.value?.user;
+  if (!u) return null;
+  return {
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    deptId: u.deptId,
+    status: u.status,
+    roleIds: u.roleIds ?? [],
+    postIds: u.postIds ?? []
+  };
+});
+
+/** 授权记录弹窗开关 */
+const grantOpen = ref(false);
+/** 高危操作弹窗开关 */
+const dangerOpen = ref(false);
+/** 「更多」底部面板开关 */
+const sheetOpen = ref(false);
+/** 一次性提示（操作成功后 2.6 秒消失） */
+const toast = ref('');
+
+/**
+ * 提示
+ *
+ * @param message 文案
+ */
+function notify(message: string): void {
+  toast.value = message;
+  window.setTimeout(() => (toast.value = ''), 2600);
+}
+
+/** 刷新详情（保持当前页签） */
+async function reload(): Promise<void> {
+  if (props.userId !== null) await fetchProfile(props.userId, false);
+}
+
+/** 打开编辑 */
+function openEdit(): void {
+  sheetOpen.value = false;
+  editOpen.value = true;
+}
+
+/**
+ * 编辑保存完成
+ *
+ * @param message 弹窗给的提示语
+ */
+async function onSaved(message: string): Promise<void> {
+  editOpen.value = false;
+  notify(message);
+  await reload();
+  // 状态可能被改（冻结 / 启用），列表页那边要跟着刷新
+  emit('changed');
+}
+
+/**
+ * 切换启用 / 冻结
+ *
+ * 待注销是系统状态，不该用"冻结/启用"去改它 —— 要走「高危操作」里的撤销注销。
+ */
+async function toggleStatus(): Promise<void> {
+  const user = data.value?.user;
+  if (!user) return;
+  if (user.status === -2) {
+    notify('该账号处于待注销状态，请先在「高危操作」里撤销注销');
+    return;
+  }
+  const next = user.status === 1 ? 0 : 1;
+  try {
+    await updateUserStatus(user.id, next);
+    notify(next === 1 ? '已启用' : '已冻结');
+    await reload();
+    emit('changed');
+  } catch (err) {
+    notify(err instanceof Error ? err.message : '操作失败');
+  }
+}
+
+/** 高危操作完成后刷新 */
+async function refreshAfterDanger(): Promise<void> {
+  await reload();
+  emit('changed');
+}
+/*
+ * 首次挂载即拉取
+ *
+ * 放在脚本末尾：watch 是 `immediate`，组件初始化时就执行，而 `options` / `loadOptions`
+ * 都声明在下面 —— 提前写会撞上 TDZ（`Cannot access before initialization`）。
+ */
+watch(
+  () => props.userId,
+  id => {
+    if (id === null) return;
+    void fetchProfile(id, true);
+    // 选项只在还没拉到过时取一次：抽屉反复开关不该重复打 /users/options
+    if (options.value.roles.length === 0) void loadOptions();
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
-  <div v-if="userId !== null" class="drawer-mask" v-mask-close="() => emit('close')">
-    <aside class="drawer" role="dialog" aria-label="用户详情">
+  <div v-if="userId !== null" :class="isPage ? 'profile-page' : 'drawer-mask'" v-mask-close="closeIfDrawer">
+    <aside :class="['drawer', { 'drawer--page': isPage }]" :role="isPage ? undefined : 'dialog'" aria-label="用户详情">
       <header class="drawer__head">
         <div class="who">
           <span class="who__avatar">
@@ -284,13 +502,19 @@ const statusText = computed(() => {
         </div>
         <div class="drawer__actions">
           <span v-if="data" :class="['tag', data.user.status === 1 ? 'tag--ok' : 'tag--off']">{{ statusText }}</span>
-          <button class="btn btn--ghost btn--sm btn--icon" type="button" aria-label="关闭" @click="emit('close')">
+          <button
+            v-if="!isPage"
+            class="btn btn--ghost btn--sm btn--icon"
+            type="button"
+            aria-label="关闭"
+            @click="emit('close')"
+          >
             <X :size="16" />
           </button>
         </div>
       </header>
 
-      <div class="tabbar" role="tablist">
+      <div class="tabbar" :class="{ 'tabbar--sticky': isPage }" role="tablist">
         <button type="button" role="tab" :class="['tab', { 'is-on': tab === 'overview' }]" @click="tab = 'overview'">
           <UserRound :size="14" /> 概览
         </button>
@@ -355,6 +579,11 @@ const statusText = computed(() => {
           <!-- 应用 -->
           <template v-else-if="tab === 'apps'">
             <table v-if="data.apps.length" class="table">
+              <colgroup>
+                <col style="width: 120px" />
+                <col style="width: 190px" />
+                <col style="width: 150px" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>应用</th>
@@ -515,11 +744,440 @@ const statusText = computed(() => {
           </template>
         </template>
       </div>
+
+      <!--
+        底部操作条（仅整页模式）
+
+        列表行上那排图标按钮（授权记录 / 高危 / 编辑 / 冻结）在 390px 上放不下，
+        全部收进这一屏：一个主按钮「编辑」，其余进「更多」。
+        没有可点的动作时整条不渲染 —— 一条空白的白条只会盖住内容。
+      -->
+      <footer v-if="isPage && (canEditUser || hasMoreActions)" class="page-actions">
+        <button v-if="canEditUser" class="btn btn--primary page-actions__main" type="button" @click="openEdit">
+          <Pencil :size="15" /> 编辑资料
+        </button>
+        <button
+          v-if="hasMoreActions"
+          class="btn page-actions__more"
+          type="button"
+          aria-label="更多操作"
+          @click="sheetOpen = true"
+        >
+          <MoreHorizontal :size="18" />
+        </button>
+      </footer>
     </aside>
+
+    <!-- 「更多」面板：从底部升起，与 App 的操作单一致 -->
+    <div v-if="sheetOpen" class="sheet-mask" @click="sheetOpen = false">
+      <div class="sheet" role="menu" aria-label="更多操作" @click.stop>
+        <span class="sheet__grip" aria-hidden="true"></span>
+        <p class="sheet__title">{{ data?.user.username }}</p>
+
+        <button
+          v-if="canToggleStatus"
+          class="sheet__item"
+          type="button"
+          role="menuitem"
+          @click="sheetOpen = false; void toggleStatus()"
+        >
+          <UserX v-if="data?.user.status === 1" :size="16" />
+          <UserCheck v-else :size="16" />
+          <span>{{ data?.user.status === 1 ? '冻结账号' : '启用账号' }}</span>
+          <span class="sheet__note">{{ data?.user.status === 1 ? '会话立即失效，可随时恢复' : '恢复登录' }}</span>
+        </button>
+
+        <button v-if="canViewGrants" class="sheet__item" type="button" role="menuitem" @click="sheetOpen = false; grantOpen = true">
+          <ShieldCheck :size="16" />
+          <span>授权记录</span>
+          <span class="sheet__note">谁在什么时候授了什么</span>
+        </button>
+
+        <button
+          v-if="canDeleteUser || canTempPassword || canDeactivateApp"
+          class="sheet__item sheet__item--danger"
+          type="button"
+          role="menuitem"
+          @click="sheetOpen = false; dangerOpen = true"
+        >
+          <ShieldAlert :size="16" />
+          <span>高危操作</span>
+          <span class="sheet__note">删除 / 应用注销 / 临时密码</span>
+        </button>
+
+        <button class="sheet__cancel" type="button" @click="sheetOpen = false">取消</button>
+      </div>
+    </div>
+
+    <!-- 编辑资料：与用户列表共用一个表单组件 -->
+    <UserEditDialog :open="editOpen" :target="editTarget" @close="editOpen = false" @saved="onSaved" />
+
+    <!-- 授权记录：单个用户的时间线 -->
+    <GrantHistoryDialog
+      :user-id="grantOpen ? userId : null"
+      :username="data?.user.username ?? ''"
+      :adjustable="canEditUser"
+      @close="grantOpen = false"
+      @adjust="grantOpen = false; editOpen = true"
+    />
+
+    <!-- 账号高危操作：删除（缓冲期）/ 应用注销 / 临时密码 -->
+    <UserDangerDialog
+      :user-id="dangerOpen ? userId : null"
+      :username="data?.user.username ?? ''"
+      :can-delete="canDeleteUser"
+      :can-deactivate-app="canDeactivateApp"
+      :can-temp="canTempPassword"
+      @close="dangerOpen = false"
+      @changed="refreshAfterDanger"
+    />
+
+    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 
 <style scoped>
+/*
+ * 整页模式（手机端从列表压栈进来的那一屏）
+ *
+ * 抽屉的手感是"盖住半屏、点外面关掉"；整页是"这一屏就是这个人"：
+ * 不透明、无遮罩、无圆角与投影，页签横向可滑（五个带图标的页签在 390px 上放不下）。
+ *
+ * 🔴 所有整页规则都带 `.drawer--page` 作用域：`.drawer` 是抽屉的基础样式，
+ *    同权重时靠"谁在后面"决胜，写在前面等于一条都没生效（实测量到 470px 宽）。
+ */
+.profile-page {
+  display: block;
+  background: var(--mauth-bg);
+}
+
+.drawer.drawer--page {
+  width: 100%;
+  border-left: 0;
+  box-shadow: none;
+  background: var(--mauth-bg);
+  animation: none;
+}
+
+/* 页头：整页模式把它当"头像 + 名字"的封面，比抽屉里放大一号 */
+.drawer--page .drawer__head {
+  gap: 12px;
+  padding: 18px 16px 16px;
+  background: var(--mauth-surface);
+}
+
+.drawer--page .who__avatar {
+  width: 52px;
+  height: 52px;
+  font-size: 19px;
+}
+
+.drawer--page .who__text strong {
+  font-size: 17px;
+  letter-spacing: -0.012em;
+}
+
+.drawer--page .who__sub {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.drawer--page .drawer__body {
+  /* 底部给固定操作条留位：96px = 操作条高度 + 安全区 + 一点余量 */
+  padding: 12px 16px calc(96px + env(safe-area-inset-bottom));
+}
+
+/*
+ * 页签：抽屉里那枚分段控件在整页里改成"通栏胶囊 + 可横滑"。
+ *
+ * 五个带图标的页签在 390px 上装不下，既然放不下就让它滑，而不是换行成两排
+ * （两排会把下面的内容顶走半屏）。吸顶是为了在「设备」页滚到第十台时还能换页签。
+ */
+.drawer--page .tabbar {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  height: auto;
+  margin: 0;
+  padding: 8px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  border: 0;
+  border-bottom: 1px solid var(--mauth-border);
+  border-radius: 0;
+  background: var(--mauth-surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.drawer--page .tabbar::-webkit-scrollbar {
+  display: none;
+}
+
+.drawer--page .tabbar .tab {
+  flex: none;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--mauth-border);
+  border-radius: 999px;
+  background: var(--mauth-surface);
+  color: var(--mauth-text-mid);
+  font-size: 12px;
+  box-shadow: none;
+}
+
+/* 选中用主色实底：手机上"浅底 + 主色字"在强光下几乎看不出选中 */
+.drawer--page .tabbar .tab.is-on {
+  border-color: var(--mauth-primary);
+  background: var(--mauth-primary);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.drawer--page .tabbar .tab.is-on:hover {
+  color: #fff;
+}
+
+/*
+ * 概览字段：手机上改成「左标签 / 右值」一行一项。
+ *
+ * 抽屉里两列网格在 560px 上没问题，但手机 390px 每列只剩 170px：
+ * 邮箱、部门全名、岗位串基本都要换行或省略成「3346…」。一行一项装得下，
+ * 也更好扫 —— 和系统设置的列表同一个读法。
+ */
+@media (max-width: 820px) {
+  .drawer--page .kv {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin-bottom: 14px;
+  }
+
+  .drawer--page .kv > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 2px;
+    border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 78%, transparent);
+  }
+
+  .drawer--page .kv > div:last-child {
+    border-bottom: 0;
+  }
+
+  .drawer--page .kv dt {
+    flex: none;
+    font-size: 12px;
+  }
+
+  .drawer--page .kv dd {
+    margin: 0;
+    min-width: 0;
+    text-align: right;
+  }
+}
+
+/* ── 底部操作条（仅整页） ─────────────────────────────────────
+   手机上一屏只放得下内容，操作要靠拇指够得到：固定在底部、主按钮占满，
+   「更多」收其余动作。桌面整页把它变回普通页脚（见下面的 ≥821 段）。 */
+.page-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--mauth-bg) 90%, transparent);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--mauth-border);
+}
+
+.page-actions__main {
+  flex: 1;
+  height: 42px;
+  font-size: 14px;
+}
+
+.page-actions__more {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+}
+
+/* ── 「更多」底部面板 ───────────────────────────────────────── */
+.sheet-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  background: color-mix(in srgb, var(--mauth-text) 32%, transparent);
+  animation: sheet-fade 0.18s var(--ease) both;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 12px calc(12px + env(safe-area-inset-bottom));
+  border-radius: 18px 18px 0 0;
+  background: var(--mauth-surface);
+  box-shadow: 0 -14px 36px color-mix(in srgb, var(--mauth-text) 16%, transparent);
+  animation: sheet-up 0.24s var(--ease-out) both;
+}
+
+/* 顶部小横条：告诉手指"这块可以往下拖"（实际靠点遮罩关，不做好像少了个把手） */
+.sheet__grip {
+  width: 36px;
+  height: 4px;
+  margin: 4px auto 10px;
+  border-radius: 999px;
+  background: var(--mauth-border-strong);
+}
+
+.sheet__title {
+  margin: 0 0 4px;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--mauth-text);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet__item:active {
+  background: var(--mauth-press);
+}
+
+.sheet__item :deep(svg) {
+  flex: none;
+  color: var(--mauth-text-mid);
+}
+
+/* 说明文字靠右：手机宽度下最多占一半，长了就省略 */
+.sheet__note {
+  margin-left: auto;
+  max-width: 50%;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet__item--danger,
+.sheet__item--danger :deep(svg) {
+  color: var(--mauth-danger);
+}
+
+.sheet__cancel {
+  margin-top: 6px;
+  padding: 14px;
+  border: 0;
+  border-top: 1px solid var(--mauth-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--mauth-text-mid);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/*
+ * 桌面端也可能是这个 URL（直接开链接 / 手机端在详情页时把窗口拉宽 / F5）：
+ * 这一屏必须变回"一页内容"，而不是一条 760px 宽、无边框、与底色同色的长条 ——
+ * 那会看起来像内容被裁掉了一半（顶栏白条只铺到中间，两侧漏出底色）。
+ *
+ * 所以桌面给卡片边界 + 限宽居中 + 静态页脚，视觉上与列表页的 panel 同一族。
+ */
+@media (min-width: 821px) {
+  .drawer.drawer--page {
+    max-width: 820px;
+    margin: 0 auto;
+    height: auto;
+    min-height: 62vh;
+    border: 1px solid var(--mauth-border);
+    border-radius: var(--mauth-radius-lg);
+    background: var(--mauth-surface);
+    box-shadow: var(--e1);
+    overflow: hidden;
+  }
+
+  /* 固定操作条会横跨整个窗口，与居中的卡片错位 —— 桌面变回普通页脚 */
+  .page-actions {
+    position: static;
+    justify-content: flex-end;
+    padding: 12px 16px;
+    background: var(--mauth-surface);
+    backdrop-filter: none;
+  }
+
+  /* 桌面不需要"拇指够得到"：按钮收到内容宽度，不拉成一条 800px 的长条 */
+  .page-actions__main {
+    flex: 0 0 auto;
+    min-width: 132px;
+  }
+
+  .drawer--page .drawer__body {
+    padding: 14px 18px 18px;
+  }
+
+  .drawer--page .tabbar {
+    position: static;
+    padding: 8px 16px;
+  }
+
+  /* 桌面没有"拇指够不到"的问题，页签用回分段控件的样子更省空间 */
+  .drawer--page .tabbar .tab {
+    height: 28px;
+    border: 0;
+    background: transparent;
+  }
+
+  .drawer--page .tabbar .tab.is-on {
+    background: var(--mauth-primary-soft);
+    color: var(--mauth-primary);
+  }
+
+  .drawer--page .tabbar .tab.is-on:hover {
+    color: var(--mauth-primary);
+  }
+}
+
 .drawer-mask {
   position: fixed;
   inset: 0;

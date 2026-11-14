@@ -1,0 +1,257 @@
+/**
+ * 微信设计层 · 浮层
+ *
+ * 微信里没有"居中弹窗"：需要决策时从底部推上来一块面板，需要看长内容就换一页。
+ * 所以本文件对全站 12 个 dialog 做同一件事——**把居中卡片改成底部面板**，
+ * 这样页面代码一行不用改，操作方式却是微信的。
+ *
+ * 🔴 全站 dialog 都没有 `Teleport`（只有 UserPicker 下拉与权限矩阵弹层有），
+ *    因此 `.wx` 前缀能覆盖到它们；teleport 出去的那两个另用 `body[data-wx]` 命中
+ *    （标记由壳组件挂载时打上，见 `index.vue`）。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+
+/* ── 遮罩：贴底对齐，遮罩本身可点关闭 ─────────────────────── */
+
+.wx .wxbody .modal-mask {
+  align-items: flex-end;
+  padding: 0;
+  background: var(--mauth-overlay);
+}
+
+/* ── 面板本体 ─────────────────────────────────────────────── */
+
+.wx .wxbody .modal {
+  width: 100%;
+  max-width: none;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: var(--mauth-radius-lg) var(--mauth-radius-lg) 0 0;
+  background: var(--mauth-surface);
+  box-shadow: none;
+  /* 从下往上推入 —— 微信的手感是"抬起来"，不是"缩放出现" */
+  animation: wx-rise 0.24s var(--ease-out) both;
+}
+
+@keyframes wx-rise {
+  from {
+    transform: translateY(14%);
+    opacity: 0.6;
+  }
+}
+
+.wx .wxbody .modal__head {
+  flex: none;
+  padding: 16px var(--wx-pad) 8px;
+  border-bottom: 0;
+}
+
+.wx .wxbody .modal__title {
+  font-size: var(--wx-fs-row);
+  font-weight: 600;
+}
+
+.wx .wxbody .modal__sub {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px var(--wx-pad) var(--wx-pad);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * 底部动作条
+ *
+ * 微信的确认面板是"并排两个等宽按钮 + 安全区"，取消在左、主动作在右。
+ *
+ * 🔴 选择器多写一层 `.modal`（0,4,0）不是凑数：各 dialog 自己的 scoped 样式里
+ *    写着 `.user-modal .modal__foot .btn[data-v-x]`（同为 0,3,0），谁后加载谁赢，
+ *    只靠 0,3,0 会出现"编辑弹窗等分、新建弹窗不等分"这种看运气的差异。
+ */
+.wx .wxbody .modal .modal__foot {
+  flex: none;
+  gap: 10px;
+  padding: 10px var(--wx-pad) calc(10px + env(safe-area-inset-bottom));
+  border-top: var(--wx-hairline);
+  background: var(--mauth-surface);
+}
+
+.wx .wxbody .modal .modal__foot .btn,
+.wx .wxbody .modal .modal__foot .btn--primary {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 42px;
+  font-size: var(--wx-fs-row);
+}
+
+/* 取消是文字按钮：等分之后不要给它白底，否则两个实心块并列像"两个都在喊" */
+.wx .wxbody .modal .modal__foot .btn:not(.btn--primary):not(.btn--danger) {
+  background: transparent;
+  color: var(--mauth-text-mid);
+}
+
+/* 关闭按钮：微信是右上角一个浅灰圆点，不描边 */
+.wx .wxbody .modal__close,
+.wx .wxbody .oper-detail__close,
+.wx .wxbody .sess-detail__close,
+.wx .wxbody .grant-close,
+.wx .wxbody .purge__close,
+.wx .wxbody .dept-history__close {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-soft);
+}
+
+/* ── 各 dialog 自己的滚动区 ──────────────────────────────── */
+/*
+ * 这些容器原来靠固定 `max-height` 撑，面板改成 flex 后必须让它们"吃掉剩余高度"，
+ * 否则内容会被裁在面板中间（没有滚动条、也滚不动）。
+ */
+.wx .wxbody .batch-scroll,
+.wx .wxbody .grant-body,
+.wx .wxbody .grant-list,
+.wx .wxbody .purge__body,
+.wx .wxbody .oper-detail__body,
+.wx .wxbody .sess-detail__body,
+.wx .wxbody .dept-history__body,
+.wx .wxbody .user-form-body,
+.wx .wxbody .danger-body,
+.wx .wxbody .import-preview,
+.wx .wxbody .risk-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── 抽屉（桌面右滑出）→ 手机上就是"新一页" ───────────────── */
+
+.wx .wxbody .drawer.drawer--page {
+  margin: 0 calc(-1 * var(--wx-pad) + 2px);
+  width: auto;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.wx .wxbody .drawer--page .drawer__head {
+  padding: 14px var(--wx-pad) 8px;
+  border-bottom: 0;
+}
+
+.wx .wxbody .drawer--page .drawer__body {
+  padding: 8px var(--wx-pad) calc(96px + env(safe-area-inset-bottom));
+}
+
+/* 抽屉里的分块（个人资料 / 角色 / 权限 / 设备）一律白块 */
+.wx .wxbody .drawer--page .block {
+  margin-bottom: var(--wx-gap);
+  padding: var(--wx-pad);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+.wx .wxbody .drawer--page .block__title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.wx .wxbody .drawer--page .block__note {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* 键值对：手机上单列（两列会把值挤成省略号） */
+.wx .wxbody .drawer--page .kv {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: 9px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .drawer--page .kv:last-child {
+  border-bottom: 0;
+}
+
+/* 底部操作条：贴底、白底、安全区 */
+.wx .wxbody .page-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  border-top: var(--wx-hairline);
+  background: color-mix(in srgb, var(--mauth-surface) 96%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+/* ── 轻提示 ───────────────────────────────────────────────── */
+
+.wx .wxbody .toast,
+body[data-wx] .toast {
+  top: auto;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--mauth-plate-bg);
+  color: var(--mauth-plate-ink);
+  font-size: var(--wx-fs-body);
+  box-shadow: none;
+}
+
+/* ── 选择器下拉（teleport 到 body，只能靠 body 标记命中）───── */
+/*
+ * 下拉是"浮在页面之上的列表"，在微信里就是一张白卡：
+ * 圆角 10、无边框、行高 44。
+ */
+body[data-wx] .upick__list,
+body[data-wx] .upick__list--fixed {
+  padding: 4px 0;
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: var(--e2);
+  overflow: hidden;
+}
+
+body[data-wx] .upick__item {
+  min-height: var(--wx-tap);
+  padding: 8px 14px;
+}
+
+body[data-wx] .upick__item.is-active {
+  background: var(--wx-press);
+}
+
+body[data-wx] .upick__name {
+  font-size: var(--wx-fs-body);
+}
+
+body[data-wx] .upick__meta {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+body[data-wx] .upick__box {
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+}

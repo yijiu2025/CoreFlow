@@ -27,7 +27,7 @@ import { requestStepUpChallenge, stepUpFactors } from '@/api/system';
 import type { StepUpChallenge, StepUpFactors, StepUpPayload } from '@/api/types';
 
 /** 与后端 `stepup.service` 的 ACTIONS 一一对应 */
-type Action = 'user.delete' | 'user.app-deactivate' | 'user.temp-password' | 'log.purge';
+type Action = 'user.delete' | 'user.app-deactivate' | 'user.temp-password' | 'user.import' | 'log.purge';
 
 const props = withDefaults(
   defineProps<{

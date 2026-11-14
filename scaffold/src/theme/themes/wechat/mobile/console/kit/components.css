@@ -1,0 +1,596 @@
+/**
+ * 微信设计层 · 业务组件
+ *
+ * 图表、选择器、权限矩阵这些组件在珍珠玻璃里是"卡片内嵌图表 + 描边网格"，
+ * 微信是"白块 + 无边框 + 数字最大"。这里只改容器与节奏，不动 SVG 内部几何
+ * （几何由组件按数据算，主题改它等于改数据表达）。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+
+/* ── 图表容器：一律变成"白块里的图表" ─────────────────────── */
+
+.wx .wxbody .cal,
+.wx .wxbody .heat,
+.wx .wxbody .trend,
+.wx .wxbody .pulse,
+.wx .wxbody .bars,
+.wx .wxbody .ring-wrap {
+  margin: 0 0 var(--wx-gap);
+  padding: var(--wx-pad);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+/* 日历是 53 列，手机上必须横向滚动（缩到一屏会让格子变成 4px 点不中） */
+.wx .wxbody .cal__scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wx .wxbody .cal__months,
+.wx .wxbody .cal__weekday {
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .cal__foot,
+.wx .wxbody .heat-foot {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* 悬浮读数：微信是深色小胶囊 */
+.wx .wxbody .trend-tip,
+.wx .wxbody .cal__readout,
+.wx .wxbody .heat-readout {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--mauth-plate-bg);
+  color: var(--mauth-plate-ink);
+  font-size: var(--wx-fs-note);
+}
+
+.wx .wxbody .trend-tip-time,
+.wx .wxbody .tip-key {
+  color: color-mix(in srgb, var(--mauth-plate-ink) 70%, transparent);
+}
+
+/* 心跳卡（登录频次）：浅底 + 大数字，去掉双层玻璃 */
+.wx .wxbody .pulse__title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.wx .wxbody .pulse__total {
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.wx .wxbody .pulse__scope,
+.wx .wxbody .pulse__faint {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/*
+ * 趋势卡的时段切换（热力 / 趋势 / 隐藏）
+ *
+ * 三个按钮在卡片右上角，容器只有 120px 左右：不给 `flex: none` 就会被压成
+ * 一列竖排的单字（实测过）。这里同时压小字号与内边距，让它一行放得下。
+ */
+.wx .wxbody .pulse__ranges {
+  /* 三个按钮始终一行：换行会让「隐藏」变成两个字上下堆叠（实测过） */
+  flex: none;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.wx .wxbody .pulse__ranges button {
+  flex: none;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: var(--wx-fs-note);
+  white-space: nowrap;
+}
+
+.wx .wxbody .pulse__ranges button.is-active {
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+}
+
+/*
+ * 脉搏卡的"查看登录日志"是深色实心块（那是珍珠的"墨色主操作"）。
+ * 在微信的灰白世界里，一块近黑按钮比任何东西都抢眼 —— 换成品牌绿实心，
+ * 与全站唯一主操作的语汇保持一致。
+ */
+.wx .wxbody .pulse__link {
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-primary);
+  color: #fff;
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .pulse__link:active {
+  background: var(--mauth-primary-hover);
+}
+
+/* 卡片底部的次要动作（刷新）：文字化 */
+.wx .wxbody .pulse__actions .btn:not(.pulse__link) {
+  height: 34px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--mauth-text-mid);
+}
+
+/* 环形进度：中心读数变大，刻度线退淡 */
+.wx .wxbody .ring__cap {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .ring__tick {
+  stroke: var(--mauth-border);
+}
+
+/* ── 选择器（角色 / 岗位 / 用户）──────────────────────────── */
+/*
+ * 微信的选择是"列表 + 对勾"，不是"卡片网格"。
+ * 网格在 390px 上会变成两列挤字，改成单列整行更接近原生。
+ */
+.wx .wxbody .role-picker,
+.wx .wxbody .post-picker {
+  border: 0;
+  background: transparent;
+}
+
+.wx .wxbody .role-group__head,
+.wx .wxbody .post-group__head {
+  padding: 10px 4px 6px;
+  background: transparent;
+}
+
+.wx .wxbody .role-group__label,
+.wx .wxbody .post-group__label {
+  font-size: var(--wx-fs-sub);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .role-group__count,
+.wx .wxbody .post-group__count {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .role-grid,
+.wx .wxbody .post-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  overflow: hidden;
+}
+
+.wx .wxbody .role-item,
+.wx .wxbody .post-item {
+  min-height: var(--wx-tap);
+  padding: 11px var(--wx-pad);
+  border: 0;
+  border-bottom: var(--wx-hairline);
+  border-radius: 0;
+  background: transparent;
+}
+
+.wx .wxbody .role-item:last-child,
+.wx .wxbody .post-item:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .role-item.is-locked {
+  background: var(--mauth-surface-2);
+}
+
+.wx .wxbody .role-item__name,
+.wx .wxbody .post-item__name {
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .role-item__rank,
+.wx .wxbody .post-item__code {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+/* ── 权限面板（Roles.vue 编辑弹窗 / PermissionMatrix）──────── */
+
+.wx .wxbody .perm-panel {
+  padding: 0;
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  overflow: hidden;
+}
+
+.wx .wxbody .perm-group__head {
+  padding: 10px var(--wx-pad);
+  background: var(--mauth-surface-2);
+}
+
+.wx .wxbody .perm-group__title {
+  font-size: var(--wx-fs-sub);
+  font-weight: 500;
+}
+
+.wx .wxbody .perm-group__count {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .perm-item {
+  min-height: 42px;
+  padding: 9px var(--wx-pad);
+  border-bottom: var(--wx-hairline);
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .perm-item__code,
+.wx .wxbody .perm__code {
+  font-family: var(--font-mono);
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-faint);
+}
+
+/* 矩阵：横向滚动 + 粘住首列（否则滑到右边的列不知道在改谁） */
+.wx .wxbody .mx-wrap,
+.wx .wxbody .matrix {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+}
+
+.wx .wxbody .mx-empty,
+.wx .wxbody .matrix-locked {
+  padding: 40px 18px;
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+  color: var(--mauth-text-soft);
+  font-size: var(--wx-fs-sub);
+}
+
+/* ── 轨迹 / 星图（浮层）→ 底部面板 ───────────────────────── */
+
+.wx .wxbody .trace-panel,
+.wx .wxbody .star-panel {
+  border: 0;
+  border-radius: var(--mauth-radius-lg) var(--mauth-radius-lg) 0 0;
+  background: var(--mauth-surface);
+  box-shadow: none;
+}
+
+.wx .wxbody .trace-panel__title,
+.wx .wxbody .star-panel__title {
+  font-size: var(--wx-fs-row);
+  font-weight: 600;
+}
+
+.wx .wxbody .trace-panel__sub,
+.wx .wxbody .star-panel__sub,
+.wx .wxbody .trace-hint {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .trace-chip,
+.wx .wxbody .star-chip {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+}
+
+.wx .wxbody .trace-chip__label,
+.wx .wxbody .star-chip__label {
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .trace-chip__sub,
+.wx .wxbody .star-chip__sub {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+/* ── 二次验证 / 危险操作 ─────────────────────────────────── */
+
+.wx .wxbody .stepup {
+  padding: 12px var(--wx-pad);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-surface);
+}
+
+.wx .wxbody .stepup__hint,
+.wx .wxbody .stepup__warn {
+  font-size: var(--wx-fs-note);
+}
+
+.wx .wxbody .danger-tabs {
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .danger-tab {
+  height: 40px;
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .danger-notice {
+  padding: 12px var(--wx-pad);
+  border: 0;
+  border-radius: var(--wx-radius);
+  background: var(--mauth-danger-soft);
+  color: var(--mauth-danger);
+  font-size: var(--wx-fs-sub);
+}
+
+/* ── 小件 ─────────────────────────────────────────────────── */
+
+.wx .wxbody .delta-pill {
+  padding: 1px 6px;
+  font-size: var(--wx-fs-tag);
+}
+
+.wx .wxbody .readonly-tag {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--mauth-surface-2);
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-soft);
+}
+
+/* ── 弹窗内的表单 ─────────────────────────────────────────── */
+/*
+ * 这是"弹窗改底部面板"之后最容易出事的一层：珍珠玻璃的两列表单在 390px 上
+ * 每格只剩 ~150px，长标签（"用户所在部门"）会折成三行、输入框变得比手指还窄。
+ * 所以弹窗里的表单**一律单列**，用行内小节（form-section）分层。
+ */
+.wx .wxbody .form-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* 表单小节：用发丝线切，不用卡片（面板本身已经是白块，再套卡片会变"套娃"） */
+.wx .wxbody .form-section {
+  padding: 12px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .form-section:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .form-section__head {
+  margin-bottom: 8px;
+}
+
+.wx .wxbody .form-section__title {
+  font-size: var(--wx-fs-body);
+  font-weight: 500;
+}
+
+.wx .wxbody .form-section__note,
+.wx .wxbody .form-hint {
+  font-size: var(--wx-fs-note);
+  line-height: 1.5;
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .form-error {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-danger);
+}
+
+/* 权限例外行：一行一条，右侧是"允许 / 拒绝"两段小开关 */
+.wx .wxbody .exc {
+  min-height: var(--wx-tap);
+  padding: 8px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .exc:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .exc__code,
+.wx .wxbody .exc__app {
+  font-family: var(--font-mono);
+  font-size: var(--wx-fs-tag);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .exc-toggle__btn {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: var(--wx-fs-tag);
+}
+
+.wx .wxbody .exc-empty,
+.wx .wxbody .exc-add {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* ── 导入 / 清理 / 二次验证三个专用弹窗 ───────────────────── */
+
+.wx .wxbody .import-file,
+.wx .wxbody .import-stats,
+.wx .wxbody .import-summary,
+.wx .wxbody .purge__condition,
+.wx .wxbody .purge__count,
+.wx .wxbody .risk-reason {
+  padding: 12px var(--wx-pad);
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .import-input {
+  height: var(--wx-tap);
+}
+
+.wx .wxbody .failed-item {
+  padding: 10px 0;
+  border-bottom: var(--wx-hairline);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .failed-item__reason {
+  color: var(--mauth-danger);
+}
+
+.wx .wxbody .purge__danger {
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-danger-soft);
+}
+
+.wx .wxbody .danger-kick__row {
+  padding: 10px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .danger-app,
+.wx .wxbody .danger-scope {
+  padding: 10px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .danger-confirm__title,
+.wx .wxbody .danger-pending__title {
+  font-size: var(--wx-fs-body);
+  font-weight: 500;
+}
+
+.wx .wxbody .danger-pending__sub,
+.wx .wxbody .danger-secret__hint {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-soft);
+}
+
+/* 一次性密钥：等宽 + 大字，方便抄写 */
+.wx .wxbody .danger-secret__value {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  letter-spacing: 0.06em;
+}
+
+/* ── 详情弹窗（操作日志 / 登录会话）───────────────────────── */
+
+.wx .wxbody .oper-summary,
+.wx .wxbody .sess-summary {
+  gap: 6px;
+  padding: 12px var(--wx-pad);
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface-2);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .oper-block__title,
+.wx .wxbody .sess-block__title {
+  margin: 14px 0 6px;
+  font-size: var(--wx-fs-note);
+  font-weight: 500;
+  color: var(--mauth-text-soft);
+}
+
+.wx .wxbody .oper-kv,
+.wx .wxbody .sess-kv {
+  padding: 8px 0;
+  border-bottom: var(--wx-hairline);
+  font-size: var(--wx-fs-sub);
+}
+
+.wx .wxbody .oper-kv:last-child,
+.wx .wxbody .sess-kv:last-child {
+  border-bottom: 0;
+}
+
+/* 宽字段（请求体 / UA）：强制整行，不挤在左右两阑里 */
+.wx .wxbody .oper-kv.is-wide,
+.wx .wxbody .sess-kv.is-wide,
+.wx .wxbody .is-block {
+  display: block;
+}
+
+.wx .wxbody .oper-raw,
+.wx .wxbody .sess-raw,
+.wx .wxbody .sess-code {
+  font-family: var(--font-mono);
+  font-size: var(--wx-fs-tag);
+  line-height: 1.55;
+  word-break: break-all;
+}
+
+.wx .wxbody .oper-fold,
+.wx .wxbody .sess-copy {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-primary);
+}
+
+/* ── 授权历史 / 部门历史（时间线）────────────────────────── */
+
+.wx .wxbody .grant-item,
+.wx .wxbody .dept-event {
+  padding: 12px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .grant-item:last-child,
+.wx .wxbody .dept-event:last-child {
+  border-bottom: 0;
+}
+
+.wx .wxbody .grant-main,
+.wx .wxbody .dept-event__main {
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .grant-meta,
+.wx .wxbody .dept-event__time,
+.wx .wxbody .dept-event__meta {
+  font-size: var(--wx-fs-note);
+  color: var(--mauth-text-faint);
+}
+
+.wx .wxbody .grant-role,
+.wx .wxbody .grant-module {
+  padding: 10px 0;
+  border-bottom: var(--wx-hairline);
+}
+
+.wx .wxbody .grant-role__name,
+.wx .wxbody .grant-module__label {
+  font-size: var(--wx-fs-body);
+}
+
+.wx .wxbody .grant-perm,
+.wx .wxbody .dept-event__field {
+  font-size: var(--wx-fs-note);
+}
+
+.wx .wxbody .grant-timeline,
+.wx .wxbody .tl-row {
+  font-size: var(--wx-fs-note);
+}
