@@ -7,6 +7,8 @@
 
 ## 未发布（Unreleased）
 
+## 2.35.1 — 2026-11-15
+
 ### 重构（管理后台前端分层）
 
 - **页面 DOM 全部下沉主题包**：`scaffold/src/views/` 的 15 个页面只留业务（取数 / 分页 /
@@ -24,6 +26,7 @@
   只给 `console` / `login` 声明过配色 ⇒ `getThemeRecord` 返回空记录 ⇒ token 层被清空，
   页面全部失去样式。内容页改用 `<ThemeView scope="inherit">`（skinsuite 1.2.0），
   沿用外壳配色；store 播种 `defaultPage: 'console'`。
+
 
 ## 2.35.0 — 2026-11-15
 
