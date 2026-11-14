@@ -18,11 +18,41 @@
 import { getModel } from '../../../persistence/db/index.js';
 import { createRingQueue } from '../../../persistence/redis/index.js';
 import Logger from '../../../support/log/index.js';
+import { requestContext } from '../context/request-context.js';
 
 /** 审计事件 Redis 环形缓冲命名空间 */
 const AUDIT_PREFIX = 'audit:security';
 /** 环形缓冲容量：只保留最近 N 条审计事件供快查（DB 是完整持久化源） */
 const AUDIT_MAX_SIZE = 1000;
+/** 设备码列宽（同 `AuditLog.device_id` STRING(100)）：超长截断，不让一条脏 UA 头打断审计 */
+const DEVICE_ID_MAX = 100;
+
+/**
+ * 解析本条审计事件的设备标识
+ *
+ * 优先取会话里的 `deviceId`（登录时校验并规范化的结构化 ID，与风险检测同源），
+ * 会话字段缺失时退回客户端自报的 header / cookie —— 覆盖"登录成功那一刻
+ * `request.state.user` 还没写入"的场景。
+ *
+ * ⚠️ 这里记的是**事实**而不是判据：device_id 由客户端携带、可清除重生（见
+ *    device-id-service.js 的强度说明），它的用途是"事后把同一台机器的操作串起来"，
+ *    与 IP / User-Agent 同一强度，不能作为权限判断依据。
+ *
+ * 非请求上下文（定时任务、脚本、单元测试）返回 null，`event.deviceId` 显式传入时优先。
+ *
+ * @param {object} event 审计事件
+ * @returns {string|null} 设备标识
+ */
+function resolveDeviceId(event) {
+  if (event.deviceId) return String(event.deviceId).slice(0, DEVICE_ID_MAX);
+  const request = requestContext.getStore();
+  if (!request) return null;
+  const fromSession = request.state?.user?.deviceId;
+  if (fromSession) return String(fromSession).slice(0, DEVICE_ID_MAX);
+  const raw = request.headers?.['x-device-id'] || request.cookies?.device_id || '';
+  if (typeof raw !== 'string' || raw === '') return null;
+  return raw.slice(0, DEVICE_ID_MAX);
+}
 
 /**
  * 审计事件环形缓冲（Redis 后端）
@@ -57,9 +87,11 @@ function getAuditRing() {
  * 双写：DB（持久化，完整审计源）+ Redis 环形缓冲（最近 N 条快查）。
  * Redis 故障/未配置时只写 DB，不阻塞调用方（审计是业务附属，不该雪崩业务）。
  *
- * @param {object} event - 事件对象（type/userId/ip/userAgent/appId/details）
+ * @param {object} event - 事件对象（type/userId/ip/userAgent/appId/deviceId/details）
+ *   `deviceId` 可省略：省略时自动从当前请求上下文取（会话 deviceId → 请求头/cookie）
  */
 async function logAuditEvent(event) {
+  const deviceId = resolveDeviceId(event);
   // 1. 写入数据库（持久化，审计完整数据源）
   try {
     const AuditLog = getModel('AuditLog');
@@ -70,6 +102,7 @@ async function logAuditEvent(event) {
         app_id: event.appId || null,
         ip: event.ip || null,
         user_agent: event.userAgent || null,
+        device_id: deviceId,
         details: event.details || null
       });
     }
@@ -82,7 +115,7 @@ async function logAuditEvent(event) {
   const ring = getAuditRing();
   if (!ring) return;
   try {
-    await ring.push({ ...event, timestamp: new Date().toISOString() });
+    await ring.push({ ...event, deviceId, timestamp: new Date().toISOString() });
   } catch (err) {
     Logger.warn(`[Audit] Redis 副本写入失败，仅保留 DB 记录: ${err?.message}`);
   }

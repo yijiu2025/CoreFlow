@@ -6,7 +6,8 @@
  * POST   /admin/console/v1/users                 —— 新建（用户 + 凭证 + 角色 + 岗位）
  * PUT    /admin/console/v1/users/:id             —— 编辑
  * PUT    /admin/console/v1/users/:id/status      —— 启用 / 冻结
- * GET    /admin/console/v1/users/export          —— 导出 CSV
+ * GET    /admin/console/v1/users/export          —— 导出 CSV（按列表当前的筛选条件）
+ * POST   /admin/console/v1/users/import          —— 批量导入（CSV 在前端解析成行）
  * GET    /admin/console/v1/users/:id/grants      —— 授权历史（授予 / 取消流水）
  * POST   /admin/console/v1/users/roles/batch     —— 批量授权（追加 / 移除）
  *
@@ -57,8 +58,12 @@ import {
   planRoleChange
 } from '../../../../app/console/services/access-scope.service.js';
 import { describeCurrentAccess } from '../../../../app/console/services/user-access.service.js';
+import userProfileService from '../../../../app/console/services/user-profile.service.js';
+import { resolveDataScope } from '../../../../app/console/services/data-scope.service.js';
 import userDangerService from '../../../../app/console/services/user-danger.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
+import { getModel } from '../../../../framework/persistence/db/index.js';
+import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 
 /**
  * 二次验证凭据（三个高危写接口共用）
@@ -120,6 +125,8 @@ const listQuerySchema = {
     pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 20 },
     keyword: { type: 'string', maxLength: 100 },
     deptId: { type: 'integer', minimum: 0 },
+    // 子应用筛选：只看在该应用里有角色的人（GLOBAL 角色不参与）
+    appId: { type: 'string', maxLength: 64 },
     // -2 = 待注销（发起删除、缓冲期内）：要能作为筛选条件
     status: { type: 'integer', enum: [-2, -1, 0, 1] }
   }
@@ -171,13 +178,18 @@ async function registerUserRoutes(fastify) {
     requirePermission: ADMIN_PERMISSIONS.USER.READ,
     schema: { querystring: listQuerySchema },
     handler: withFail(async (request, reply) => {
-      const { pageNum = 1, pageSize = 20, keyword = '', deptId = null, status = null } = request.query;
+      const { pageNum = 1, pageSize = 20, keyword = '', deptId = null, appId = null, status = null } = request.query;
+      const actorId = request.state.user?.userId;
+      // 行级数据范围：与前端传的 deptId 取交集，越权的 deptId 也只能在自己范围内再筛
+      const dataScope = { ...(await resolveDataScope(actorId)), actorId };
       const { rows, total } = await userDao.page({
         pageNum,
         pageSize,
         keyword,
         deptId,
+        appId,
         status,
+        dataScope,
         scopeAppIds: await scopeAppIdsOf(request)
       });
       /*
@@ -357,16 +369,18 @@ async function registerUserRoutes(fastify) {
     method: 'GET',
     url: '/users/export',
     requireLogin: true,
-    requirePermission: ADMIN_PERMISSIONS.USER.READ,
+    // 导出是数据外带（整份名单 + 邮箱），不能只靠列表的 read 权限
+    requirePermission: ADMIN_PERMISSIONS.USER.EXPORT,
     schema: { querystring: listQuerySchema },
     handler: withFail(async (request, reply) => {
-      const { keyword = '', deptId = null, status = null } = request.query;
+      const { keyword = '', deptId = null, appId = null, status = null } = request.query;
       // 导出与列表同一口径：给应用管理员导全表等于把别家应用的用户名单往外带
       const { rows } = await userDao.page({
         pageNum: 1,
         pageSize: 5000,
         keyword,
         deptId,
+        appId,
         status,
         scopeAppIds: await scopeAppIdsOf(request)
       });
@@ -400,12 +414,140 @@ async function registerUserRoutes(fastify) {
    * （写库时已快照 username / role_name / operator_name）。
    */
   registerSecureRoute(fastify, {
+    name: 'consoleUserImport',
+    alias: '批量导入用户',
+    method: 'POST',
+    url: '/users/import',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.IMPORT,
+    schema: {
+      body: {
+        type: 'object',
+        required: ['rows'],
+        properties: {
+          rows: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 500,
+            items: {
+              type: 'object',
+              required: ['username', 'password'],
+              properties: {
+                username: { type: 'string', minLength: 1, maxLength: 50 },
+                email: { type: 'string', maxLength: 100 },
+                password: { type: 'string', minLength: 8, maxLength: 128 },
+                /** 部门名（按名称匹配，找不到即该行失败） */
+                dept: { type: 'string', maxLength: 50 },
+                /** 角色（编码或名称均可，多个用 | 分隔，由前端拆成数组） */
+                roles: { type: 'array', items: { type: 'string', maxLength: 50 }, default: [] }
+              }
+            }
+          }
+        }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const actor = await getActorScope(request.state.user?.userId);
+      const operator = actorOf(request);
+      const rows = request.body.rows;
+
+      /*
+       * 参照表一次性读出来：逐行查库会把 500 行变成上千次查询。
+       * 部门按名称匹配、角色按"编码或名称"匹配 —— 前端 CSV 里人写的是名字，
+       * 不是 id；要求填 id 等于让用户先去查库。
+       */
+      const [depts, roles] = await Promise.all([
+        getModel('console.SysDept').findAll({ attributes: ['id', 'name'], raw: true }),
+        getModel('Role').findAll({ attributes: ['id', 'code', 'name'], raw: true })
+      ]);
+      const deptMap = new Map(depts.map(d => [String(d.name).trim(), Number(d.id)]));
+      const roleMap = new Map();
+      for (const role of roles) {
+        roleMap.set(
+          String(role.code || '')
+            .trim()
+            .toLowerCase(),
+          Number(role.id)
+        );
+        roleMap.set(
+          String(role.name || '')
+            .trim()
+            .toLowerCase(),
+          Number(role.id)
+        );
+      }
+
+      const created = [];
+      const failed = [];
+      for (const [index, row] of rows.entries()) {
+        const line = index + 1;
+        try {
+          const roleIds = [];
+          const unknownRoles = [];
+          for (const raw of row.roles || []) {
+            const key = String(raw || '')
+              .trim()
+              .toLowerCase();
+            if (!key) continue;
+            const hit = roleMap.get(key);
+            if (hit) roleIds.push(hit);
+            else unknownRoles.push(String(raw).trim());
+          }
+          if (unknownRoles.length > 0) throw new Error(`角色不存在：${unknownRoles.join('、')}`);
+
+          const deptName = String(row.dept || '').trim();
+          const deptId = deptName ? (deptMap.get(deptName) ?? null) : null;
+          if (deptName && deptId === null) throw new Error(`部门不存在「${deptName}」`);
+
+          // 导入同样受职级约束：否则"批量导入 + 超管角色"就是绕过提权闸的后门
+          await assertGrantable(actor, roleIds);
+
+          const user = await userDao.create(
+            {
+              username: row.username,
+              email: row.email || null,
+              password: row.password,
+              deptId,
+              roleIds,
+              postIds: []
+            },
+            { ...operator, remark: '批量导入' }
+          );
+          created.push({ line, id: user.id, username: user.username });
+        } catch (err) {
+          failed.push({
+            line,
+            username: String(row.username || ''),
+            reason: String(err?.message || err).replace(/^[A-Z_]+:/, '')
+          });
+        }
+      }
+
+      // 一次导入 = 一次高影响写操作，留一条汇总审计（逐行流水在 user_grant_logs）
+      await logAuditEvent({
+        type: 'USER_IMPORT',
+        userId: operator.id,
+        ip: request.ip,
+        userAgent: request.headers?.['user-agent'] || '',
+        appId: 'console',
+        details: { total: rows.length, created: created.length, failed: failed.length }
+      });
+
+      return reply.result.success(`导入完成：成功 ${created.length} 条，失败 ${failed.length} 条`, {
+        created: created.length,
+        failed
+      });
+    })
+  });
+
+  registerSecureRoute(fastify, {
     name: 'consoleUserGrants',
     alias: '用户授权历史',
     method: 'GET',
     url: '/users/:id/grants',
     requireLogin: true,
-    requirePermission: ADMIN_PERMISSIONS.USER.READ,
+    // 授权记录是越权排查入口（谁给谁授了什么），与列表的 read 分开
+    requirePermission: ADMIN_PERMISSIONS.USER.GRANTS,
     schema: {
       params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
       querystring: {
@@ -615,10 +757,11 @@ async function registerUserRoutes(fastify) {
       params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
       body: {
         type: 'object',
-        required: ['stepUp', 'confirmUsername'],
+        required: ['stepUp', 'confirm'],
         properties: {
           stepUp: STEP_UP_SCHEMA,
-          confirmUsername: { type: 'string', minLength: 1, maxLength: 64 },
+          // 邮箱可能比较长，上限放宽；具体是哪个字段由后端 resolveConfirm 决定
+          confirm: { type: 'string', minLength: 1, maxLength: 128 },
           reason: { type: 'string', maxLength: 255 }
         }
       }
@@ -629,7 +772,7 @@ async function registerUserRoutes(fastify) {
         actor: actorOf(request),
         targetId: Number(request.params.id),
         stepUp: request.body.stepUp,
-        confirmUsername: request.body.confirmUsername,
+        confirm: request.body.confirm,
         reason: request.body.reason
       });
       return reply.result.success(`已发起删除，${data.graceDays} 天后正式清理，可随时撤销`, data);
@@ -658,6 +801,70 @@ async function registerUserRoutes(fastify) {
         requestId: Number(request.params.requestId)
       });
       return reply.result.success('已撤销，账号恢复正常', data);
+    })
+  });
+
+  /*
+   * 用户详情：一次给全「概览 / 应用 / 角色权限 / 最近记录」。
+   *
+   * 拆成 4 个接口会让前端并发 4 次、职级判定写 4 遍，而且任何一处漏判就是越权读。
+   * 职级规则在 service 里统一判：同级能看、下级看不了上级。
+   */
+  registerSecureRoute(fastify, {
+    name: 'consoleUserProfile',
+    alias: '用户详情',
+    method: 'GET',
+    url: '/users/:id/profile',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.READ,
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userProfileService.profile({
+        actorId: request.state.user?.userId,
+        targetId: Number(request.params.id)
+      });
+      return reply.result.success('获取成功', data);
+    })
+  });
+
+  /*
+   * 调整某一条权限：允许 / 拒绝 / 恢复继承。
+   *
+   * 落 `iam_inline_policy`（PBAC 个人策略），与角色 policy 叠加、**Deny 优先**；
+   * `inherit` 表示把这条从个人策略里摘掉，回到"跟角色走"。
+   */
+  registerSecureRoute(fastify, {
+    name: 'consoleUserPermission',
+    alias: '调整用户单条权限',
+    method: 'PUT',
+    url: '/users/:id/permissions',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.USER.UPDATE,
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: {
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } },
+      body: {
+        type: 'object',
+        required: ['appId', 'code', 'effect'],
+        properties: {
+          appId: { type: 'string', minLength: 1, maxLength: 64 },
+          code: { type: 'string', minLength: 1, maxLength: 100 },
+          effect: { type: 'string', enum: ['allow', 'deny', 'inherit'] }
+        }
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const data = await userProfileService.setPermission({
+        actorId: request.state.user?.userId,
+        targetId: Number(request.params.id),
+        appId: request.body.appId,
+        code: request.body.code,
+        effect: request.body.effect,
+        request
+      });
+      return reply.result.success('权限已更新', data);
     })
   });
 

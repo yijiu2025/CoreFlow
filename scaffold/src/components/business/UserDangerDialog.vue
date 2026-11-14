@@ -7,7 +7,10 @@
  * - 先说清**会发生什么**（清哪些数据、保留什么、什么时候生效、能不能撤销）；
  * - 每个动作都要一次**独立完成的二次验证**（默认邮箱验证码，密码仅作后备）——
  *   会话可能落在一台没锁屏的机器上，而本仓多数账号从没设过密码，密码框对它们是死路；
- * - 删除要**手打目标账号名**确认 —— 这一条专门防"点错行"。
+ * - 删除要**手打一个确认值** —— 这一条专门防"点错行"。确认值不是登录名：
+ *   登录名可能是带空格/符号/中文的长工号，手打容易错，错一次就把验证码吃掉；
+ *   改由后端挑一个「一定存在且好打」的字段（邮箱 → 手机号 → 用户 ID），
+ *   界面上原样显示该值，服务端按同一套规则比对。
  *
  * 为什么删完不立刻生效：误删不可逆，而交接期账号常被别处引用着；缓冲期内随时可撤销。
  *
@@ -25,7 +28,14 @@ import {
   userDeletion,
   userTempPasswords
 } from '@/api/system';
-import type { PendingKick, StepUpPayload, TempPasswordRow, UserAppRow, UserDeletionRequest } from '@/api/types';
+import type {
+  DangerConfirm,
+  PendingKick,
+  StepUpPayload,
+  TempPasswordRow,
+  UserAppRow,
+  UserDeletionRequest
+} from '@/api/types';
 import StepUpField from '@/components/business/StepUpField.vue';
 
 const props = defineProps<{
@@ -59,9 +69,17 @@ const busy = ref(false);
 const errorMessage = ref('');
 const notice = ref('');
 
-/** 删除页签：手打的目标账号名 + 原因 */
-const confirmUsername = ref('');
+/** 删除页签：手打的确认值 + 原因 */
+const confirmValue = ref('');
 const reason = ref('');
+
+/**
+ * 手打确认用哪个字段（邮箱 / 手机号 / 用户 ID）
+ *
+ * 由后端在详情接口里一并给出，前端不自己挑 —— 否则服务端比对时用的字段
+ * 和界面上写的那句会对不上。
+ */
+const confirmInfo = ref<DangerConfirm | null>(null);
 
 /**
  * 二次验证输入区
@@ -139,7 +157,7 @@ function onMaskClick(): void {
 
 /** 清空表单（关闭 / 换人时） */
 function resetForms(): void {
-  confirmUsername.value = '';
+  confirmValue.value = '';
   reason.value = '';
   appTarget.value = '';
   tempReason.value = '';
@@ -163,6 +181,7 @@ async function reload(): Promise<void> {
     ]);
     pendingAll.value = deletion.requests.find(item => item.scope === 'all') ?? null;
     pendingKicks.value = deletion.pendingKicks ?? [];
+    confirmInfo.value = deletion.confirm ?? null;
     appRows.value = apps.rows;
     tempRows.value = temps.rows;
   } catch (err) {
@@ -215,11 +234,16 @@ function appStateText(row: UserAppRow): string {
 async function submitDelete(): Promise<void> {
   if (props.userId === null || busy.value) return;
   /*
-   * 先校验手打的账号名，再看二次验证 —— 与后端同序。
-   * 反过来的话，名字打错也会把验证码用掉，得重新等一封邮件。
+   * 先校验手打的确认值，再看二次验证 —— 与后端同序。
+   * 反过来的话，填错也会把验证码用掉，得重新等一封邮件。
    */
-  if (confirmUsername.value.trim() !== props.username) {
-    errorMessage.value = '请输入该用户的登录名以确认删除';
+  const expected = confirmInfo.value;
+  if (!expected) {
+    errorMessage.value = '确认信息还没加载完，请稍候重试';
+    return;
+  }
+  if (confirmValue.value.trim().toLowerCase() !== expected.value.toLowerCase()) {
+    errorMessage.value = `请输入该用户的${expected.label}以确认删除`;
     return;
   }
   const stepUp = stepUpRef.value?.buildPayload();
@@ -232,12 +256,12 @@ async function submitDelete(): Promise<void> {
   try {
     const res = await requestUserDeletion(props.userId, {
       stepUp,
-      confirmUsername: confirmUsername.value.trim(),
+      confirm: confirmValue.value.trim(),
       reason: reason.value || undefined
     });
     notice.value = `已发起删除：${res.graceDays} 天后（${when(res.scheduledAt)}）正式清理，期间可撤销。账号状态已置为「待注销」——现在起无法登录，现有会话会在下一个请求失效。`;
     stepUpRef.value?.reset();
-    confirmUsername.value = '';
+    confirmValue.value = '';
     reason.value = '';
     await reload();
     emit('changed');
@@ -353,7 +377,7 @@ async function copyIssued(): Promise<void> {
     role="dialog"
     aria-modal="true"
     aria-labelledby="danger-title"
-    @click.self="onMaskClick"
+    v-mask-close="onMaskClick"
   >
     <div class="modal danger-modal">
       <div class="modal__head">
@@ -445,9 +469,24 @@ async function copyIssued(): Promise<void> {
 
             <label class="field">
               <span class="field__label">
-                输入该用户的登录名 <span class="mono danger-strong">{{ username }}</span> 以确认
+                <template v-if="confirmInfo">
+                  输入该用户的{{ confirmInfo.label }}
+                  <span class="mono danger-strong">{{ confirmInfo.value }}</span> 以确认
+                </template>
+                <template v-else>确认信息加载中…</template>
               </span>
-              <input v-model="confirmUsername" class="input" type="text" autocomplete="off" placeholder="手打账号名" />
+              <input
+                v-model="confirmValue"
+                class="input"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                :disabled="!confirmInfo"
+                :placeholder="confirmInfo ? `手打${confirmInfo.label}` : ''"
+              />
+              <span v-if="confirmInfo?.field === 'id'" class="field__hint"
+                >该账号未绑定邮箱与手机号，用纯数字的用户 ID 确认（登录名可能含空格或符号，不便手打）。</span
+              >
             </label>
           </template>
         </template>

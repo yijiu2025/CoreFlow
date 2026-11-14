@@ -8,7 +8,7 @@
  * @since 2026-11-09
  */
 import { get, post, put } from './http';
-import type { CurrentUser, MenuNode } from './types';
+import type { CurrentUser, MenuNode, MyDeviceRow } from './types';
 
 /** 当前用户信息（含角色与扁平权限码） */
 export function fetchMe(): Promise<CurrentUser> {
@@ -30,9 +30,86 @@ export function changePassword(oldPassword: string, newPassword: string): Promis
   return put<null>('/admin/console/v1/session/password', { oldPassword, newPassword });
 }
 
+/**
+ * 保存个人偏好（主题色等）
+ *
+ * 自动保存用：合并语义，只传变化的键，不会覆盖其它偏好。
+ */
+export function savePreferences(payload: { accent?: string }): Promise<{ accent?: string }> {
+  return put<{ accent?: string }>('/admin/console/v1/session/preferences', payload);
+}
+
+/**
+ * 保存后台内的展示身份（昵称 / 头像）
+ *
+ * 只影响 console，不动全局 `user_user.username / avatar`。
+ * 传空串表示清除该字段（回落到全局值）。
+ */
+export function saveProfile(payload: {
+  nickname?: string;
+  avatar?: string;
+}): Promise<{ nickname: string; avatar: string }> {
+  return put<{ nickname: string; avatar: string }>('/admin/console/v1/session/profile', payload);
+}
+
+/**
+ * 上传头像（multipart）
+ *
+ * 直接发 FormData：不手写 Content-Type，交给浏览器带 boundary —— 手写会把 boundary
+ * 写死，服务端解析必失败。
+ *
+ * @param file 图片文件（JPG / PNG / WebP，≤2MB）
+ * @returns 可访问的头像 URL
+ */
+export function uploadAvatar(file: File): Promise<{ avatar: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  return post<{ avatar: string }>('/admin/console/v1/session/avatar', form);
+}
+
 /** 退出登录（清 Cookie） */
 export function logout(): Promise<null> {
   return post<null>('/admin/console/v1/session/logout');
+}
+
+/* ── 我的登录设备（自服务） ───────────────────────────────────
+ *
+ * 与用户管理里的设备页不是同一组接口：这里只能碰**自己**的设备，不需要
+ * `admin:user:*` 权限；踢下线按设备行 id 走（列表里的设备码是打码值，不能用来匹配）。
+ */
+
+/** 我的登录设备（含已失效的历史行） */
+export function myDevices(): Promise<{ devices: MyDeviceRow[]; total: number }> {
+  return get('/user/v1/sessions/devices');
+}
+
+/**
+ * 踢掉我的某一台设备
+ *
+ * @param id 设备行 id（`myDevices()` 返回的 `id`）
+ * @returns `current` 为 true 表示踢的就是当前设备，会话已失效、需要重新登录
+ */
+export function kickMyDevice(
+  id: number
+): Promise<{ kicked: number; revoked: number; clearedRefresh: number; current: boolean }> {
+  return post('/user/v1/sessions/kick-device', { id });
+}
+
+/** 退出其他所有设备（保留当前会话） */
+export function kickOtherDevices(): Promise<{ kicked: number }> {
+  return post('/user/v1/sessions/kick-all');
+}
+
+/**
+ * 清理我的「已下线」设备记录
+ *
+ * 只删 `revoked = 1` 的历史行，不影响任何在线会话（后端按 userId 强制限定，
+ * 不接受前端传用户 ID）。
+ *
+ * @returns 实际删除的记录数
+ */
+export function pruneMyRevokedDevices(): Promise<{ removed: number }> {
+  return post('/user/v1/sessions/prune-revoked');
 }
 
 /**

@@ -34,6 +34,8 @@ jest.unstable_mockModule('../../../../framework/support/log/index.js', () => ({
 }));
 
 const { getAuditLogs, logAuditEvent } = await import('../../../../framework/security/auth/audit/audit-logger.js');
+// 真实 ALS 实例（零依赖模块，不涉及 DB/Redis）：用来验证"从请求上下文取设备码"
+const { requestContext } = await import('../../../../framework/security/auth/context/request-context.js');
 
 beforeEach(() => {
   auditFindAll.mockReset();
@@ -125,5 +127,50 @@ describe('logAuditEvent 双写', () => {
     ringPush.mockRejectedValue(new Error('Redis down'));
     await expect(logAuditEvent({ type: 'PASSWORD_CHANGE', userId: 3 })).resolves.toBeUndefined();
     expect(auditCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('logAuditEvent 设备码采集', () => {
+  /** 设备码列宽：与 AuditLog.device_id STRING(100) 一致 */
+  const DEVICE_MAX = 100;
+
+  test('非请求上下文且未显式传入：device_id 为 null（脚本/定时任务不编造设备）', async () => {
+    await logAuditEvent({ type: 'DEPT_UPDATE', userId: 1 });
+    expect(auditCreate.mock.calls[0][0].device_id).toBeNull();
+  });
+
+  test('显式传入 deviceId 优先于请求上下文', async () => {
+    await requestContext.run({ headers: { 'x-device-id': 'WEB-FROMHEADER-aaaa' }, cookies: {} }, async () => {
+      await logAuditEvent({ type: 'DEPT_UPDATE', deviceId: 'WEB-EXPLICIT-bbbb' });
+    });
+    expect(auditCreate.mock.calls[0][0].device_id).toBe('WEB-EXPLICIT-bbbb');
+  });
+
+  test('请求上下文：会话 deviceId 优先于请求头', async () => {
+    const req = {
+      headers: { 'x-device-id': 'WEB-HEADER-cccc' },
+      cookies: {},
+      state: { user: { deviceId: 'WEB-SESSION-dddd' } }
+    };
+    await requestContext.run(req, async () => {
+      await logAuditEvent({ type: 'DEPT_UPDATE' });
+    });
+    expect(auditCreate.mock.calls[0][0].device_id).toBe('WEB-SESSION-dddd');
+  });
+
+  test('会话无 deviceId 时回落到 cookie（登录成功那一刻 state.user 尚未写入）', async () => {
+    const req = { headers: {}, cookies: { device_id: 'WEB-COOKIE-eeee' }, state: {} };
+    await requestContext.run(req, async () => {
+      await logAuditEvent({ type: 'LOGIN_SUCCESS' });
+    });
+    expect(auditCreate.mock.calls[0][0].device_id).toBe('WEB-COOKIE-eeee');
+  });
+
+  test('超长设备码按列宽截断（不让一条脏头打断审计写入）', async () => {
+    const long = 'WEB-' + 'x'.repeat(300);
+    await logAuditEvent({ type: 'DEPT_UPDATE', deviceId: long });
+    const written = auditCreate.mock.calls[0][0].device_id;
+    expect(written).toHaveLength(DEVICE_MAX);
+    expect(written.startsWith('WEB-')).toBe(true);
   });
 });

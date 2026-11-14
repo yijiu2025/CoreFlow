@@ -9,7 +9,7 @@
  * | `kickByDeviceType` | 用户 + 应用 + 设备类型 | 单设备单登录：新登录踢掉同类型旧会话 |
  * | `kickByDeviceId`   | 用户 + 应用 + 设备 ID   | 管理端远程踢指定设备（精准，不误伤同类型其它设备） |
  * | `kickSession`      | 单个 sessionId          | 踢某一条会话 |
- * | `kickAllSessions`  | 用户全部会话            | 改密 / 注销等强制全端下线 |
+ * | `kickAllSessions`  | 用户全部会话（可保留当前） | 改密 / 注销等强制全端下线 |
  * | `kickUser`         | 用户（可按 app 过滤）   | 管理员踢人 |
  *
  * 各入口的 Redis 侧清理动作完全同构，统一收敛到 `_revokeOneSession()`（🔵-3）；
@@ -31,6 +31,9 @@ import {
   sessionStore,
   userSessionsStore,
   kickTombStore,
+  refreshStore,
+  rotatedStore,
+  userRefreshStore,
   sidHash,
   deleteRefreshTokensForSession
 } from './session-store.js';
@@ -170,33 +173,114 @@ async function kickByDeviceType(userId, appId, deviceType) {
 }
 
 /**
- * 按 device_id 精准踢单设备会话
+ * 清理「孤儿」refresh token（sid 已经不在 Redis 的那批）
  *
- * 区别于 kickByDeviceType（按设备类型批量踢，同类型多设备会误踢），
- * 本函数只踢 user_id+device_id 指定的那台设备，用于"管理端远程踢单设备"等场景。
- * session_tokens 有 device_id 索引，但 DB 只存 sha256(sid) 无法反查 raw sid，
- * 故仍走 user_sessions 逆索引遍历，按 sd.deviceId 精确匹配。
+ * 记住我（sid_r）的语义是"用 refresh token 换回一个新 sid"。会话过期后，sid 没了，
+ * 但 rt 还在（TTL 更长）—— 用户下次打开浏览器就会换出一个新会话，看起来就是
+ * **"下线没生效"**。这类 rt 已经不可能再恢复出有效会话，属于纯垃圾，按用户维度清掉。
+ *
+ * ⚠️ 只删「sid 不存在」的条目：sid 仍在 Redis 的 rt 属于活跃设备，必须保留
+ * （否则踢一台设备会把用户其它设备的记住我一起废掉）。
+ *
+ * @param {number} userId 用户 ID
+ * @returns {Promise<number>} 清掉的 refresh token 数
+ */
+async function purgeOrphanRefreshTokens(userId) {
+  let cleared = 0;
+  try {
+    const tokens = await userRefreshStore.zRangeByScore(String(userId), '-inf', '+inf');
+    for (const rt of tokens) {
+      const sid = await refreshStore.get(rt);
+      if (sid && (await sessionStore.get(sid))) continue; // 活跃设备的 rt，保留
+      await refreshStore.delete(rt);
+      await rotatedStore.delete(rt);
+      await userRefreshStore.zRem(String(userId), [rt]);
+      cleared++;
+    }
+  } catch (err) {
+    // 清理是尽力而为：Redis 抖动不该让"踢出"整体失败（Redis 会话已经删掉了）
+    log.warn('🧹 [Session] 孤儿 refresh token 清理失败（忽略）: userId=%s, err=%s', userId, err?.message);
+  }
+  return cleared;
+}
+
+/**
+ * 按 device_id 精准下线一台设备的**全部痕迹**
+ *
+ * 区别于 kickByDeviceType（按设备类型批量踢，同类型多设备会误踢），本函数只针对
+ * user_id + app_id + device_id 指定的那一台。
+ *
+ * 🔴 为什么不能只删 Redis 会话：`session_tokens` 里的行才是设备列表"活跃/已下线"的
+ *    判据。会话在 Redis 自然过期（TTL 到）时，DB 行仍然 `revoked=0` —— 界面显示"活跃"，
+ *    点下线却因为找不到 Redis 会话而返回 0 条，用户看到"没有活跃会话"，而那一行
+ *    永远停在"活跃"。所以这里**无论 Redis 是否命中，都按设备维度把 DB 令牌置为已撤销**。
+ *
+ * 三步，缺一不可：
+ *   1. Redis：命中该设备的活跃会话 → 完整踢出（删 sid + 失效 sid_r + 逆索引 + 墓碑 + 审计）
+ *   2. DB：该设备名下所有未撤销令牌 → revoked（这是列表徽标的真相来源）
+ *   3. 记住我：清掉该用户的孤儿 refresh token，避免"过期会话"被 sid_r 悄悄复活
  *
  * @param {number} userId 用户 ID
  * @param {string} appId 应用 ID
  * @param {string} deviceId 设备 ID（结构化 WEB-... 形式）
- * @returns {number} 踢出的会话数
+ * @returns {Promise<{kicked: number, revoked: number, clearedRefresh: number}>} 各项实际处理数
+ */
+async function kickDeviceEverywhere(userId, appId, deviceId) {
+  if (!deviceId) return { kicked: 0, revoked: 0, clearedRefresh: 0 };
+
+  // 1. Redis 活跃会话（Redis 不可用时**不能**让整件事失败：DB 撤销仍必须发生，
+  //    否则"管理员点下线 → 报错 → 设备列表还显示活跃"，是最糟的组合）
+  let kicked = 0;
+  try {
+    const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
+    for (const sid of sids) {
+      const sd = await sessionStore.get(sid);
+      if (!sd) {
+        await userSessionsStore.zRem(String(userId), [sid]);
+        continue;
+      }
+      if (sd.appId === appId && sd.deviceId === deviceId) {
+        await _kickSession(userId, sid, sd, appId, { reason: 'kick_by_device_id', deviceId });
+        kicked++;
+      }
+    }
+  } catch (err) {
+    log.warn('⚠️ [Session] Redis 不可用，跳过会话清理，继续撤销 DB 令牌: userId=%s, err=%s', userId, err?.message);
+  }
+
+  // 2. DB token：不管上面命中几条，这台设备的历史令牌一律作废
+  const SessionToken = getModel('SessionToken');
+  const [revokedRows] = await SessionToken.update(
+    { revoked: true },
+    {
+      where: {
+        user_id: Number(userId),
+        app_id: appId,
+        device_id: deviceId,
+        // NULL 也要算"未撤销"：老数据里存在没写默认值的行，`revoked: false` 会漏掉它们
+        [Op.or]: [{ revoked: false }, { revoked: null }]
+      }
+    }
+  );
+
+  // 3. 记住我：清孤儿 rt（活跃设备的不动）
+  const clearedRefresh = await purgeOrphanRefreshTokens(userId);
+
+  return { kicked, revoked: Number(revokedRows) || 0, clearedRefresh };
+}
+
+/**
+ * 按 device_id 精准踢单设备会话（兼容入口，只返回会话数）
+ *
+ * 需要"撤销了多少条 DB 令牌"这类明细时用 `kickDeviceEverywhere`。
+ *
+ * @param {number} userId 用户 ID
+ * @param {string} appId 应用 ID
+ * @param {string} deviceId 设备 ID
+ * @returns {Promise<number>} 踢出的 Redis 会话数
  */
 async function kickByDeviceId(userId, appId, deviceId) {
-  if (!deviceId) return 0;
-  let kicked = 0;
-  const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
-  for (const sid of sids) {
-    const sd = await sessionStore.get(sid);
-    if (!sd) {
-      await userSessionsStore.zRem(String(userId), [sid]);
-      continue;
-    }
-    if (sd.appId === appId && sd.deviceId === deviceId) {
-      await _kickSession(userId, sid, sd, appId, { reason: 'kick_by_device_id', deviceId });
-      kicked++;
-    }
-  }
+  const { kicked } = await kickDeviceEverywhere(userId, appId, deviceId);
   return kicked;
 }
 
@@ -231,16 +315,26 @@ async function kickSession(sessionId, userId) {
 
 /**
  * 踢掉用户所有会话（含记住我：sid + sid_r + DB 全清）
+ *
+ * 🔴 `keepSessionId` 不是可选的礼貌参数，而是"退出其他设备"这个功能的正确性前提：
+ *    原实现无脑遍历全部会话，接口注释却写着"保留当前会话" —— 结果是用户点
+ *    「退出其他所有设备」会把自己也踢下线（下一个请求直接 401）。DB 兜底那步
+ *    同样会把保留行的 token 一起 revoke，所以必须显式排除。
+ *
  * @param {number} userId 用户 ID
+ * @param {string|null} [keepSessionId=null] 要保留的会话（当前 sid）
+ * @returns {Promise<number>} 实际踢出的会话数
  */
-async function kickAllSessions(userId) {
+async function kickAllSessions(userId, keepSessionId = null) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
+  const keepHash = keepSessionId ? sidHash(keepSessionId) : null;
 
   // 用逆索引遍历 raw sid：删 Redis session + 失效 sid_r + DB revoke + 清索引
   const sids = await userSessionsStore.zRangeByScore(String(userId), '-inf', '+inf');
   const hashes = [];
   for (const sid of sids) {
+    if (keepSessionId && sid === keepSessionId) continue;
     const sd = await sessionStore.get(sid);
     // 逐个吊销 Redis 侧；DB revoke 收集 hashes 后一次批量提交（原实现同样如此，避免 N 次 UPDATE）
     hashes.push(await _revokeOneSession(userId, sid, sd, 'kick_all'));
@@ -251,13 +345,19 @@ async function kickAllSessions(userId) {
 
   // DB 兜底：Redis 逆索引可能丢失（重启/驱逐/故障），按 user_id 全量 revoke 未吊销行。
   // 与 hashes 批量 revoke 互补而非重复——hashes 覆盖的是索引可达的，此处覆盖索引遗漏的。
-  await SessionToken.update({ revoked: true }, { where: { user_id: userId, revoked: false } });
+  // 保留行必须排除：否则它的 token 被 revoke，当前会话下次刷新就失效了。
+  const sweepWhere = { user_id: userId, revoked: false };
+  if (keepHash) sweepWhere.token = { [Op.ne]: keepHash };
+  await SessionToken.update({ revoked: true }, { where: sweepWhere });
 
   await SessionLog.create({
     user_id: userId,
     event: 'KICK',
-    details: { reason: 'kick_all', count: sids.length }
+    // count 记实际踢出数（排除保留的当前会话）：日志里的数字要和用户看到的一致
+    details: { reason: 'kick_all', count: hashes.length, keptCurrent: Boolean(keepSessionId) }
   });
+
+  return hashes.length;
 }
 
 /**
@@ -337,6 +437,8 @@ async function kickSessionsByIds(userId, sessionIds, { reason = 'offline_by_logi
 export {
   kickByDeviceType,
   kickByDeviceId,
+  kickDeviceEverywhere,
+  purgeOrphanRefreshTokens,
   kickSession,
   kickAllSessions,
   kickUser,

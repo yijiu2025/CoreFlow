@@ -90,6 +90,33 @@ async function loadTarget(targetId) {
 }
 
 /**
+ * 「手打确认」让用户打哪个字段
+ *
+ * 为什么不再固定用登录名：登录名是账号主人自己设的，可能是工号、手机尾号，
+ * 甚至带空格、符号、中文或 emoji —— 让人对着抄，错一个字符就白打一次，
+ * 而这个校验只起"停一下、看清是哪个账号"的作用，不该变成打字考试。
+ *
+ * 取「一定存在且好打」的第一个：
+ *   邮箱 → 手机号 → 用户 ID（纯数字，永远都在）
+ * 顺序即优先级；都为空时用 ID 兜底，所以永远有值。
+ *
+ * @param {object} user User 实例
+ * @returns {{field: string, label: string, value: string}} 确认字段描述
+ */
+function resolveConfirm(user) {
+  const candidates = [
+    { field: 'email', label: '邮箱', value: user?.email },
+    { field: 'phone', label: '手机号', value: user?.phone },
+    { field: 'id', label: '用户 ID', value: user?.id }
+  ];
+  for (const item of candidates) {
+    const value = String(item.value ?? '').trim();
+    if (value) return { field: item.field, label: item.label, value };
+  }
+  return { field: 'id', label: '用户 ID', value: String(user?.id ?? '') };
+}
+
+/**
  * 判定「能不能对这个账号做高危操作」
  *
  * 除职级/应用域外，额外禁掉**删除自己**：删除会立刻拒登录，把自己删了就再也进不来，
@@ -221,20 +248,28 @@ class UserDangerService {
    * @param {object} params.actor 操作者（{ id, username }）
    * @param {number} params.targetId 目标用户
    * @param {{challengeId?: string, code?: string, password?: string}} params.stepUp 二次验证凭据
-   * @param {string} params.confirmUsername 手打的目标账号名（防误点）
+   * @param {string} params.confirm 手打的确认值（防误点，字段见 resolveConfirm）
    * @param {string} [params.reason] 原因
    * @returns {Promise<object>} { id, scheduledAt, graceDays }
    */
-  async requestDeletion({ request, actor, targetId, stepUp, confirmUsername, reason }) {
+  async requestDeletion({ request, actor, targetId, stepUp, confirm, reason }) {
     const target = await assertActionAuthority(actor, 'user.delete', targetId);
 
     /*
-     * 顺序很关键：**先校验手打的账号名，再消费验证码**。
-     * 反过来的话，名字打错也会把码用掉，用户得重新等一封邮件 —— 而这个校验本来就
+     * 顺序很关键：**先校验手打的确认值，再消费验证码**。
+     * 反过来的话，填错也会把码用掉，用户得重新等一封邮件 —— 而这个校验本来就
      * 只是防手滑，先做零成本。
+     *
+     * 比对不区分大小写并去空格：邮箱、ID 都可能带大小写差异，收紧到"逐字符相同"
+     * 只会制造无意义的失败。
      */
-    if (String(confirmUsername || '').trim() !== String(target.username)) {
-      throw new Error('INVALID_PARAM:请输入该用户的登录名以确认删除');
+    const expected = resolveConfirm(target);
+    if (
+      String(confirm ?? '')
+        .trim()
+        .toLowerCase() !== expected.value.toLowerCase()
+    ) {
+      throw new Error(`INVALID_PARAM:请输入该用户的${expected.label}以确认删除`);
     }
 
     await stepUpService.consumeChallenge({
@@ -298,8 +333,10 @@ class UserDangerService {
    * @returns {Promise<object>} { requests }
    */
   async listDeletion(targetId) {
+    // 连确认字段一起给：前端只负责显示与比对，字段选择只有这一处（避免两边各判一套）
+    const target = await loadTarget(targetId);
     const requests = await deactivationService.listPending(Number(targetId));
-    return { requests };
+    return { requests, confirm: resolveConfirm(target) };
   }
 
   /**
