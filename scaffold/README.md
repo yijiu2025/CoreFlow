@@ -53,8 +53,9 @@ src/
   stores/            auth（用户 + 可见菜单）/ theme（skinsuite 状态机）
   router/            静态路由 + 守卫（meta.permission）
   composables/       useSsoLogin（iframe 协议）/ useListPage（分页通用态）
-  components/        layout/AppShell、ui/AppIcon
-  views/             Login / Dashboard / Users / Roles / Menus / Depts / Posts / Dict / Configs / OperLog / LoginLog / Firewall / Generator
+  components/        layout/AppShell（壳容器）、business/ 业务组件、ui/ 基础件
+  views/             **只放业务**：取数 / 分页 / 校验 / 权限判定 / ctx 组装；
+                     每页模板只剩一行 `<ThemeView page=… :device :ctx>`（0 行 scoped CSS）
   assets/styles/     tokens → base → layout → components（顺序即层叠）
   theme/devices.ts   设备词汇（宿主事实）
 ```
@@ -67,20 +68,42 @@ src/theme/
   palette.ts                             色值单一来源（8 个壳文件只声明 meta/tone 并展开它）
   themes/default/                        主题包（目录名 default = 库内置兜底包名）
     index.ts                             包定义（设计名放 meta.name：珍珠玻璃）
-    <设备>/<页面>/colors/<配色>/index.ts  设备 standard|mobile × 页面 console|login × 配色 white|black
-  views/console.ts · views/login.ts      页面域声明（defineThemePage）
+    <设备>/<页面>/index.vue              **页面 DOM 都在这里**（设备身份 = 目录位置）
+    <设备>/<页面>/colors/<配色>/index.ts  配色只换 CSS 变量，不动 DOM
+  themes/{spotlight,wechat}/             极光 / 微信两套包（没有自有版式的页面转发到 default）
+  views/<页面>.ts                        页面域声明 + 版式契约（纯类型 ctx + defineThemePage）
+```
+
+一页的四层：
+
+```
+views/system/Users.vue                业务容器（取数 / 判定 / 状态）
+        │ ctx（= theme/views/users.ts 的 UsersViewContext）
+        ▼
+themes/<包>/<设备>/users/index.vue    版式（只渲染 ctx、只调 ctx 上的回调）
+        ▲
+        │ <ThemeView page="users" :device :ctx>（views/system/Users.vue 的模板就这一行）
+```
+
+**版式里禁止**：`@/api/*` 请求、pinia 读写、权限判定、分页/校验逻辑。
+权限已由容器算成 `can*` 布尔，分页已由 `useListPage` 算成 `list`，版式只显示结论。
+换一套 UI = 在包里加个 `<设备>/<页面>/` 目录，容器零改动。
 src/view/devices.ts                      设备词汇（宿主事实，不 import 主题库）
 src/view/useRenderDevice.ts              设备判定（?device= 优先，否则视口 ≤ 820px）
 ```
 
 - 明暗 = 配色系别：`white`（浅）/ `black`（深）；`mode` 仍是用户偏好（system/light/dark），
   由 `createThemeState` 维护、持久化在 `mauth:mode` / `mauth:theme`。
-- 壳层用 `<ThemeScope page="console" :device>`：**token-only**，只锚定「包 × 设备 × 页面」，
-  不渲染版式组件 —— console 只有一套设计，页面之间换的是业务内容而不是 DOM。
+- 壳层本身也是版式（`themes/<包>/<设备>/console/index.vue`）：`AppShell` 只准备
+  `ConsoleViewContext`（导航分组 / 标题 / 返回 / 明暗），微信包的手机端因此能换成一整套
+  导航栏 + 底部 TabBar，而 `AppShell` 里一行 `if (pkg === …)` 都没有。
 - 颜色变量一律 `--mauth-*`（skinsuite 注入白名单要求）；阴影 / 字体栈 / 结构尺寸
   是复合值或布局骨架，留在 `src/assets/styles/tokens.css`，不进主题 token。
-- 要「同一壳换一套 DOM」：新建主题包（`themes/<包>/`）并在包定义声明 `views.console`，
+- 要「同一壳换一套 DOM」：新建主题包（`themes/<包>/`）并给该包建 `<设备>/console/` 目录，
   **不要**在 AppShell 里写 `if (pkg === …)`。
+- 🔴 每台会被访问到的设备都要有目录：`<ThemeView>` 找不到版式时渲染空（不报错）。
+  内容页的版式是**惰性 chunk**（`themeAssets({ eagerPages })` 只让 `login` / `console` 进首屏），
+  所以入口体积不随页面数量增长。
 
 调试：`?debug=theme` 打开面板；`?th_color=black` 强制深色；`?device=mobile` 锁定手机版。
 

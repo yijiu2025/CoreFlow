@@ -5,16 +5,32 @@
  * @author yijiu2025
  */
 import { useRouter } from 'vue-router';
-import { ShieldAlert } from 'lucide-vue-next';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
+import { ThemeView } from 'skinsuite/vue';
+import type { NoAccessViewContext } from '@/theme/views/no-access';
 
 const router = useRouter();
+
+/** 当前渲染设备（版式目录按设备查；本页只靠 CSS 适配） */
+const device = useRenderDevice();
+
+/** 回工作台：本页唯一的出口 */
+function goDashboard(): void {
+  void router.replace('/dashboard');
+}
+
+/**
+ * 版式上下文
+ *
+ * 字段分两类：容器算好的结论（`*` 布尔、格式化后的文案）与容器持有的状态/动作。
+ * 版式只读它们，不再自己判权限、不再自己取数。
+ */
+const ctx: NoAccessViewContext = {
+  goDashboard
+};
 </script>
 
 <template>
-  <div class="empty" style="padding: 80px 16px">
-    <ShieldAlert :size="28" />
-    <strong>没有访问该页面的权限</strong>
-    <span>当前账号缺少所需权限码，请联系管理员在「角色管理」里授权。</span>
-    <button class="btn btn--sm" type="button" style="margin-top: 8px" @click="router.replace('/dashboard')">返回工作台</button>
-  </div>
+  <!-- 页面长什么样在主题包里（`themes/<包>/<设备>/no-access/`），容器只准备 ctx -->
+  <ThemeView page="no-access" :device="device" :ctx="ctx" />
 </template>

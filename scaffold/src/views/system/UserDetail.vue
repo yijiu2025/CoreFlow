@@ -16,9 +16,12 @@
  */
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
-import UserProfileDrawer from '@/components/business/UserProfileDrawer.vue';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
+import { ThemeView } from 'skinsuite/vue';
+import type { UserDetailViewContext } from '@/theme/views/user-detail';
 
 const route = useRoute();
+const device = useRenderDevice();
 
 /**
  * 路由参数 → 用户 id
@@ -32,9 +35,19 @@ const userId = computed<number | null>(() => {
   const id = Number(route.params.id);
   return Number.isInteger(id) && id > 0 ? id : null;
 });
+
+/**
+ * 版式上下文
+ *
+ * 字段分两类：容器算好的结论（`*` 布尔、格式化后的文案）与容器持有的状态/动作。
+ * 版式只读它们，不再自己判权限、不再自己取数。
+ */
+const ctx: UserDetailViewContext = {
+  userId
+};
 </script>
 
 <template>
-  <UserProfileDrawer v-if="userId !== null" :user-id="userId" mode="page" />
-  <p v-else class="tag tag--off">用户编号无效，请从列表重新进入</p>
+  <!-- 页面长什么样在主题包里（`themes/<包>/<设备>/user-detail/`），容器只准备 ctx -->
+  <ThemeView page="user-detail" :device="device" :ctx="ctx" />
 </template>

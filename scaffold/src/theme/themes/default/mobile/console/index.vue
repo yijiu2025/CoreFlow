@@ -1,19 +1,27 @@
 <script setup lang="ts">
 /**
- * 珍珠玻璃 · 手机端 · 后台壳版式
+ * default · mobile · 后台壳版式（转发）
  *
- * 与 `standard/` 共用同一个实现：手机端不是"另一套壳"，只是侧栏改抽屉、
- * 内容区改单列（`layout.css` / `components.css` 的 820px 断点）。
+ * 手机端与桌面端是同一套 DOM（窄屏侧栏改抽屉、内容区改单列，全在 CSS 断点里）。
  *
  * @author yijiu2025
- * @since 2026-11-14
+ * @since 2026-11-15
  */
-import ConsoleChrome from '@/components/layout/ConsoleChrome.vue';
+import Base from '../../../default/standard/console/index.vue';
 import type { ConsoleViewContext } from '@/theme/views/console';
 
 defineProps<{ ctx: ConsoleViewContext }>();
 </script>
 
 <template>
-  <ConsoleChrome :ctx="ctx" />
+  <!-- display:contents：本层只为携带版式身份（data-mauth-view = 包名），不生成盒子 -->
+  <div class="device-view-alias" data-mauth-view="default">
+    <Base :ctx="ctx" />
+  </div>
 </template>
+
+<style scoped>
+.device-view-alias {
+  display: contents;
+}
+</style>

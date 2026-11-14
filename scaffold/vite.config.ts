@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => {
     // 类型桥接：packages/theme-core 自带一份 vite（版本与宿主不同），其 Plugin 类型
     // 与宿主 vite 的 PluginOption 不同源。运行期是同一套钩子协议，这里只做类型对齐。
     // TODO: 宿主 vite 升到 8 与 oauth21 对齐后，这个断言可以去掉。
-    plugins: [themeAssets() as unknown as PluginOption, vue()],
+    plugins: [themeAssets({ eagerPages: ['login', 'console'] }) as unknown as PluginOption, vue()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
