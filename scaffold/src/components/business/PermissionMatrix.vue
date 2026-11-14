@@ -87,6 +87,64 @@ interface Row {
   descendants: number[];
 }
 
+/* ── 筛选：行太多时按名称 / 类型 / 应用缩小范围 ──────────────────
+ *
+ * 🔴 筛选必须保留**祖先链**：只留下命中的子节点，父级没了，树就是一排孤儿缩进，
+ *    既看不出层级，也无法折叠。所以命中节点连同它的父级一起留下。
+ *
+ * 状态由**宿主**持有（`v-model:*`）：角色页把"视图切换 + 名称/编码 + 应用分档 +
+ * 菜单筛选"压在同一行筛选条里，控件不能各在各的组件里各画一排。
+ */
+const keyword = defineModel<string>('keyword', { default: '' });
+const typeFilter = defineModel<'' | MenuNode['type']>('typeFilter', { default: '' });
+
+/** 是否有生效的筛选 */
+const filtering = computed(() => keyword.value.trim() !== '' || typeFilter.value !== '');
+
+/** 按筛选条件裁剪后的树（命中节点带**整枝**，祖先只作上下文） */
+const filteredMenus = computed<MenuNode[]>(() => {
+  if (!filtering.value) return props.menus;
+  const kw = keyword.value.trim().toLowerCase();
+  const matches = (node: MenuNode): boolean => {
+    if (typeFilter.value && node.type !== typeFilter.value) return false;
+    if (!kw) return true;
+    return (
+      node.name.toLowerCase().includes(kw) ||
+      String(node.permission || '')
+        .toLowerCase()
+        .includes(kw)
+    );
+  };
+  /**
+   * 只按**类型**裁剪（不看关键词）
+   *
+   * 命中的节点要连子菜单一起带出来 —— 否则搜「系统管理」只剩一个目录行，
+   * 它下面的页面/按钮全都消失，而授权恰恰是在这些子项上点的（用户实测：
+   * "搜索没显示子菜单"）。但"带整枝"不能把类型筛选也绕过：筛「按钮」时
+   * 仍然只应出现按钮。
+   */
+  const pruneByType = (nodes: MenuNode[]): MenuNode[] => {
+    if (!typeFilter.value) return nodes;
+    const out: MenuNode[] = [];
+    for (const node of nodes) {
+      const children = pruneByType(node.children ?? []);
+      if (node.type === typeFilter.value || children.length > 0) out.push({ ...node, children });
+    }
+    return out;
+  };
+  const walk = (nodes: MenuNode[]): MenuNode[] => {
+    const out: MenuNode[] = [];
+    for (const node of nodes) {
+      const hit = matches(node);
+      // 命中 → 整枝带出（按类型裁剪）；未命中 → 只在子孙里有命中时保留作上下文
+      const children = hit ? pruneByType(node.children ?? []) : walk(node.children ?? []);
+      if (hit || children.length > 0) out.push({ ...node, children });
+    }
+    return out;
+  };
+  return walk(props.menus);
+});
+
 const index = computed(() => {
   const rows: Row[] = [];
   const walk = (nodes: MenuNode[], depth: number, parents: number[]): number[] => {
@@ -99,11 +157,32 @@ const index = computed(() => {
     });
     return ids;
   };
-  walk(props.menus, 0, []);
+  walk(filteredMenus.value, 0, []);
   return rows;
 });
 
-const visibleRows = computed(() => index.value.filter(r => !r.parents.some(id => collapsed.value.has(id))));
+/** 未筛选时的总行数（用于"显示 X / Y"） */
+const totalRowCount = computed(() => {
+  let count = 0;
+  const walk = (nodes: MenuNode[]): void => {
+    for (const node of nodes) {
+      count += 1;
+      walk(node.children ?? []);
+    }
+  };
+  walk(props.menus);
+  return count;
+});
+
+/**
+ * 折叠之后真正可见的行
+ *
+ * 🔴 筛选期间**忽略折叠**：搜出来的结果如果落在之前折叠过的分支里，用户会看到
+ *    "搜到了但下面一片空白"——和"搜索没显示子菜单"是同一个观感。筛选态一律展开。
+ */
+const visibleRows = computed(() =>
+  filtering.value ? index.value : index.value.filter(r => !r.parents.some(id => collapsed.value.has(id)))
+);
 
 /** 锁定的角色（超管）：恒显示为全选，且不接受点击 */
 const lockedIds = computed(() => new Set(props.roles.filter(r => r.menuLocked).map(r => r.id)));
@@ -326,11 +405,15 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
 
 <template>
   <div class="matrix" :style="{ '--mx-cols': roles.length }" @pointerleave="hoverRow = hoverCol = null">
+    <!-- 筛选控件在宿主页的筛选条里（与视图切换、角色搜索同一行），这里不再重复一排 -->
+    <div v-if="index.length === 0" class="mx-empty">当前筛选下没有菜单，清空筛选条件或换个关键词。</div>
     <div class="mx-scroll">
       <div class="mx-grid" role="grid" :aria-rowcount="visibleRows.length + 1" :aria-colcount="roles.length + 1">
         <div class="mx-head" role="row">
           <div class="mx-corner" role="columnheader">
             <span class="eyebrow">菜单 × 角色</span>
+            <!-- 行数放在表头角落：它属于这张表，不该占筛选条那一行的宽度 -->
+            <span class="mx-corner__count tnum">{{ index.length }}/{{ totalRowCount }}</span>
           </div>
           <div
             v-for="r in roles"
@@ -449,5 +532,32 @@ defineExpose({ dirty: computed(() => changeCount.value > 0), reset });
  */
 .mx-cell.is-readonly .mx-mark {
   opacity: 1;
+}
+
+/*
+ * 表头左上角：标签 + 行数上下排
+ *
+ * 全局 `.mx-corner` 是 flex-end 单行；这里加一行小字后改成纵向，否则会把第一列
+ * 撑宽（第一列宽度就是菜单树缩进的基准）。
+ */
+.mx-corner {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.mx-corner__count {
+  font-size: 10.5px;
+  color: var(--mauth-text-faint);
+}
+
+/* 筛选条在宿主页（见 `Roles.vue` 的 `.filterbar`），这里只保留"筛空"的提示 */
+.mx-empty {
+  padding: 22px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--mauth-text-soft);
+  border: 1px dashed var(--mauth-border);
+  border-radius: var(--mauth-radius-sm);
 }
 </style>
