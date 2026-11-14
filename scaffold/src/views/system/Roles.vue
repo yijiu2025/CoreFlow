@@ -19,7 +19,7 @@
  */
 import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { KeyRound, LockKeyhole, Pencil, Plus, RefreshCw, SearchX, Trash2 } from 'lucide-vue-next';
+import { ChevronRight, KeyRound, LockKeyhole, Pencil, Plus, RefreshCw, SearchX, Trash2 } from 'lucide-vue-next';
 import {
   createRole,
   deptTree,
@@ -51,8 +51,18 @@ const PermissionMatrix = defineAsyncComponent(() => import('@/components/busines
  */
 const PermissionTrace = defineAsyncComponent(() => import('@/components/business/PermissionTrace.vue'));
 import { useAuthStore } from '@/stores/auth';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 
 const auth = useAuthStore();
+
+/**
+ * 当前渲染设备
+ *
+ * 角色表 7 列、行里还有"名称 + 内置标签 + 缩进"，手机上表格会退化成
+ * 每个单元格一行 `标签：值`（一屏一个角色，操作列还夹在最后）。手机上换成
+ * 分组 + 卡片：应用当分组标题，一张卡一个角色，操作单独一行。
+ */
+const device = useRenderDevice();
 
 /**
  * 只读视角（观察者角色）
@@ -119,6 +129,40 @@ const roleGroups = computed(() => {
     a.appId === 'GLOBAL' ? -1 : b.appId === 'GLOBAL' ? 1 : a.label.localeCompare(b.label, 'zh-CN')
   );
 });
+
+/**
+ * 折叠的分组（按 appId 记）
+ *
+ * 角色按应用分组后，一屏里常只关心两三个应用；不能收起的列表等于把"分组"变成了
+ * "分隔线"—— 想跳到底部还得滚过所有组。折叠状态按 appId 存，切换应用筛选再切回来
+ * 仍然记得，符合"我刚才把哪些收起来了"的预期。
+ */
+const collapsedGroups = ref<Set<string>>(new Set());
+
+/**
+ * 某个分组是否已收起
+ *
+ * @param appId 应用标识
+ * @returns 是否收起
+ */
+function isCollapsed(appId: string): boolean {
+  return collapsedGroups.value.has(appId);
+}
+
+/**
+ * 收起 / 展开一个分组
+ *
+ * 🔴 不能叫 `toggleGroup` —— 权限弹窗里已有一个同名的 `toggleGroup(items, on)`（组内全选），
+ *    同名声明后写者覆盖前者，模板里 `toggleGroup(group.appId)` 会去当"全选"用。
+ *
+ * @param appId 应用标识
+ */
+function toggleCollapse(appId: string): void {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(appId)) next.delete(appId);
+  else next.add(appId);
+  collapsedGroups.value = next;
+}
 
 /** 权限码目录项（`GET /permissions/catalog` 的返回形状） */
 interface PermItem {
@@ -294,6 +338,33 @@ const errorMessage = ref('');
 const toast = ref('');
 const keyword = ref('');
 
+/*
+ * 矩阵筛选（`PermissionMatrix` 的 v-model）
+ *
+ * 状态放在宿主而不是组件里：这几档筛选与"视图切换 / 角色搜索 / 应用分档"挤在同一行，
+ * 控件各在各的组件里就没法排成一行。组件只负责算（并把行数抛回来）。
+ */
+const matrixKeyword = ref('');
+const matrixType = ref<'' | MenuNode['type']>('');
+
+/** 是否有任何生效的筛选（决定"清空筛选"按钮出不出现） */
+const hasFilter = computed(
+  () =>
+    keyword.value.trim() !== '' ||
+    appFilter.value !== '' ||
+    (altView.value === 'matrix' && (matrixKeyword.value.trim() !== '' || matrixType.value !== ''))
+);
+
+/** 清空全部筛选：关键词变了要重新拉数据，其余是纯前端筛选 */
+function clearFilters(): void {
+  const keywordChanged = keyword.value !== '';
+  keyword.value = '';
+  appFilter.value = '';
+  matrixKeyword.value = '';
+  matrixType.value = '';
+  if (keywordChanged) void load();
+}
+
 /* ── 菜单授权弹窗 ───────────────────────────────────────────── */
 const trees = ref<MenuNode[]>([]);
 const dialogOpen = ref(false);
@@ -331,6 +402,34 @@ const SCOPE_OPTIONS = [
 
 /** 当前数据范围档位的说明（下拉里只放标签，解释放下面一行，避免下拉项过长） */
 const currentScopeHint = computed(() => SCOPE_OPTIONS.find(opt => opt.value === form.dataScope)?.hint ?? '');
+
+/**
+ * 该角色是否允许配置"非仅本人"的数据范围
+ *
+ * 与后端 `isScopeConfigurable` 同一套规则：只有管理员（`*_admin` / `superadmin`）、
+ * 审核员（`*_operator`）、观察者（`*_viewer`）需要看别人的数据。
+ * 前端只负责别让人白选 —— 真正的闸在 `assertScopeConfigurable`。
+ */
+const scopeConfigurable = computed(() => {
+  const code = form.code.trim();
+  // 还没填编码时不拦：新人可能先写名字再写编码，保存时后端会判
+  if (!code) return true;
+  return code === 'superadmin' || /^.+_(admin|operator|viewer)$/.test(code);
+});
+
+/** 编码改成普通角色后，把已经选过的档位收回「仅本人」，避免提交一个必被拒的值 */
+watch(scopeConfigurable, allowed => {
+  if (!allowed && form.dataScope !== 5) form.dataScope = 5;
+});
+
+/**
+ * 职级是否锁定（仅超管）
+ *
+ * 职级是「能不能动这个角色」的闸：把超管从 99 降下来，它立刻失去编辑高职级角色的
+ * 资格，而它往往就是唯一持有 `admin:role:update` 的账号 —— 自己把自己锁在门外。
+ * 后端 `PUT /roles/:id` 同样拒绝（`BUILTIN_PROTECTED`），这里只是别让人白改。
+ */
+const rankLocked = computed(() => form.code.trim() === 'superadmin');
 
 /** 部门树（给「自定义」用） */
 const deptTrees = ref<DeptNode[]>([]);
@@ -686,7 +785,8 @@ function openCreate(): void {
   form.name = '';
   form.appId = 'GLOBAL';
   form.rankLevel = 1;
-  form.dataScope = 1;
+  // 默认「仅本人」：建角色时没人主动选范围，默认给全量是最危险的方向
+  form.dataScope = 5;
   form.deptIds = [];
   void loadDepts();
   form.description = '';
@@ -878,91 +978,143 @@ onMounted(() => {
       <h2 class="page__title">角色管理</h2>
       <span class="page__sub">
         共 {{ total }} 个角色<template v-if="appFilteredCount !== null"> · 当前应用 {{ appFilteredCount }} 个</template>
-        · 权限码决定接口放行，菜单只决定侧栏可见
       </span>
       <!-- 只读标记与按钮同一个判据（`admin:role:update`），见 ui/ReadOnlyTag.vue -->
       <ReadOnlyTag code="admin:role:update" scope="角色" />
     </div>
 
-    <div class="tabbar" role="tablist" aria-label="视图">
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="altView === 'table'"
-        :class="['tab', { 'is-on': altView === 'table' }]"
-        @click="altView = 'table'"
-      >
-        列表
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="altView === 'matrix'"
-        :class="['tab', { 'is-on': altView === 'matrix' }]"
-        @click="altView = 'matrix'"
-      >
-        权限矩阵
-      </button>
-      <button
-        type="button"
-        role="tab"
-        :aria-selected="altView === 'trace'"
-        :class="['tab', { 'is-on': altView === 'trace' }]"
-        @click="altView = 'trace'"
-      >
-        授权溯源
-      </button>
-    </div>
+    <!--
+      筛选条：视图切换 + 关键词 + 应用分档 + 矩阵筛选，压在同一行。
+      应用分档原来是 8 个 chip（占一整行、还会换行），改成下拉后与其它控件同排；
+      窄屏靠 flex-wrap 自动换行，不硬撑成横向滚动条。
+    -->
+    <div class="filterbar">
+      <div class="tabbar filterbar__views" role="tablist" aria-label="视图">
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="altView === 'table'"
+          :class="['tab', { 'is-on': altView === 'table' }]"
+          @click="altView = 'table'"
+        >
+          列表
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="altView === 'matrix'"
+          :class="['tab', { 'is-on': altView === 'matrix' }]"
+          @click="altView = 'matrix'"
+        >
+          权限矩阵
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="altView === 'trace'"
+          :class="['tab', { 'is-on': altView === 'trace' }]"
+          @click="altView = 'trace'"
+        >
+          授权溯源
+        </button>
+      </div>
 
-    <!-- 搜索/刷新对列表和矩阵都生效（矩阵列就是角色），所以矩阵视图也保留 -->
-    <div v-show="altView !== 'trace'" class="toolbar">
-      <input v-model="keyword" class="input" style="width: 220px" placeholder="名称 / 编码" @keyup.enter="load" />
-      <button class="btn btn--sm" type="button" :disabled="loading" @click="load"><RefreshCw :size="15" /> 刷新</button>
-      <button
-        v-if="auth.hasPermission('admin:role:create')"
-        class="btn btn--primary btn--sm"
-        type="button"
-        @click="openCreate"
-      >
-        <Plus :size="15" /> 新建角色
-      </button>
-    </div>
+      <!--
+        筛选控件只在列表/矩阵出现 —— **视图切换本身必须始终可见**。
+        （曾经把整条筛选条 v-show 掉，切到「授权溯源」后连切回来的按钮一起消失。）
+      -->
+      <template v-if="altView !== 'trace'">
+        <!-- 搜索/刷新对列表和矩阵都生效（矩阵列就是角色） -->
+        <input
+          v-model="keyword"
+          class="input filterbar__kw"
+          placeholder="名称 / 编码"
+          aria-label="角色名称或编码"
+          @keyup.enter="load"
+        />
 
-    <!-- 应用分档：角色是"按应用分家"的，先分档再找比逐行扫快得多。
-         矩阵视图同样可见 —— 否则在列表里选好的档位切过去就"看不见自己在筛什么" -->
-    <div v-show="altView !== 'trace'" class="role-tabs" role="group" aria-label="按应用筛选">
-      <button
-        type="button"
-        :class="['role-tab', { 'is-on': appFilter === '' }]"
-        :aria-pressed="appFilter === ''"
-        @click="appFilter = ''"
-      >
-        全部
-        <span class="role-tab__count mono">{{ rows.length }}</span>
-      </button>
-      <button
-        v-for="tab in appTabs"
-        :key="tab.id"
-        type="button"
-        :class="['role-tab', { 'is-on': appFilter === tab.id }]"
-        :aria-pressed="appFilter === tab.id"
-        @click="appFilter = tab.id"
-      >
-        {{ tab.label }}
-        <span class="role-tab__count mono">{{ tab.count }}</span>
-      </button>
+        <select v-model="appFilter" class="select filterbar__app" aria-label="按应用筛选">
+          <option value="">全部应用（{{ rows.length }}）</option>
+          <option v-for="tab in appTabs" :key="tab.id" :value="tab.id">{{ tab.label }}（{{ tab.count }}）</option>
+        </select>
+
+        <!-- 矩阵专属：菜单行太多时先筛再勾 -->
+        <template v-if="altView === 'matrix'">
+          <input
+            v-model="matrixKeyword"
+            class="input filterbar__kw"
+            placeholder="菜单名 / 权限码"
+            aria-label="菜单名或权限码"
+          />
+          <select
+            v-model="matrixType"
+            class="select filterbar__type"
+            aria-label="菜单类型（不选 = 全部）"
+            title="菜单类型（不选 = 全部）"
+          >
+            <option value="">类型</option>
+            <option value="dir">目录</option>
+            <option value="menu">页面</option>
+            <option value="btn">按钮</option>
+          </select>
+        </template>
+
+        <button
+          v-if="hasFilter"
+          class="btn btn--ghost btn--sm"
+          type="button"
+          @click="clearFilters"
+        >
+          清空
+        </button>
+      </template>
+
+      <!--
+        「刷新 + 新建角色」**同一行、同一组、靠右**，且放在筛选条上（不是页头）。
+        曾经刷新单独挂在这里、新建在页头：筛选条一换行，刷新就掉到新建正下方，
+        右边竖着堆两个按钮，看着像被挤坏的残次品。
+        这一组在「授权溯源」档也要留着 —— 新建角色与视图无关，别跟着筛选项一起消失。
+        刷新统一成「图标 + 文字」：全站七处刷新按钮一个形态，纯图标只留行内小操作。
+      -->
+      <div class="filterbar__actions">
+        <button
+          v-if="altView !== 'trace'"
+          class="btn btn--sm"
+          type="button"
+          :disabled="loading"
+          @click="load"
+        >
+          <RefreshCw :size="15" /> 刷新
+        </button>
+        <button
+          v-if="auth.hasPermission('admin:role:create')"
+          class="btn btn--primary btn--sm"
+          type="button"
+          @click="openCreate"
+        >
+          <Plus :size="15" /> 新建角色
+        </button>
+      </div>
     </div>
 
     <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
     <section v-if="altView === 'table'" class="panel">
-      <div class="table-wrap">
+      <div v-if="device !== 'mobile'" class="table-wrap">
         <table class="table">
+          <colgroup>
+            <col style="width: 210px" />
+            <col style="width: 150px" />
+            <col style="width: 70px" />
+            <col style="width: 70px" />
+            <col style="width: 82px" />
+            <col style="width: 70px" />
+            <col style="width: 128px" />
+          </colgroup>
           <thead>
             <tr>
               <th>名称</th>
               <th>编码</th>
-              <th>应用</th>
               <th>职级</th>
               <th>成员</th>
               <th>权限码</th>
@@ -972,74 +1124,175 @@ onMounted(() => {
           </thead>
           <tbody>
             <template v-for="group in roleGroups" :key="group.appId">
-              <!-- 分组标题行：应用名 + 角色数，扫视时先定位"哪个应用" -->
-              <tr class="role-group-row">
-                <td colspan="8">
-                  <span class="role-group-row__label">{{ group.label }}</span>
-                  <span class="role-group-row__count mono">{{ group.rows.length }}</span>
-                  <span class="role-group-row__hint">{{ group.appId }}</span>
+              <!--
+                分组标题行：应用名 + 角色数，扫视时先定位"哪个应用"。
+                整行可点收起 —— 一屏里通常只关心两三个应用，收不起的"分组"只是分隔线。
+              -->
+              <tr class="role-group-row" @click="toggleCollapse(group.appId)">
+                <td colspan="7">
+                  <div class="role-group">
+                    <button
+                      class="role-group__twist"
+                      type="button"
+                      :aria-expanded="!isCollapsed(group.appId)"
+                      :aria-label="`${group.label}（${group.rows.length} 个角色），${isCollapsed(group.appId) ? '展开' : '收起'}`"
+                      @click.stop="toggleCollapse(group.appId)"
+                    >
+                      <ChevronRight :size="13" :class="{ 'is-open': !isCollapsed(group.appId) }" />
+                    </button>
+                    <span class="role-group__label">{{ group.label }}</span>
+                    <span class="role-group__count">{{ group.rows.length }}</span>
+                    <!-- 应用 id 保留但压到最弱：排查"这条属于哪个应用"时要它，扫读时不该抢标题 -->
+                    <span class="role-group__id mono">{{ group.appId }}</span>
+                  </div>
                 </td>
               </tr>
-              <tr v-for="row in group.rows" :key="row.id">
-                <td>
-                  {{ row.name }}
-                  <span v-if="row.builtin" class="tag tag--info" style="margin-left: 6px">内置</span>
-                </td>
-                <td class="mono">{{ row.code }}</td>
-                <td>{{ row.app_label || row.app_id }}</td>
-                <td class="mono">{{ row.rank_level }}</td>
-                <td class="mono">{{ row.user_count }}</td>
-                <td class="mono">{{ row.permissions.length }}</td>
-                <td class="mono">{{ row.menu_ids.length }}</td>
-                <td class="col-actions">
-                  <button
-                    v-if="auth.hasPermission('admin:role:update')"
-                    class="btn btn--ghost btn--sm"
-                    type="button"
-                    :disabled="row.manageable === false"
-                    :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '编辑角色'"
-                    @click="openFormEdit(row)"
-                  >
-                    <Pencil :size="14" /> 编辑
-                  </button>
-                  <!-- 授权：超管的菜单固定为全部（后端直接拒），按钮不该可点 ——
+              <template v-if="!isCollapsed(group.appId)">
+                <tr v-for="row in group.rows" :key="row.id">
+                  <!--
+                    名称列缩进一格：角色与所属应用的关系靠"缩进"表达，
+                    而不是在每行重复一遍应用名（应用只在分组标题出现）。
+                  -->
+                  <td class="role-name" :title="row.name">
+                    <span class="role-name__text">{{ row.name }}</span>
+                    <span v-if="row.builtin" class="role-name__tag" title="系统内置角色，不可删除">内置</span>
+                  </td>
+                  <td class="mono" :title="row.code">{{ row.code }}</td>
+                  <td class="mono">{{ row.rank_level }}</td>
+                  <td class="mono" :class="{ 'cell-zero': !row.user_count }">{{ row.user_count }}</td>
+                  <td class="mono" :class="{ 'cell-zero': !row.permissions.length }">
+                    {{ row.permissions.length }}
+                  </td>
+                  <td class="mono" :class="{ 'cell-zero': !row.menu_ids.length }">{{ row.menu_ids.length }}</td>
+                  <td class="col-actions">
+                    <button
+                      v-if="auth.hasPermission('admin:role:update')"
+                      class="btn btn--ghost btn--sm btn--icon"
+                      type="button"
+                      :disabled="row.manageable === false"
+                      :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '编辑角色'"
+                      aria-label="编辑角色"
+                      @click="openFormEdit(row)"
+                    >
+                      <Pencil :size="14" />
+                    </button>
+                    <!-- 授权：超管的菜单固定为全部（后端直接拒），按钮不该可点 ——
                        能点开却只有一列灰掉的矩阵，等于让人白点一次。
                        写权限没有时整颗按钮不出现（只读用户不该看到"点了会 403"的东西） -->
-                  <button
-                    v-if="canEdit"
-                    class="btn btn--ghost btn--sm"
-                    type="button"
-                    :disabled="row.manageable === false || row.menuLocked"
-                    :title="
-                      row.menuLocked
-                        ? '超级管理员的菜单固定为全部，不可修改'
-                        : row.manageable === false
-                          ? '不在你的管理范围（应用域或职级限制）'
-                          : '菜单授权'
-                    "
-                    @click="openMenus(row)"
-                  >
-                    <KeyRound :size="14" /> 授权
-                  </button>
-                  <button
-                    v-if="!row.builtin && auth.hasPermission('admin:role:delete')"
-                    class="btn btn--danger btn--sm"
-                    type="button"
-                    :disabled="row.manageable === false"
-                    :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '删除角色'"
-                    @click="remove(row)"
-                  >
-                    <Trash2 :size="14" /> 删除
-                  </button>
-                </td>
-              </tr>
+                    <button
+                      v-if="canEdit"
+                      class="btn btn--ghost btn--sm btn--icon"
+                      type="button"
+                      :disabled="row.manageable === false || row.menuLocked"
+                      :title="
+                        row.menuLocked
+                          ? '超级管理员的菜单固定为全部，不可修改'
+                          : row.manageable === false
+                            ? '不在你的管理范围（应用域或职级限制）'
+                            : '菜单授权'
+                      "
+                      aria-label="菜单授权"
+                      @click="openMenus(row)"
+                    >
+                      <KeyRound :size="14" />
+                    </button>
+                    <button
+                      v-if="!row.builtin && auth.hasPermission('admin:role:delete')"
+                      class="btn btn--ghost btn--sm btn--icon role-del"
+                      type="button"
+                      :disabled="row.manageable === false"
+                      :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '删除角色'"
+                      aria-label="删除角色"
+                      @click="remove(row)"
+                    >
+                      <Trash2 :size="14" />
+                    </button>
+                  </td>
+                </tr>
+              </template>
             </template>
             <tr v-if="!loading && rows.length === 0">
-              <td colspan="8"><div class="empty">暂无角色</div></td>
+              <td colspan="7"><div class="empty">暂无角色</div></td>
             </tr>
           </tbody>
         </table>
       </div>
+
+      <!--
+        手机端：应用分组 + 角色卡片。
+        分组行仍可点收起（一屏里通常只关心一两个应用）；卡片里名称与「内置」同行、
+        编码与三个计数压成一行副标题，操作单独成行 —— 「内置」标签不会被挤掉。
+      -->
+      <ul v-else class="mlist">
+        <template v-for="group in roleGroups" :key="group.appId">
+          <li class="mgroup" @click="toggleCollapse(group.appId)">
+            <button
+              class="mgroup__twist"
+              type="button"
+              :aria-expanded="!isCollapsed(group.appId)"
+              :aria-label="`${group.label}（${group.rows.length} 个角色），${isCollapsed(group.appId) ? '展开' : '收起'}`"
+              @click.stop="toggleCollapse(group.appId)"
+            >
+              <ChevronRight :size="13" :class="{ 'is-open': !isCollapsed(group.appId) }" />
+            </button>
+            <span class="mgroup__label">{{ group.label }}</span>
+            <span class="mgroup__count">{{ group.rows.length }}</span>
+            <span class="mgroup__id mono">{{ group.appId }}</span>
+          </li>
+          <template v-if="!isCollapsed(group.appId)">
+            <li v-for="row in group.rows" :key="row.id" class="mcard">
+              <div class="mcard__head">
+                <div class="mcard__main">
+                  <span class="mcard__title">
+                    <span class="mcard__title-text">{{ row.name }}</span>
+                    <!-- 内置：系统定义的角色，不可删除 —— 必须在小屏上也看得见 -->
+                    <span v-if="row.builtin" class="role-name__tag">内置</span>
+                  </span>
+                  <span class="mcard__sub mono">{{ row.code }}</span>
+                  <span class="mcard__meta">
+                    <span>职级 <b class="tnum">{{ row.rank_level }}</b></span>
+                    <span><b class="tnum">{{ row.user_count }}</b> 成员</span>
+                    <span><b class="tnum">{{ row.permissions.length }}</b> 权限码</span>
+                    <span><b class="tnum">{{ row.menu_ids.length }}</b> 菜单</span>
+                  </span>
+                </div>
+              </div>
+              <div class="mcard__acts">
+                <button
+                  v-if="auth.hasPermission('admin:role:update')"
+                  class="btn btn--sm"
+                  type="button"
+                  :disabled="row.manageable === false"
+                  :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '编辑角色'"
+                  @click="openFormEdit(row)"
+                >
+                  <Pencil :size="13" /> 编辑
+                </button>
+                <button
+                  v-if="canEdit"
+                  class="btn btn--sm"
+                  type="button"
+                  :disabled="row.manageable === false || row.menuLocked"
+                  :title="row.menuLocked ? '超级管理员的菜单固定为全部，不可修改' : '菜单授权'"
+                  @click="openMenus(row)"
+                >
+                  <KeyRound :size="13" /> 菜单
+                </button>
+                <button
+                  v-if="!row.builtin && auth.hasPermission('admin:role:delete')"
+                  class="btn btn--danger btn--sm"
+                  type="button"
+                  :disabled="row.manageable === false"
+                  @click="remove(row)"
+                >
+                  <Trash2 :size="13" /> 删除
+                </button>
+              </div>
+            </li>
+          </template>
+        </template>
+        <li v-if="!loading && rows.length === 0" class="mlist__hint">暂无角色</li>
+      </ul>
     </section>
 
     <!-- 权限矩阵：菜单 × 角色，勾选即菜单可见性（接口权限看权限码）。
@@ -1047,6 +1300,8 @@ onMounted(() => {
     <section v-if="altView === 'matrix'">
       <PermissionMatrix
         v-if="canReadMenu && matrixRoles.length"
+        v-model:keyword="matrixKeyword"
+        v-model:type-filter="matrixType"
         :menus="trees"
         :roles="matrixRoles"
         :grants="matrixGrants"
@@ -1108,8 +1363,17 @@ onMounted(() => {
             />
           </label>
           <label class="field">
-            <span class="field__label">职级（0–99，不能高于你自己的最高职级）</span>
-            <input v-model.number="form.rankLevel" class="input" type="number" min="0" max="99" />
+            <span class="field__label">
+              职级（0–99，不能高于你自己的最高职级）{{ rankLocked ? '（超管固定，不可修改）' : '' }}
+            </span>
+            <input
+              v-model.number="form.rankLevel"
+              class="input"
+              type="number"
+              min="0"
+              max="99"
+              :disabled="rankLocked"
+            />
           </label>
 
           <!--
@@ -1122,12 +1386,18 @@ onMounted(() => {
               下拉而不是五张单选卡：这五项是同一个维度的枚举，卡片会把弹窗撑得很长，
               而"自定义"只是其中一种取值，不该让所有选项都占满版面。
             -->
-            <select v-model.number="form.dataScope" class="select" aria-label="数据范围">
+            <select v-model.number="form.dataScope" class="select" :disabled="!scopeConfigurable" aria-label="数据范围">
               <option v-for="opt in SCOPE_OPTIONS" :key="opt.value" :value="opt.value">
                 {{ opt.label }}
               </option>
             </select>
-            <p class="form-hint">{{ currentScopeHint }}</p>
+            <p class="form-hint">
+              {{
+                scopeConfigurable
+                  ? currentScopeHint
+                  : '该角色只能看本人数据 —— 只有管理员 / 审核员 / 观察者可配置数据范围。'
+              }}
+            </p>
 
             <div v-if="form.dataScope === 2" class="scope__depts">
               <p class="form-hint">勾选可见部门（自动包含其下级部门）：</p>
@@ -1192,9 +1462,7 @@ onMounted(() => {
             <template v-else>
               <span class="field__label">
                 权限码（接口放行依据）· 已选 <span class="mono">{{ permissionCount }}</span>
-                <span v-if="form.permissions.some(isWildcard)" class="perm-wild-hint"
-                  >（含通配符，已自动合并）</span
-                >
+                <span v-if="form.permissions.some(isWildcard)" class="perm-wild-hint">（含通配符，已自动合并）</span>
               </span>
               <input v-model="permKeyword" class="input" style="margin-bottom: 8px" placeholder="搜索权限码 / 名称" />
               <div class="perm-panel">
@@ -1473,81 +1741,179 @@ onMounted(() => {
   color: var(--mauth-text-faint);
 }
 
-/* ── 应用分档 ─────────────────────────────────────────────── */
-.role-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 2px;
+/* ── 筛选条（公共骨架在 components.css，这里只留本页宽度）───────── */
+
+/*
+ * 输入/下拉都给一个可收缩的基准宽度而不是死宽：窗口窄的时候一起变瘦，
+ * 实在放不下才整体换行（flex-wrap），不会把最后一个控件孤零零甩到第二行。
+ */
+.filterbar__kw,
+.filterbar__app {
+  flex: 0 1 138px;
+  min-width: 108px;
 }
 
-.role-tab {
-  display: inline-flex;
+/* .select 全局是 width:100%，塞进工具栏会被拉成整行 —— 这里钉死上限。
+   文案用「类型」而不是「全部类型」：后者在 90px 里会被原生箭头挤成「全部类」。 */
+.filterbar__type {
+  flex: 0 0 82px;
+}
+
+/* 页头不再放按钮：刷新与新建都在筛选条的动作组里（见模板注释） */
+
+/* ── 分组标题行 ────────────────────────────────────────────────
+   应用分组是这张表的骨架，不是一条彩色分隔带：
+   行高 42px（比角色行的 48px 略矮）、标题 13px/620、数量做成胶囊。
+   旧版是"6px 内边距的灰条 + 12px 字 + 与数字挤在一起的 appId"，
+   读起来像表格被切开一道口子，也看不出角色属于哪个应用。 */
+.table .role-group-row td {
+  /* 高度交给内层 flex：td 自带 --row-h，否则分组会和角色行一样重 */
+  height: auto;
+  padding: 0 12px 0 8px;
+  background: var(--mauth-surface-2);
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 78%, transparent);
+  cursor: pointer;
+  user-select: none;
+}
+
+.table .role-group-row:hover td {
+  background: var(--mauth-hover);
+}
+
+.role-group {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--mauth-border-strong);
-  border-radius: 999px;
-  background: var(--mauth-surface);
-  color: var(--mauth-text-mid);
-  font: inherit;
-  font-size: 12.5px;
+  gap: 8px;
+  height: 42px;
+  min-width: 0;
+}
+
+/* 折叠箭头：与菜单树的 twist 同形，展开时转 90° */
+.role-group__twist {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mauth-text-faint);
   cursor: pointer;
   transition:
-    color 0.16s ease,
-    border-color 0.16s ease,
-    background 0.16s ease;
+    background 0.16s var(--ease),
+    color 0.16s var(--ease);
 }
 
-.role-tab:hover {
-  color: var(--mauth-primary);
-  border-color: var(--mauth-primary);
-}
-
-/* 选中态用主色描边而不是实心：分档是筛选器，不该抢表格的视觉重量 */
-.role-tab.is-on {
-  border-color: var(--mauth-primary);
-  background: var(--mauth-primary-soft);
-  color: var(--mauth-primary);
-}
-
-.role-tab__count {
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--mauth-hover);
-  font-size: 11px;
-  color: var(--mauth-text-faint);
-}
-
-.role-tab.is-on .role-tab__count {
-  background: color-mix(in srgb, var(--mauth-primary) 14%, transparent);
-  color: var(--mauth-primary);
-}
-
-/* 分组标题行：贴着表格走，比单独一张卡片更紧凑 */
-.role-group-row td {
-  padding: 6px 12px;
-  background: var(--mauth-surface-2);
-  border-bottom: 1px solid var(--mauth-border);
-}
-
-.role-group-row__label {
-  font-size: 12px;
-  font-weight: 620;
+.role-group__twist:hover {
+  background: var(--mauth-press);
   color: var(--mauth-text);
 }
 
-.role-group-row__count {
-  margin-left: 6px;
+.role-group__twist svg {
+  transition: transform 0.16s var(--ease);
+}
+
+.role-group__twist svg.is-open {
+  transform: rotate(90deg);
+}
+
+.role-group__label {
+  font-size: 13px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  color: var(--mauth-text);
+}
+
+/* 角色数：做成胶囊，与右侧表格的数字列区分开 —— 那是数据，这是计数 */
+.role-group__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mauth-text) 6%, transparent);
+  color: var(--mauth-text-soft);
   font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* appId 留着（排查"这角色属于哪个应用"时要它），但压到最弱，扫读时不抢标题 */
+.role-group__id {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--mauth-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── 角色行（分组的子项） ───────────────────────────────────── */
+
+/*
+ * 名称列：只靠缩进表达"我属于上面那个应用"。
+ *
+ * 特异性要压过 components.css 的 `.table td:first-child`（它给 20px 左内边距），
+ * 否则缩进会被那条通用规则吃掉。
+ */
+.table tbody td.role-name {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 40px;
+}
+
+.role-name__text {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  color: var(--mauth-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 内置标记：比 .tag 薄一档 —— 它是"出身"这个属性，不是可点的状态胶囊 */
+.role-name__tag {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--mauth-hover);
+  color: var(--mauth-text-soft);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+/* 0 也是信息（没有成员 / 没有权限码），但它是"没有"，压淡一档让人先看见非零 */
+.table td.cell-zero {
   color: var(--mauth-text-faint);
 }
 
-.role-group-row__hint {
-  margin-left: 8px;
-  font-size: 10.5px;
-  color: var(--mauth-text-faint);
-  opacity: 0.8;
+/* 删除：平时是普通图标，悬停才泛红 —— 一排按钮里不该有个常驻的红点抢视线 */
+.role-del:hover:not(:disabled) {
+  color: #b91c1c;
+  border-color: color-mix(in srgb, #ef4444 45%, var(--mauth-border-strong));
+}
+
+/* 窄屏（≤820px）表格变卡片：缩进是"列内层级"的隐喻，卡片模式下没有列，去掉 */
+@media (max-width: 820px) {
+  .table tbody td.role-name {
+    padding-left: 12px;
+  }
+
+  .table .role-group-row td {
+    padding: 0 12px;
+  }
 }
 
 /* 数据范围：下拉 + 自定义时展开的部门勾选 */

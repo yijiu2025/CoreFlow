@@ -76,6 +76,29 @@ default_role: 'fw_viewer',
 `config.default_role` → `is_default` → 该权限命名空间**职级最低**的角色（要求 `rank_level <= 20`）。
 写 `default_role: null` 表示"有意不自动授予"（例如只有一个管理员角色的 `notice`）。
 
+#### 封闭应用：写 `null`，角色由管理员分配
+
+有些应用**注册了也不该能进**，管理后台就是典型：`config.access` 声明了准入闸门
+（`anyPermission: ['admin:*']`），没有管理能力的账号在 `bind-session` 阶段就被拒，
+前端拿到的是 `access.denyMessage`。
+
+这类应用必须 `default_role: null`，并且**不要**在 `roles.js` 上标 `is_default`：
+
+- 默认角色满足闸门（`admin_viewer` 持有全站读码，`admin:*` 直接命中）→ 任何注册用户
+  点一下"同意授权"就能看用户、部门、角色与日志，闸门形同虚设；
+- 默认角色不满足闸门 → 用户拿到一个进不去任何页面的假角色，登录即 403，
+  比"什么都不授"更让人困惑。
+
+那角色怎么给：
+
+1. 管理员在「用户管理 → 分配角色」手工授予
+   （`POST /admin/console/v1/users/roles/batch`，支持追加/移除、跨应用批量）；
+2. GLOBAL 的 `superadmin` 由 `permission-loader` 自动继承各应用的 `{appId}_admin`，
+   不需要逐个授。
+
+判据：启动期 `auditDefaultRoles` 对"有闸门 + 有默认角色"直接报 **error**；
+`__tests__/permission/role-rank-levels.test.js` 用真实 config 跑一遍，写错测试就红。
+
 ::: warning 写角色定义时必须一起把默认角色写对
 - **注册期直接抛错**（import 期 = 启动失败）：缺 `app_id` / `rank_level` / `policy.Statement`，
   同一应用声明两个 `is_default`，或默认角色的 `rank_level` 超过普通档上限（20）。

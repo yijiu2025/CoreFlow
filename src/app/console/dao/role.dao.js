@@ -72,6 +72,24 @@ function isProtectedRoleCode(code) {
 }
 
 /**
+ * 超管的职级是否锁死（`rank_level` 不可改）
+ *
+ * 职级是「能不能动这个角色」的闸：路由里 `role.rank_level > myRank` 直接拒编辑，
+ * 列表的 `manageable` 也按它算。把 superadmin 从 99 降下来，它立刻失去编辑所有
+ * 高职级角色的资格 —— 而它往往就是唯一持有 `admin:role:update` 的账号，
+ * 等于自己把自己关在门外，只能直连数据库改回来。
+ *
+ * 与 `isProtectedRoleCode` 分开：内置角色（代码声明的那批）的**职级是可以调的**，
+ * 那是运维的正常诉求；锁的只有超管这一个。
+ *
+ * @param {string} code 角色编码
+ * @returns {boolean} 是否锁死职级
+ */
+function isRankLockedRole(code) {
+  return String(code || '') === MENU_LOCKED_CODE;
+}
+
+/**
  * 由权限码数组构造 PBAC 策略文档
  *
  * @param {string[]} permissions 权限码数组（支持 `admin:*` 通配）
@@ -501,5 +519,5 @@ class RoleDao {
 
 const roleDao = new RoleDao();
 
-export { MENU_LOCKED_CODE, isProtectedRoleCode, protectedRoleCodes, extractPermissions };
+export { MENU_LOCKED_CODE, isProtectedRoleCode, isRankLockedRole, protectedRoleCodes, extractPermissions };
 export default roleDao;

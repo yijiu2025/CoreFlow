@@ -134,6 +134,47 @@ function userScopeWhere(scope, actorId) {
 }
 
 /**
+ * 校验「能不能把用户写进这个部门」
+ *
+ * 读与写的范围必须是同一套：列表用 `userScopeWhere` 过滤，所以部门管理员只能看见
+ * 自己部门的人；如果**写**不校验，他就可以往看不见的部门里建账号 —— 那是"凭空造人"，
+ * 而且新账号立刻从他的列表里消失，谁都发现不了。批量导入尤其明显：一张 CSV 能一次
+ * 塞 500 个。
+ *
+ * 三档语义（与 `userScopeWhere` 一一对应）：
+ *   · `all`   → 不限；
+ *   · `depts` → 必须指定部门，且落在 `deptIds` 里（含子部门，已在下游展开）；
+ *   · `self`  → 拒绝：数据范围只有本人的人，本来就不该有创建他人的能力。
+ *
+ * 刻意**不允许**"不填部门"绕过：`dept_id IS NULL` 的用户不属于任何部门，
+ * 部门管理员既看不见也管不了，等于留了一个无人认领的账号。
+ *
+ * @param {{mode: string, deptIds: number[]|null}} scope 数据范围
+ * @param {number|null} deptId 目标部门 ID
+ * @param {object} [options] 提示文案上下文
+ * @param {string} [options.action='创建'] 动作名（"导入"/"创建"）
+ * @returns {void}
+ * @throws {Error} `FORBIDDEN:xxx` / `INVALID_PARAM:xxx`
+ */
+function assertDeptWritable(scope, deptId, { action = '创建' } = {}) {
+  if (!scope || scope.mode === 'all') return;
+
+  if (scope.mode === 'self') {
+    throw new Error(`FORBIDDEN:你的数据范围仅限本人，不能${action}他人账号`);
+  }
+
+  const target = Number(deptId);
+  if (!Number.isInteger(target) || target <= 0) {
+    throw new Error(`INVALID_PARAM:请填写部门 —— 你的数据范围限定在若干部门内，不能${action}无所属部门的账号`);
+  }
+
+  const allowed = new Set((scope.deptIds ?? []).map(Number));
+  if (!allowed.has(target)) {
+    throw new Error('FORBIDDEN:该部门不在你的数据范围内');
+  }
+}
+
+/**
  * 剪枝部门树（只留下范围内的部门）
  *
  * 父节点不在范围内时整枝丢弃：留下孤儿子节点会让树"从中间开始"，读者无法定位。
@@ -176,4 +217,51 @@ function logScopeSql(scope, actorId, alias) {
   return ` AND ${alias}.user_id IN (SELECT id FROM user_user WHERE dept_id IN (${list}))`;
 }
 
-export { DATA_SCOPE, resolveDataScope, userScopeWhere, filterDeptTree, subtreeOf, activeRoleIds, logScopeSql };
+/**
+ * 该角色编码是否允许配置"非仅本人"的数据范围
+ *
+ * 只有**需要看别人数据**的三类角色才给这个口子：
+ *   · 管理员 `*_admin`（含 `superadmin`）
+ *   · 审核员 `*_operator`
+ *   · 观察者 `*_viewer`
+ *
+ * 其余角色（`*_user` / `*_vip` / `*_creator` / `user_normal` / 自定义编码）一律「仅本人」——
+ * 这条规则的作用是堵住"建个角色顺手勾个『全部数据』"这条最短的越权路径。
+ *
+ * @param {string} code 角色编码
+ * @returns {boolean} 是否可配
+ */
+function isScopeConfigurable(code) {
+  const value = String(code || '').trim();
+  if (!value) return false;
+  if (value === 'superadmin') return true;
+  return /^.+_(admin|operator|viewer)$/.test(value);
+}
+
+/**
+ * 校验角色只能用「仅本人」
+ *
+ * @param {string} code 角色编码
+ * @param {number|null|undefined} dataScope 提交的数据范围
+ * @returns {void}
+ * @throws {Error} 非白名单角色提交了非 5 的档位
+ */
+function assertScopeConfigurable(code, dataScope) {
+  if (dataScope === undefined || dataScope === null) return;
+  if (Number(dataScope) === DATA_SCOPE.SELF) return;
+  if (isScopeConfigurable(code)) return;
+  throw new Error(`INVALID_PARAM:角色「${code}」的数据范围只能是「仅本人」（只有管理员 / 审核员 / 观察者可配置范围）`);
+}
+
+export {
+  DATA_SCOPE,
+  isScopeConfigurable,
+  assertScopeConfigurable,
+  resolveDataScope,
+  userScopeWhere,
+  assertDeptWritable,
+  filterDeptTree,
+  subtreeOf,
+  activeRoleIds,
+  logScopeSql
+};

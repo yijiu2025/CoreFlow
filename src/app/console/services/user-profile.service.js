@@ -19,7 +19,7 @@ import { QueryTypes } from 'sequelize';
 import { logAuditEvent } from '../../../framework/security/auth/index.js';
 import { describeCurrentAccess } from './user-access.service.js';
 import userDangerService from './user-danger.service.js';
-import { getActorScope, getTargetScope, appLabel } from './access-scope.service.js';
+import { getActorScope, getTargetScope, appLabel, activeRoleIds } from './access-scope.service.js';
 
 /** 记录区展示条数（够看出"最近在忙什么"即可，完整流水在日志页） */
 const RECENT_LIMIT = 10;
@@ -101,9 +101,12 @@ class UserProfileService {
     const user = await User.findByPk(id, { raw: true });
     if (!user) throw new Error('NOT_FOUND:用户不存在');
 
-    const [dept, posts, access, apps, ops, logins, inlineRows] = await Promise.all([
+    const [dept, postRefs, roleIds, access, apps, ops, logins, inlineRows] = await Promise.all([
       user.dept_id ? getModel('SysDept').findByPk(user.dept_id, { raw: true }) : null,
       this.postsOf(id),
+      // 完整角色 ID（不经 `describeCurrentAccess` 的可见性裁剪）：这是**回填表单**用的，
+      // 只回填看得见的那几条，保存时会把其余角色当成"用户主动摘掉"整片删掉。
+      activeRoleIds(id),
       describeCurrentAccess(id),
       userDangerService.listApps(id),
       this.recentOps(id),
@@ -128,7 +131,11 @@ class UserProfileService {
         status: Number(user.status),
         deptId: user.dept_id ? Number(user.dept_id) : null,
         deptName: dept?.name || '',
-        postNames: posts,
+        postNames: postRefs.names,
+        /** 岗位 ID（编辑回填用；名字会重名 / 可改名，反查必错） */
+        postIds: postRefs.ids,
+        /** 完整角色 ID（编辑回填用，含当前操作者看不见的角色，见 Promise.all 注释） */
+        roleIds,
         createdAt: user.created_at,
         deleteVersion: Number(user.delete_version || 0)
       },
@@ -143,10 +150,13 @@ class UserProfileService {
   }
 
   /**
-   * 岗位名
+   * 岗位（ID + 名称）
+   *
+   * 两样都要：详情页展示用名字，编辑回填只能用 ID —— 名字会重名、可改名，
+   * 反查会静默选错岗位。
    *
    * @param {number} userId 用户 ID
-   * @returns {Promise<string[]>} 岗位名列表
+   * @returns {Promise<{ids: number[], names: string[]}>} 岗位 ID 与名称
    */
   async postsOf(userId) {
     const rows = await getModel('SysUserPost').findAll({
@@ -155,9 +165,13 @@ class UserProfileService {
       raw: true
     });
     const ids = rows.map(r => Number(r.post_id)).filter(n => n > 0);
-    if (ids.length === 0) return [];
-    const posts = await getModel('SysPost').findAll({ where: { id: ids }, attributes: ['name'], raw: true });
-    return posts.map(p => p.name);
+    if (ids.length === 0) return { ids: [], names: [] };
+    const posts = await getModel('SysPost').findAll({ where: { id: ids }, attributes: ['id', 'name'], raw: true });
+    return {
+      // 顺序跟 `ids` 走：关联表里先挂的排前面，UI 上顺序稳定（findAll 的返回顺序不可依赖）
+      ids: posts.map(p => Number(p.id)),
+      names: posts.map(p => p.name)
+    };
   }
 
   /**

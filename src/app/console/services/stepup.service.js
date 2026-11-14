@@ -61,6 +61,8 @@ const ACTIONS = {
   'user.delete': '删除账号',
   'user.app-deactivate': '注销应用账号',
   'user.temp-password': '签发临时密码',
+  // 批量导入一次能建 500 个账号（每个都能登录），破坏半径比删单个账号大
+  'user.import': '批量导入用户',
   // 清除日志：目标不是"某个用户"，而是"一组筛选条件"，所以走 targetKey 绑定（见下）
   'log.purge': '清除日志'
 };
@@ -316,7 +318,7 @@ async function consumeChallenge({ userId, request, action, targetId, targetKey, 
    */
   const expectKey = targetKey === null || targetKey === undefined ? null : String(targetKey);
   if ((record.targetKey ?? null) !== expectKey) {
-    throw new Error('FORBIDDEN:该验证不是为当前筛选范围签发的，请重新获取验证码');
+    throw new Error('FORBIDDEN:该验证不是为本次提交的内容签发的，请重新获取验证码');
   }
 
   if (record.method === 'password') {

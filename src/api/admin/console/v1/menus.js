@@ -11,12 +11,11 @@
  * @since 2026-11-09
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import {
-  ADMIN_PERMISSIONS,
-  ADMIN_PERMISSION_CODES,
-  adminPermissionOptions
-} from '../../../../app/admin/permission/index.js';
+import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
+import { actionMetaRegistry } from '../../../../framework/security/pbac/index.js';
 import menuDao from '../../../../app/console/dao/menu.dao.js';
+import { getActorScope } from '../../../../app/console/services/access-scope.service.js';
+import { appNameOf, canConfigureApp } from '../../../../app/console/services/menu-scope.service.js';
 import { invalidateButtonGrants } from '../../../../app/console/services/button-grant.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 
@@ -25,6 +24,8 @@ const menuBodySchema = {
   type: 'object',
   properties: {
     parentId: { type: 'integer', minimum: 0 },
+    /** 归属应用：默认 admin（管理后台）。换应用时权限码也要换成该应用的命名空间 */
+    appId: { type: 'string', minLength: 1, maxLength: 32 },
     name: { type: 'string', minLength: 1, maxLength: 50 },
     type: { type: 'string', enum: ['dir', 'menu', 'btn'] },
     icon: { type: 'string', maxLength: 64 },
@@ -56,6 +57,7 @@ function toModelFields(body) {
   // 「声明了一个叫 permission 的权限码」，从而让整仓测试变红。
   const FIELDS = [
     ['parentId', 'parent_id'],
+    ['appId', 'app_id'],
     ['name', 'name'],
     ['type', 'type'],
     ['icon', 'icon'],
@@ -77,27 +79,58 @@ function toModelFields(body) {
 }
 
 /**
- * 校验权限码属于本应用
+ * 某应用可选的权限码
  *
- * 🔴 原则：**菜单树是本应用自己的，权限码也只能是本应用的。**
- *    写进别的应用的码不会有任何效果 —— 这条菜单/按钮匹配不到本应用的任何一个
- *    `requirePermission`，看起来"配了权限"实际谁也点不开；而角色授权页还会把它
- *    算成"该角色拥有别的应用的能力"，审计与排障都被带偏。别的应用有没有这个码
- *    与本应用无关，所以不是"警告"而是**拒写**。
+ * 从权限注册表按命名空间取（`admin` → `admin:*`，`firewall` → `fw:*`…）。
+ * 这是"这个码能不能挂在这条菜单上"的唯一判据 —— 写错命名空间的码永远匹配不到
+ * 任何 `requirePermission`，界面上配了也点不动。
  *
- * 例外：**值没变**时放行。历史数据里可能已经躺着跨应用的码（跨版本升级留下的），
+ * @param {string} appId 应用标识
+ * @returns {Set<string>} 可选权限码
+ */
+function permissionCodesOf(appId) {
+  const meta = actionMetaRegistry.find(item => item.domain === appId);
+  return new Set((meta?.actions || []).map(action => action.code));
+}
+
+/**
+ * 校验操作者能配置该应用的菜单
+ *
+ * @param {object} request Fastify 请求
+ * @param {string} appId 目标应用
+ * @returns {Promise<void>}
+ * @throws {Error} `FORBIDDEN:...`
+ */
+async function assertAppWritable(request, appId) {
+  const actor = await getActorScope(request.state.user?.userId);
+  if (canConfigureApp(request.state.user, actor, appId)) return;
+  throw new Error(`FORBIDDEN:你没有「${appNameOf(appId)}」的权限，不能配置该应用的菜单`);
+}
+
+/**
+ * 校验权限码属于该菜单所属的应用
+ *
+ * 🔴 写进别的应用的码不会有任何效果 —— 这条菜单/按钮匹配不到该应用的任何一个
+ *    `requirePermission`，看起来"配了权限"实际谁也点不开；角色授权页还会把它算成
+ *    "该角色拥有别的应用的能力"。所以不是"警告"而是**拒写**。
+ *
+ * 例外：**值没变**时放行。历史数据里可能已经躺着跨命名空间的码（跨版本升级留下的），
  * 若不允许原值保存，管理员改一个菜单的排序都会被这条规则卡死，只能连库改。
  *
- * @param {unknown} code 待写入的权限码（空值表示不设权限，合法）
- * @param {unknown} [previous] 该菜单当前库里的值（新建时传 undefined）
- * @throws {Error} 权限码不属于本应用时抛 INVALID_PARAM
+ * @param {string} code 待写入的权限码（空值表示不设权限，合法）
+ * @param {string} [previous] 该菜单当前库里的值（新建时传 undefined）
+ * @param {string} [appId='admin'] 目标应用（决定可用哪个命名空间的码）
+ * @throws {Error} 权限码不属于该应用时抛 INVALID_PARAM
+ * @returns {void}
  */
-function assertOwnPermission(code, previous) {
+function assertOwnPermission(code, previous, appId = 'admin') {
   if (code === undefined || code === null || String(code).trim() === '') return;
   const value = String(code).trim();
   if (previous !== undefined && previous !== null && String(previous) === value) return;
-  if (!ADMIN_PERMISSION_CODES.has(value)) {
-    throw new Error(`INVALID_PARAM:权限码「${value}」不属于本应用，只能用 admin: 开头的码（如 admin:user:read）`);
+  if (!permissionCodesOf(appId).has(value)) {
+    const meta = actionMetaRegistry.find(item => item.domain === appId);
+    const hint = meta?.actions?.[0]?.code || 'admin:user:read';
+    throw new Error(`INVALID_PARAM:权限码「${value}」不属于应用「${appId}」，只能用该应用的码（如 ${hint}）`);
   }
 }
 
@@ -130,8 +163,38 @@ async function registerMenuRoutes(fastify) {
     url: '/menus/tree',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.MENU.READ,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: { appId: { type: 'string', maxLength: 32 } }
+      }
+    },
     handler: withFail(async (request, reply) => {
-      return reply.result.success('获取成功', await menuDao.tree());
+      // 不带 appId 时返回全部应用（导出/矩阵视角需要）；带则只回该应用
+      const appId = request.query?.appId ? String(request.query.appId) : null;
+      return reply.result.success('获取成功', await menuDao.tree({ appId }));
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleMenuApps',
+    alias: '可配置的应用',
+    method: 'GET',
+    url: '/menus/apps',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.MENU.READ,
+    handler: withFail(async (request, reply) => {
+      // 只回「注册过权限码」的应用：没有码就没有可授权的界面元素，列出来只会是空分档
+      const actor = await getActorScope(request.state.user?.userId);
+      const apps = actionMetaRegistry
+        .filter(meta => (meta.actions || []).length > 0)
+        .map(meta => ({
+          id: meta.domain,
+          name: meta.name || meta.domain,
+          /** 当前账号能否配置该应用的菜单（写接口会再校验一次，这里只用于前端置灰/过滤） */
+          writable: canConfigureApp(request.state.user, actor, meta.domain)
+        }));
+      return reply.result.success('获取成功', apps);
     })
   });
 
@@ -142,9 +205,22 @@ async function registerMenuRoutes(fastify) {
     url: '/menus/permission-options',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.MENU.READ,
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: { appId: { type: 'string', maxLength: 32 } }
+      }
+    },
     handler: withFail(async (request, reply) => {
-      // 只回本应用的码：前端拿它做候选，天然不会把别的应用摆出来
-      return reply.result.success('获取成功', { options: adminPermissionOptions() });
+      const appId = String(request.query?.appId || 'admin');
+      const meta = actionMetaRegistry.find(item => item.domain === appId);
+      if (!meta) throw new Error(`NOT_FOUND:未知应用「${appId}」`);
+      // 候选只回该应用的码：跨命名空间的码挂上去不会生效，不该出现在候选里
+      return reply.result.success('获取成功', {
+        appId,
+        appName: meta.name || appId,
+        options: (meta.actions || []).map(action => ({ code: action.code, label: action.label, type: action.type }))
+      });
     })
   });
 
@@ -160,7 +236,21 @@ async function registerMenuRoutes(fastify) {
     },
     handler: withFail(async (request, reply) => {
       const payload = toModelFields(request.body);
-      assertOwnPermission(payload.permission);
+      const appId = String(payload.app_id || 'admin');
+      payload.app_id = appId;
+      await assertAppWritable(request, appId);
+      assertOwnPermission(payload.permission, undefined, appId);
+      /*
+       * 父级必须同应用：跨应用挂载会造出"防火墙页面在管理后台侧栏里"这种孤儿，
+       * 而且菜单树的 app 过滤会把子项一起藏掉。
+       */
+      if (payload.parent_id) {
+        const parent = await menuDao.findById(payload.parent_id);
+        if (!parent) throw new Error('INVALID_PARENT:上级菜单不存在');
+        if (String(parent.app_id || 'admin') !== appId) {
+          throw new Error('INVALID_PARENT:上级菜单属于其它应用，不能在它下面挂本应用的菜单');
+        }
+      }
       const menu = await menuDao.create(payload);
       /*
        * 新增按钮时继承上级页面的授权。
@@ -192,7 +282,24 @@ async function registerMenuRoutes(fastify) {
       const menu = await menuDao.findById(request.params.id);
       if (!menu) throw new Error('NOT_FOUND:菜单不存在');
       const payload = toModelFields(request.body);
-      assertOwnPermission(payload.permission, menu.permission);
+      const appId = String(payload.app_id || menu.app_id || 'admin');
+      // 原应用与目标应用都要可写：否则"把别人应用的菜单改到自己名下"就是一条绕过口
+      await assertAppWritable(request, menu.app_id || 'admin');
+      if (appId !== (menu.app_id || 'admin')) await assertAppWritable(request, appId);
+      // 只有真的要改权限码时才校验（原值保持不变时放行历史跨命名空间的脏数据）
+      assertOwnPermission(payload.permission, menu.permission, appId);
+      if (payload.app_id !== undefined && payload.app_id !== menu.app_id) {
+        // 换应用时子项必须一起换，否则父子跨应用，树会断
+        if ((await menuDao.countChildren(menu.id)) > 0) {
+          throw new Error('INVALID_PARENT:该菜单下有子项，不能单独更换归属应用');
+        }
+        if (Number(menu.parent_id) > 0) {
+          const parent = await menuDao.findById(menu.parent_id);
+          if (parent && String(parent.app_id || 'admin') !== appId) {
+            throw new Error('INVALID_PARENT:上级菜单属于其它应用，请先把上级改到同一应用');
+          }
+        }
+      }
       if (payload.parent_id !== undefined && Number(payload.parent_id) === Number(menu.id)) {
         throw new Error('INVALID_PARENT:不能把菜单挂到自己下面');
       }
@@ -220,6 +327,7 @@ async function registerMenuRoutes(fastify) {
       const id = request.params.id;
       const menu = await menuDao.findById(id);
       if (!menu) throw new Error('NOT_FOUND:菜单不存在');
+      await assertAppWritable(request, menu.app_id || 'admin');
       if ((await menuDao.countChildren(id)) > 0) throw new Error('HAS_CHILDREN:请先删除子菜单');
       if ((await menuDao.countRoleRefs(id)) > 0) throw new Error('ROLE_REFERENCED:仍有角色引用该菜单，请先解除授权');
       await menuDao.remove(id);
@@ -237,9 +345,23 @@ async function registerMenuRoutes(fastify) {
     requirePermission: ADMIN_PERMISSIONS.MENU.READ,
     handler: withFail(async (request, reply) => {
       const rows = await menuDao.listAll();
-      const header = ['ID', '上级', '名称', '类型', '路由', '权限码', '排序', '可见', '状态'];
+      // 带上应用列：导出是全应用的，没有这一列分不清哪些行属于哪个界面
+      const header = ['ID', '应用', '上级', '名称', '类型', '路由', '权限码', '排序', '可见', '状态'];
       const lines = rows.map(r =>
-        [r.id, r.parent_id, r.name, r.type, r.path, r.permission, r.sort, r.visible, r.status].map(csvCell).join(',')
+        [
+          r.id,
+          actionMetaRegistry.find(meta => meta.domain === (r.app_id || 'admin'))?.name || r.app_id || 'admin',
+          r.parent_id,
+          r.name,
+          r.type,
+          r.path,
+          r.permission,
+          r.sort,
+          r.visible,
+          r.status
+        ]
+          .map(csvCell)
+          .join(',')
       );
       const csv = `\uFEFF${header.join(',')}\n${lines.join('\n')}`;
       return reply

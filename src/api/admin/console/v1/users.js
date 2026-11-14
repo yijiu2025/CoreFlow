@@ -155,8 +155,15 @@ const listQuerySchema = {
   properties: {
     pageNum: { type: 'integer', minimum: 1, default: 1 },
     pageSize: { type: 'integer', minimum: 1, maximum: 200, default: 20 },
+    // 账号 / 邮箱 / 设备码（三者任一命中）；前端只用一个搜索框
     keyword: { type: 'string', maxLength: 100 },
     deptId: { type: 'integer', minimum: 0 },
+    /*
+     * 设备码（子串）—— **AND 语义**：只留这台设备登过的账号，用于精确排查/导出。
+     * 一般"找人"走 keyword 就够了（那里已把设备码并进 OR），前端也只剩一个搜索框；
+     * 这个参数保留给旧链接与外部调用方。
+     */
+    deviceId: { type: 'string', maxLength: 100 },
     // 子应用筛选：只看在该应用里有角色的人（GLOBAL 角色不参与）
     appId: { type: 'string', maxLength: 64 },
     // -2 = 待注销（发起删除、缓冲期内）：要能作为筛选条件
@@ -210,7 +217,15 @@ async function registerUserRoutes(fastify) {
     requirePermission: ADMIN_PERMISSIONS.USER.READ,
     schema: { querystring: listQuerySchema },
     handler: withFail(async (request, reply) => {
-      const { pageNum = 1, pageSize = 20, keyword = '', deptId = null, appId = null, status = null } = request.query;
+      const {
+        pageNum = 1,
+        pageSize = 20,
+        keyword = '',
+        deptId = null,
+        appId = null,
+        status = null,
+        deviceId = ''
+      } = request.query;
       const actorId = request.state.user?.userId;
       // 行级数据范围：与前端传的 deptId 取交集，越权的 deptId 也只能在自己范围内再筛
       const dataScope = { ...(await resolveDataScope(actorId)), actorId };
@@ -221,6 +236,7 @@ async function registerUserRoutes(fastify) {
         deptId,
         appId,
         status,
+        deviceId,
         dataScope,
         scopeAppIds: await scopeAppIdsOf(request)
       });
@@ -447,7 +463,7 @@ async function registerUserRoutes(fastify) {
     requirePermission: ADMIN_PERMISSIONS.USER.EXPORT,
     schema: { querystring: listQuerySchema },
     handler: withFail(async (request, reply) => {
-      const { keyword = '', deptId = null, appId = null, status = null } = request.query;
+      const { keyword = '', deptId = null, appId = null, status = null, deviceId = '' } = request.query;
       // 导出与列表同一口径：给应用管理员导全表等于把别家应用的用户名单往外带
       const { rows } = await userDao.page({
         pageNum: 1,
@@ -456,6 +472,8 @@ async function registerUserRoutes(fastify) {
         deptId,
         appId,
         status,
+        // 导出必须和列表同一套条件：否则"筛了设备码导出全量"，名单和眼前的对不上
+        deviceId,
         scopeAppIds: await scopeAppIdsOf(request)
       });
       const header = ['ID', '账号', '邮箱', '部门', '角色', '岗位', '状态', '创建时间'];

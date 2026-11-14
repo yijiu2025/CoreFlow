@@ -114,3 +114,7 @@ articles/
 reports/
 # 截图/视觉回归工具的浏览器持久化 profile（本地生成，14MB 级别，勿入库）
 scaffold/.shots-profile/
+
+# playwright-cli 的会话快照与临时产物（含 user.yaml 的 aria 快照，本地生成）
+.playwright-cli/
+/user.yaml

@@ -178,6 +178,35 @@ function auditDefaultRoles({ configs = [], roleDefs = [] } = {}) {
       cfg && Object.prototype.hasOwnProperty.call(cfg, 'default_role') ? cfg.default_role : undefined;
     const declaredInCode = getDeclaredDefaultRole(appId);
 
+    /*
+     * ⓪ 封闭应用（声明了准入闸门 `config.access`）**不允许**有默认角色。
+     *
+     * 闸门的语义是"没被授予能力就进不来"（`checkAppAccess` → NO_CAPABILITY），
+     * 而默认角色是"授权即送"。两者并存只有两种结果，都不对：
+     *   · 角色满足闸门（如 admin_viewer 持有 admin:* 读码）→ 注册用户点一下同意
+     *     就能进后台，闸门形同虚设；
+     *   · 角色不满足闸门 → 用户拿到一个进不去任何页面的假角色，登录即 403，
+     *     比"什么都不授"更让人困惑。
+     * 所以封闭应用一律 `default_role: null`，角色由管理员手工分配。
+     */
+    const gated =
+      (Array.isArray(cfg?.access?.anyPermission) && cfg.access.anyPermission.length > 0) ||
+      (Array.isArray(cfg?.access?.anyRole) && cfg.access.anyRole.length > 0);
+
+    if (gated && (typeof declaredInConfig === 'string' || declaredInCode)) {
+      issues.push({
+        level: 'error',
+        appId,
+        message:
+          `应用 ${appId} 声明了接入闸门（config.access），却又指定了默认角色` +
+          `（config=${JSON.stringify(declaredInConfig ?? null)}、roles.js=${JSON.stringify(declaredInCode)}）—— ` +
+          '封闭应用不能"授权即送"：要么默认角色直接跨过闸门（注册即可访问），' +
+          '要么发出去也进不去。请把 config 的 default_role 设为 null 并去掉 is_default，' +
+          '角色改由管理员在「用户管理 → 分配角色」里手工授予'
+      });
+      continue;
+    }
+
     // ① config 显式写 null = 有意不自动授予（如只发管理员的 notice）
     if (declaredInConfig === null) {
       if (declaredInCode) {

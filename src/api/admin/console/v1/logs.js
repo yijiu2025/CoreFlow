@@ -42,6 +42,8 @@ const listQuerySchema = {
     // 以下是**独立维度**：keyword 是 OR 模糊，做"按 IP / 按账号"会误伤别处的同类文本
     username: { type: 'string', maxLength: 64 },
     ip: { type: 'string', maxLength: 50 },
+    // 设备码：设备码是客户端自报的字符串（WEB-xxxx / MOB-xxxx），按子串匹配
+    deviceId: { type: 'string', maxLength: 100 },
     event: { type: 'string', maxLength: 50 },
     action: { type: 'string', maxLength: 50 },
     startTime: { type: 'string', maxLength: 32 },
@@ -50,7 +52,7 @@ const listQuerySchema = {
 };
 
 /** 清除操作允许的筛选键（白名单：前端传别的键一律忽略，不进 where 也不进留痕） */
-const FILTER_KEYS = ['keyword', 'status', 'startTime', 'endTime', 'username', 'ip', 'event', 'action'];
+const FILTER_KEYS = ['keyword', 'status', 'startTime', 'endTime', 'username', 'ip', 'deviceId', 'event', 'action'];
 
 /**
  * 从请求体里取筛选条件

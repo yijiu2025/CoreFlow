@@ -37,6 +37,10 @@ export default {
    * 用户在 OAuth 授权页同意授权时自动授予这个角色。写 `null` = 有意不自动授予。
    * 与 `permission/roles.js` 里该角色的 `is_default: true` 配套：config 为主口径，
    * 代码标记为辅；两处不一致或漏写都会在启动期审计里报出来。
+   *
+   * 🔴 如果本应用声明了 `access` 准入闸门（"注册了也不该能进"，如管理后台），
+   *    这里**必须**是 `null`，且 roles.js 里不要标 is_default —— 默认角色会直接
+   *    跨过闸门。角色改由管理员手工分配。
    */
   default_role: 'myapp_user',
 

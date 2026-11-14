@@ -12,34 +12,32 @@
  * @since 2026-11-09
  */
 import { computed, onMounted, reactive, ref } from 'vue';
-import { useRoute } from 'vue-router';
-import { Download, Pencil, Plus, RotateCcw, Search, ShieldAlert, ShieldCheck, Upload, UserCheck, UserX, X } from 'lucide-vue-next';
-import {
-  createUser,
-  deptTree,
-  exportUsers,
-  listUsers,
-  permissionCatalog,
-  setUserPermission,
-  updateUser,
-  updateUserStatus,
-  userOptions,
-  userProfile
-} from '@/api/system';
-import type { DeptNode, UserOptions, UserRow } from '@/api/types';
+import { useRoute, useRouter } from 'vue-router';
+import { Download, Pencil, Plus, Search, ShieldAlert, ShieldCheck, Upload, UserCheck, UserX } from 'lucide-vue-next';
+import { deptTree, exportUsers, listUsers, updateUserStatus, userOptions } from '@/api/system';
+import type { DeptNode, UserEditTarget, UserOptions, UserRow } from '@/api/types';
 import GrantHistoryDialog from '@/components/business/GrantHistoryDialog.vue';
 import BatchGrantDialog from '@/components/business/BatchGrantDialog.vue';
 import UserDangerDialog from '@/components/business/UserDangerDialog.vue';
 import AppIcon from '@/components/ui/AppIcon.vue';
 import UserProfileDrawer from '@/components/business/UserProfileDrawer.vue';
+import UserEditDialog from '@/components/business/UserEditDialog.vue';
 import UserImportDialog from '@/components/business/UserImportDialog.vue';
-import RolePicker from '@/components/ui/RolePicker.vue';
-import PostPicker from '@/components/ui/PostPicker.vue';
 import { canManageUser, indexRoles } from '@/utils/scope';
 import { useAuthStore } from '@/stores/auth';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 
 const auth = useAuthStore();
 const route = useRoute();
+const router = useRouter();
+
+/**
+ * 当前渲染设备（`?device=mobile|std` 或 ≤820px 自动判定）
+ *
+ * 只用来决定「这张列表怎么画」：桌面走表格 + 详情抽屉，手机走一行一条的列表 +
+ * 详情页。CSS 断点改不了 DOM 结构，所以这个判定必须在 JS 里做一次。
+ */
+const device = useRenderDevice();
 
 const rows = ref<UserRow[]>([]);
 const total = ref(0);
@@ -104,13 +102,36 @@ function toggleDept(id: number): void {
  * 切回「全部」时必须清掉 deptId —— 否则界面显示"全部"但列表还在按部门过滤，
  * 是最容易让人误判"数据丢了"的那种 bug。
  *
+ * 🔴 **重复点选中的那一档，也要有反应**。这里曾经对 `filterMode === mode` 直接
+ *    `return`：用户看到「全部用户」已经是高亮的，再点一下页面连 loading 都不闪，
+ *    于是报成"这个按钮无效"（前端已经高亮、deptId 也本来就是空，确实什么都没发生）。
+ *    分段控件在用户眼里是"按钮"而不是"状态灯" —— 点下去必须留下后果，
+ *    所以现在无论模式变没变，都重新拉一次当前视图；唯一省掉的是部门树的重复拉取。
+ *
  * @param mode 目标方式
  */
 function switchFilterMode(mode: 'all' | 'dept'): void {
-  if (filterMode.value === mode) return;
+  const changed = filterMode.value !== mode;
   filterMode.value = mode;
-  if (mode === 'all') pickDept(null);
-  else void loadDeptTree();
+
+  if (mode === 'dept') {
+    // 树只在真正切进来时拉：重复点不该打接口。列表也不动 —— 部门还没选，条件没变
+    if (!changed) {
+      // 已经是「按部门」了，再点一次 = 刷新当前部门视图（有选部门就重查该部门）
+      void load();
+      return;
+    }
+    void loadDeptTree();
+    return;
+  }
+
+  // 已经在「全部用户」时不再动 deptId / 页码（本来就是干净的），只是重查一次；
+  // 真从部门切回来才需要清限定并回到第一页
+  if (changed) {
+    query.deptId = null;
+    query.pageNum = 1;
+  }
+  void load();
 }
 
 /** 当前筛选的部门名（标题右侧提示，避免"只在树上高亮"看不出来在看谁） */
@@ -133,7 +154,29 @@ function pickDept(deptId: number | null): void {
  * @param row 用户行
  */
 function openProfile(row: UserRow): void {
+  /*
+   * 手机端不走抽屉：抽屉盖住半屏、右侧滑出，在 390px 上左右都不留余量，
+   * 而且「退回去」只能点遮罩 —— 不是 App 的手感。改成压栈进详情页，
+   * 顶栏会出现返回箭头（路由 `meta.stack`，见 AppShell）。
+   */
+  if (device.value === 'mobile') {
+    router.push({ name: 'system-user-detail', params: { id: row.id } });
+    return;
+  }
   profileId.value = row.id;
+}
+
+/**
+ * 手机端列表的头像占位字
+ *
+ * 没有头像的人不能留一个灰圆圈（一整屏灰点分不清谁是谁）：
+ * 取账号首字，中文就是第一个字、英文首字母大写。
+ *
+ * @param row 列表行
+ * @returns 单个字符
+ */
+function initialOf(row: UserRow): string {
+  return (row.username || row.uid || '?').trim().slice(0, 1).toUpperCase();
 }
 
 /**
@@ -225,154 +268,10 @@ const canDeactivateApp = computed(() => auth.hasPermission('admin:user:deactivat
 /** 是否显示「高危操作」入口（三种能力任一可用） */
 const canOpenDanger = computed(() => canDeleteUser.value || canTempPassword.value || canDeactivateApp.value);
 
+/** 编辑目标（`null` = 新建）—— 表单状态与提交逻辑都在 `UserEditDialog` 里 */
+const editingTarget = ref<UserEditTarget | null>(null);
+/** 编辑 / 新建弹窗开关 */
 const dialogOpen = ref(false);
-const submitting = ref(false);
-const editingId = ref<number | null>(null);
-const form = reactive({
-  username: '',
-  email: '',
-  password: '',
-  deptId: null as number | null,
-  status: 1,
-  roleIds: [] as number[],
-  postIds: [] as number[]
-});
-
-/* ── 权限例外（角色之外单独允许 / 拒绝） ──────────────────────
- *
- * 🔴 这块**只在编辑弹窗**里，不在详情抽屉：详情页是"看"的地方，放无保存步骤的
- *    写控件会误触即生效（抽屉里原来那版就是这个毛病，已移除）。
- *
- * 提交方式是**差量**的：只有真正改过的那几条才发请求。个人策略通常 0~3 条，
- * 逐条 PUT 足够；一次事务批量的接口后端没有，也不值得为它加。
- */
-interface PermissionException {
-  code: string;
-  effect: 'allow' | 'deny';
-  /** 落库分区键：与权限码的 domain 一致（`admin:*` → `admin`） */
-  appId: string;
-  appLabel: string;
-}
-
-const formExceptions = ref<PermissionException[]>([]);
-/** 打开弹窗时的快照（JSON），保存时用来算差量 */
-const exceptionsBaseline = ref('');
-const exceptionsLoading = ref(false);
-const exceptionsError = ref('');
-/** 新增例外的输入 */
-const excCode = ref('');
-const excEffect = ref<'allow' | 'deny'>('allow');
-/** 权限码目录（提供 domain，用来推出 appId） */
-const excCatalog = ref<Array<{ domain: string; domainName: string; code: string; label: string }>>([]);
-
-/**
- * 例外列表的快照
- *
- * 排序后再序列化：{@code formExceptions} 的顺序会随增删变动，
- * 不排序就会把"顺序变了"当成"改过了"，凭空多发几条请求。
- *
- * @param list 例外列表
- * @returns 快照字符串
- */
-function snapshotExceptions(list: PermissionException[]): string {
-  return JSON.stringify([...list].sort((a, b) => `${a.appId}|${a.code}`.localeCompare(`${b.appId}|${b.code}`)));
-}
-
-/** 加载例外与权限码目录 */
-async function loadExceptions(id: number): Promise<void> {
-  exceptionsLoading.value = true;
-  exceptionsError.value = '';
-  try {
-    const [profile, catalog] = await Promise.all([
-      userProfile(id),
-      excCatalog.value.length ? Promise.resolve(excCatalog.value) : permissionCatalog()
-    ]);
-    excCatalog.value = catalog;
-    const list: PermissionException[] = [];
-    for (const item of profile.inline ?? []) {
-      item.allow.forEach(code => list.push({ code, effect: 'allow', appId: item.appId, appLabel: item.appLabel }));
-      item.deny.forEach(code => list.push({ code, effect: 'deny', appId: item.appId, appLabel: item.appLabel }));
-    }
-    formExceptions.value = list;
-    exceptionsBaseline.value = snapshotExceptions(list);
-  } catch (err) {
-    // 读不到不该挡住改资料：例外区降级成"不可读"，其他字段照常保存
-    exceptionsError.value = err instanceof Error ? err.message : '权限例外读取失败';
-    formExceptions.value = [];
-    exceptionsBaseline.value = '[]';
-  } finally {
-    exceptionsLoading.value = false;
-  }
-}
-
-/** 加一条例外（appId 从权限码的 domain 推出来） */
-function addException(): void {
-  const code = excCode.value.trim();
-  if (!code) return;
-  const hit = excCatalog.value.find(item => item.code === code);
-  if (!hit) {
-    exceptionsError.value = `「${code}」不在权限码目录里，请从候选中选择`;
-    return;
-  }
-  if (formExceptions.value.some(e => e.code === code && e.appId === hit.domain)) {
-    exceptionsError.value = `「${code}」已经在例外列表里`;
-    return;
-  }
-  formExceptions.value.push({
-    code,
-    effect: excEffect.value,
-    appId: hit.domain,
-    appLabel: hit.domainName
-  });
-  excCode.value = '';
-  exceptionsError.value = '';
-}
-
-/**
- * 提交例外差量
- *
- * @param id 用户 ID
- * @returns 实际提交的条数
- */
-async function saveExceptions(id: number): Promise<number> {
-  const before = JSON.parse(exceptionsBaseline.value || '[]') as PermissionException[];
-  const beforeMap = new Map(before.map(e => [`${e.appId}|${e.code}`, e.effect]));
-  const afterMap = new Map(formExceptions.value.map(e => [`${e.appId}|${e.code}`, e.effect]));
-
-  const tasks: Array<{ appId: string; code: string; effect: 'allow' | 'deny' | 'inherit' }> = [];
-  for (const item of formExceptions.value) {
-    const key = `${item.appId}|${item.code}`;
-    if (beforeMap.get(key) !== item.effect) tasks.push({ appId: item.appId, code: item.code, effect: item.effect });
-  }
-  // 从列表里移除 = 恢复继承（摘掉这条个人策略）
-  for (const item of before) {
-    if (!afterMap.has(`${item.appId}|${item.code}`)) {
-      tasks.push({ appId: item.appId, code: item.code, effect: 'inherit' });
-    }
-  }
-
-  for (const task of tasks) await setUserPermission(id, task);
-  return tasks.length;
-}
-
-/**
- * 可提交的角色 ID
- *
- * 只提交自己**能管**的角色：越权的 id 后端会整单拒绝（而不是静默忽略），
- * 表单里那些置灰勾选表示"他本来就有这个角色"，不该由这次保存去动它 ——
- * 后端也会把这些角色原样保留，两端口径一致。
- *
- * 🔴 选项没加载出来（`roles` 为空）时**原样提交**：否则一次拉取失败就会把用户的
- *    角色全清空，而清空是可写进授权流水的"真实操作"，事后只能靠流水解释。
- */
-const submittableRoleIds = computed(() => {
-  if (options.value.roles.length === 0) return form.roleIds;
-  return form.roleIds.filter(id => {
-    const role = roleById.value.get(id);
-    if (!role) return false;
-    return role.manageable !== false;
-  });
-});
 
 /** 总页数 */
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
@@ -392,7 +291,42 @@ function notify(message: string): void {
  *
  * @returns 无
  */
+/**
+ * 把当前筛选条件写回地址栏
+ *
+ * 手机端从列表压栈进详情、返回时列表会**重新挂载** —— 条件不写进 URL，
+ * 回来就是"第一页、筛选全清"，等于每次都从头找。顺带两个好处：
+ * 链接可分享，F5 不丢条件（原来只有 `?keyword=` 单向支持）。
+ *
+ * 只写非默认值，地址栏保持短：`/system/user` 就是"全部、第 1 页"。
+ *
+ * @returns 无
+ */
+function syncQuery(): void {
+  const next: Record<string, string> = {};
+  if (query.keyword) next.keyword = query.keyword;
+  if (query.deptId !== null) next.deptId = String(query.deptId);
+  if (query.appId) next.appId = query.appId;
+  if (query.status !== null) next.status = String(query.status);
+  if (query.pageNum > 1) next.page = String(query.pageNum);
+  // 与当前地址完全一致就别折腾：每次挂载都 replace 一遍会白跑一次导航守卫
+  const same =
+    Object.keys(next).length === Object.keys(route.query).length &&
+    Object.entries(next).every(([key, value]) => route.query[key] === value);
+  if (same) return;
+  /*
+   * `replace` 而不是 `push`：翻页/筛选不该在浏览器历史里堆一串条目，
+   * 否则"返回"会被困在上一页而不是回到上一个页面。
+   */
+  router.replace({ query: next });
+}
+
 async function load(): Promise<void> {
+  /*
+   * 每次真正取数时同步地址栏：写在这里而不是各个动作里，
+   * 覆盖"搜索 / 翻页 / 点部门 / 重置 / 刷新"全部入口，不会漏一处。
+   */
+  syncQuery();
   // 换页 / 刷新后清空勾选：否则「已选 N 人」与眼前的行对不上
   selected.value = new Set();
   loading.value = true;
@@ -554,17 +488,6 @@ function onBatchDone(): void {
   void load();
 }
 
-/** 打开「新建」表单 */
-function openCreate(): void {
-  editingId.value = null;
-  Object.assign(form, { username: '', email: '', password: '', deptId: null, status: 1, roleIds: [], postIds: [] });
-  // 新建时还没有 user id，例外区不显示；状态也要清干净，免得带上一个人的残留
-  formExceptions.value = [];
-  exceptionsBaseline.value = '[]';
-  exceptionsError.value = '';
-  dialogOpen.value = true;
-}
-
 /**
  * 解析 GROUP_CONCAT 出来的 ID 串
  *
@@ -583,86 +506,56 @@ function parseIds(raw: string | null | undefined): number[] {
 }
 
 /**
- * 打开「编辑」表单
+ * 列表行 → 编辑弹窗的初始值
  *
  * 🔴 回填用 `role_ids` / `post_ids`，**不能用名字反查**：角色可能重名（不同 app
  *    有同名角色）、可改名、名字里还可能有逗号（GROUP_CONCAT 的分隔符）——
  *    任何一条都会静默选错角色，且保存后把用户的真实角色覆盖掉。
  *
  * @param row 用户行
+ * @returns 弹窗初始值
  */
-function openEdit(row: UserRow): void {
-  editingId.value = row.id;
-  Object.assign(form, {
+function targetOf(row: UserRow): UserEditTarget {
+  return {
+    id: row.id,
     username: row.username,
     email: row.email || '',
-    password: '',
     deptId: row.dept_id,
     status: row.status,
     roleIds: parseIds(row.role_ids),
     postIds: parseIds(row.post_ids)
-  });
-  formExceptions.value = [];
-  exceptionsBaseline.value = '[]';
-  exceptionsError.value = '';
+  };
+}
+
+/** 打开「新建」表单（`target = null`） */
+function openCreate(): void {
+  editingTarget.value = null;
   dialogOpen.value = true;
-  void loadExceptions(row.id);
 }
 
-/** 提交表单（新建 / 编辑） */
-async function submit(): Promise<void> {
-  if (!form.username.trim()) {
-    notify('请填写账号');
-    return;
-  }
-  submitting.value = true;
-  try {
-    if (editingId.value) {
-      const targetId = editingId.value;
-      await updateUser(targetId, {
-        username: form.username,
-        email: form.email,
-        deptId: form.deptId,
-        status: form.status,
-        roleIds: submittableRoleIds.value,
-        postIds: form.postIds
-      });
-      /*
-       * 例外是**独立接口**（一次一条），不像资料那样能整单回滚。
-       * 所以这里分开报：资料已经落库，例外失败时要如实说"一半成功"，
-       * 否则用户会以为整个保存都没生效，重新点一次又把资料覆盖一遍。
-       */
-      let changed = 0;
-      try {
-        changed = await saveExceptions(targetId);
-      } catch (err) {
-        dialogOpen.value = false;
-        await load();
-        notify(`资料已保存，但权限例外未全部生效：${err instanceof Error ? err.message : '未知错误'}`);
-        return;
-      }
-      notify(changed ? `已保存（含 ${changed} 项权限例外）` : '已保存');
-    } else {
-      await createUser({
-        username: form.username,
-        email: form.email,
-        password: form.password,
-        deptId: form.deptId,
-        status: form.status,
-        roleIds: submittableRoleIds.value,
-        postIds: form.postIds
-      });
-      notify('已创建');
-    }
-    dialogOpen.value = false;
-    await load();
-  } catch (err) {
-    notify(err instanceof Error ? err.message : '保存失败');
-  } finally {
-    submitting.value = false;
-  }
+/**
+ * 打开「编辑」表单
+ *
+ * @param row 用户行
+ */
+function openEdit(row: UserRow): void {
+  editingTarget.value = targetOf(row);
+  dialogOpen.value = true;
 }
 
+/**
+ * 保存完成（新建 / 编辑同一出口）
+ *
+ * 弹窗自己已经关了，这里只补列表刷新与提示 —— 让保存成功在列表上立刻可见，
+ * 而不是要用户自己按刷新。
+ *
+ * @param message 弹窗给的提示语
+ */
+async function onUserSaved(message: string): Promise<void> {
+  dialogOpen.value = false;
+  notify(message);
+  await load();
+}
 /**
  * 切换启用 / 冻结
  *
@@ -698,10 +591,41 @@ async function exportCsv(): Promise<void> {
   }
 }
 
+/**
+ * 从地址栏读回筛选条件（进入页面时调用一次）
+ *
+ * 只认能通过校验的值：`status` 只接受 0/1、`deptId`/`page` 只接受正整数 ——
+ * 手改地址栏塞进来一个 `?page=abc` 不该把列表打成空页。
+ *
+ * @returns 无
+ */
+function restoreQuery(): void {
+  const q = route.query;
+  if (typeof q.keyword === 'string' && q.keyword) query.keyword = q.keyword;
+
+  const deptId = Number(q.deptId);
+  if (Number.isInteger(deptId) && deptId > 0) {
+    query.deptId = deptId;
+    // 带部门条件进来，左侧树就该是"选中的"状态，否则筛选结果和界面不一致
+    filterMode.value = 'dept';
+  }
+
+  if (typeof q.appId === 'string' && q.appId) query.appId = q.appId;
+
+  if (q.status === '0' || q.status === '1') query.status = Number(q.status);
+
+  const page = Number(q.page);
+  if (Number.isInteger(page) && page > 0) query.pageNum = page;
+}
+
 onMounted(async () => {
-  // 从岗位阶梯 / 其他页跳过来时带 `?keyword=`：预填并只查一次
-  const incoming = route.query.keyword;
-  if (typeof incoming === 'string' && incoming) query.keyword = incoming;
+  /*
+   * 从地址栏还原筛选条件
+   *
+   * 两个来源：① 手机端从详情返回（上一屏的条件在 URL 里）；② 别的页面跳过来时带的
+   * `?keyword=`。都只读一次，之后由 `syncQuery` 单向写出去，不存在两边互相覆盖。
+   */
+  restoreQuery();
   loadDeptTree();
   await load();
   try {
@@ -725,29 +649,37 @@ onMounted(async () => {
       部门树出现时只在下方让出左侧一列。
     -->
     <div class="toolbar">
-      <div class="mode" role="group" aria-label="筛选方式">
+      <!-- 分段控件与角色页同一套样式（.tabbar/.tab）：外圈带边框 + 内层选中胶囊 -->
+      <div class="tabbar" role="tablist" aria-label="筛选方式">
         <button
           type="button"
-          :aria-pressed="filterMode === 'all'"
-          :class="['mode__btn', { 'is-on': filterMode === 'all' }]"
+          role="tab"
+          :aria-selected="filterMode === 'all'"
+          :class="['tab', { 'is-on': filterMode === 'all' }]"
           @click="switchFilterMode('all')"
         >
           全部用户
         </button>
         <button
           type="button"
-          :aria-pressed="filterMode === 'dept'"
-          :class="['mode__btn', { 'is-on': filterMode === 'dept' }]"
+          role="tab"
+          :aria-selected="filterMode === 'dept'"
+          :class="['tab', { 'is-on': filterMode === 'dept' }]"
           @click="switchFilterMode('dept')"
         >
           按部门
         </button>
       </div>
+      <!--
+        一个框搜三样：账号 / 邮箱 / 设备码（后端 `keyword` 三选一命中）。
+        设备码原本是第二个输入框 —— 但用户并不知道自己想找的是"人"还是"机器"，
+        分成两个框只会让人先猜一次；合并后输入什么都能找到。
+      -->
       <input
         v-model="query.keyword"
-        class="input"
-        style="width: 220px"
-        placeholder="账号 / 邮箱"
+        class="input user-search"
+        placeholder="账号 / 邮箱 / 设备码"
+        title="账号、邮箱、设备码（含片段）任一项匹配；设备码会连同历史会话一起找"
         @keyup.enter="search"
       />
       <!--
@@ -766,9 +698,8 @@ onMounted(async () => {
         <option :value="-1">注销</option>
       </select>
       <button class="btn btn--sm" type="button" @click="search"><Search :size="15" /> 查询</button>
-      <button class="btn btn--ghost btn--sm" type="button" @click="resetQuery">
-        <RotateCcw :size="15" /> 重置
-      </button>
+      <!-- 清空筛选：与其它页同一形态（ghost 无边框 + 纯文字），不挂图标 -->
+      <button class="btn btn--ghost btn--sm" type="button" @click="resetQuery">清空</button>
 
       <!--
         操作组整块靠右。不用 `toolbar__spacer` 撑开：换行时撑开的空白会把
@@ -861,8 +792,18 @@ onMounted(async () => {
         <p v-if="errorMessage" class="tag tag--off">{{ errorMessage }}</p>
 
         <section class="panel">
-          <div class="table-wrap">
+          <div v-if="device !== 'mobile'" class="table-wrap">
             <table class="table">
+              <colgroup>
+                <col style="width: 36px" />
+                <col style="width: 95px" />
+                <col style="width: 122px" />
+                <col style="width: 78px" />
+                <col style="width: 110px" />
+                <col style="width: 70px" />
+                <col style="width: 58px" />
+                <col style="width: 168px" />
+              </colgroup>
               <thead>
                 <tr>
                   <th class="col-check">
@@ -891,7 +832,8 @@ onMounted(async () => {
                   class="row-clickable"
                   @click="openProfile(row)"
                 >
-                  <td class="col-check">
+                  <!-- 勾选不该连带打开详情抽屉：click 冒泡到 tr 上会触发 openProfile -->
+                  <td class="col-check" @click.stop>
                     <input
                       type="checkbox"
                       :checked="selected.has(row.id)"
@@ -993,6 +935,39 @@ onMounted(async () => {
             </table>
           </div>
 
+          <!--
+            手机端：一条一行。桌面表格在手机上会退化成「每行 6 个 label/value」的卡片，
+            一屏只放得下一个人；这里只留「谁 + 怎么联系 + 是否可用」，
+            其余信息点进详情页看（压栈，可返回）。
+          -->
+          <ul v-else class="mlist">
+            <li
+              v-for="row in rows"
+              :key="row.id"
+              class="m-user"
+              role="button"
+              tabindex="0"
+              :aria-label="`${row.username}，${row.status === 1 ? '正常' : '冻结'}，查看详情`"
+              @click="openProfile(row)"
+              @keydown.enter.prevent="openProfile(row)"
+            >
+              <span class="m-user__avatar">
+                <img v-if="row.avatar" :src="row.avatar" alt="" />
+                <span v-else>{{ initialOf(row) }}</span>
+              </span>
+              <span class="m-user__main">
+                <span class="m-user__name">{{ row.username }}</span>
+                <span class="m-user__meta">{{ row.email || row.uid }}</span>
+              </span>
+              <span :class="['m-user__state', row.status === 1 ? 'is-on' : 'is-off']">
+                {{ row.status === 1 ? '正常' : '冻结' }}
+              </span>
+              <AppIcon name="chevronRight" :size="14" class="m-user__arrow" />
+            </li>
+            <li v-if="loading" class="mlist__hint">加载中…</li>
+            <li v-else-if="rows.length === 0" class="mlist__hint">没有符合条件的用户</li>
+          </ul>
+
           <div class="pager">
             <span class="mono">第 {{ query.pageNum }} / {{ pageCount }} 页</span>
             <button class="btn btn--sm" type="button" :disabled="query.pageNum <= 1" @click="turnPage(-1)">
@@ -1009,169 +984,14 @@ onMounted(async () => {
     <!-- 用户详情：点行打开，职级可见性由后端判 -->
     <UserProfileDrawer :user-id="profileId" @close="profileId = null" @changed="load" />
 
-    <!-- 用户表单 -->
-    <div v-if="dialogOpen" class="modal-mask" v-mask-close="() => (dialogOpen = false)">
-      <div class="modal user-modal" :class="{ 'is-compact': !editingId }">
-        <header class="modal__head">
-          <div class="modal__heading">
-            <span class="modal__title">{{ editingId ? '编辑用户' : '新建用户' }}</span>
-            <span v-if="editingId" class="modal__sub mono">{{ form.username }}</span>
-          </div>
-          <button class="modal__close" type="button" aria-label="关闭" @click="dialogOpen = false">
-            <X :size="16" />
-          </button>
-        </header>
-
-        <div class="modal__body user-form-body" :class="{ 'is-single': !editingId }">
-          <div class="user-form-col">
-          <section class="form-section">
-            <h3 class="form-section__title">基本信息</h3>
-            <div class="form-grid">
-              <label class="field">
-                <span class="field__label">账号</span>
-                <input v-model="form.username" class="input" maxlength="50" />
-              </label>
-              <label class="field">
-                <span class="field__label">邮箱</span>
-                <input v-model="form.email" class="input" maxlength="100" />
-              </label>
-              <label v-if="!editingId" class="field is-wide">
-                <span class="field__label">初始密码（至少 8 位）</span>
-                <input v-model="form.password" class="input" type="password" maxlength="128" />
-              </label>
-              <label class="field">
-                <span class="field__label">部门</span>
-                <select v-model.number="form.deptId" class="select">
-                  <option :value="null">未分配</option>
-                  <option v-for="dept in options.depts" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field__label">状态</span>
-                <select v-model.number="form.status" class="select">
-                  <option :value="1">正常</option>
-                  <option :value="0">冻结</option>
-                </select>
-              </label>
-            </div>
-          </section>
-
-          <section class="form-section">
-            <h3 class="form-section__title">角色与岗位</h3>
-            <div class="field">
-              <span class="field__label">角色</span>
-              <RolePicker v-model="form.roleIds" :roles="options.roles" />
-            </div>
-            <div class="field">
-              <span class="field__label">岗位</span>
-              <PostPicker v-model="form.postIds" :posts="options.posts" />
-            </div>
-          </section>
-
-          </div>
-
-          <div v-if="editingId" class="user-form-col">
-            <!-- 权限例外（仅编辑）：角色之外的单独允许 / 拒绝。
-                 放在这里而不是详情抽屉，是因为它必须随「保存」一起提交。 -->
-            <section class="form-section">
-            <header class="form-section__head">
-              <h3 class="form-section__title">权限例外</h3>
-              <span class="form-section__note">{{ formExceptions.length }} 条 · 角色之外</span>
-            </header>
-            <p class="form-hint">
-              日常授权请改角色；这里只放必须的例外。「拒绝」优先于角色授予，用来临时收回某个权限。
-            </p>
-
-            <div v-if="exceptionsLoading" class="empty">权限例外加载中…</div>
-            <template v-else>
-              <p v-if="!formExceptions.length" class="exc-empty">
-                没有例外 —— 该账号的权限完全来自角色。
-              </p>
-              <ul v-else class="exc-list">
-                <li
-                  v-for="(item, i) in formExceptions"
-                  :key="`${item.appId}-${item.code}`"
-                  class="exc"
-                  :data-effect="item.effect"
-                >
-                  <span class="exc__dot" aria-hidden="true"></span>
-                  <span class="mono exc__code">{{ item.code }}</span>
-                  <span class="exc__app">{{ item.appLabel }}</span>
-                  <!-- 处置用分段按钮而不是下拉：一眼能看到「允许/拒绝」，点一下就换，少一次展开 -->
-                  <div class="exc-toggle" role="group" :aria-label="`${item.code} 的处置`">
-                    <button
-                      type="button"
-                      :class="['exc-toggle__btn', { 'is-on': item.effect === 'allow' }]"
-                      @click="item.effect = 'allow'"
-                    >
-                      允许
-                    </button>
-                    <button
-                      type="button"
-                      :class="['exc-toggle__btn', 'is-deny', { 'is-on': item.effect === 'deny' }]"
-                      @click="item.effect = 'deny'"
-                    >
-                      拒绝
-                    </button>
-                  </div>
-                  <button
-                    class="exc__remove"
-                    type="button"
-                    title="移除这条例外"
-                    aria-label="移除"
-                    @click="formExceptions.splice(i, 1)"
-                  >
-                    <X :size="14" />
-                  </button>
-                </li>
-              </ul>
-
-              <div class="exc-add">
-                <input
-                  v-model="excCode"
-                  class="input"
-                  list="exc-catalog"
-                  placeholder="权限码，如 admin:user:delete"
-                  @keyup.enter="addException"
-                />
-                <datalist id="exc-catalog">
-                  <option v-for="item in excCatalog" :key="item.code" :value="item.code">{{ item.label }}</option>
-                </datalist>
-                <div class="exc-toggle" role="group" aria-label="新增例外的处置">
-                  <button
-                    type="button"
-                    :class="['exc-toggle__btn', { 'is-on': excEffect === 'allow' }]"
-                    @click="excEffect = 'allow'"
-                  >
-                    允许
-                  </button>
-                  <button
-                    type="button"
-                    :class="['exc-toggle__btn', 'is-deny', { 'is-on': excEffect === 'deny' }]"
-                    @click="excEffect = 'deny'"
-                  >
-                    拒绝
-                  </button>
-                </div>
-                <button class="btn btn--sm" type="button" :disabled="!excCode.trim()" @click="addException">
-                  添加
-                </button>
-              </div>
-            </template>
-
-            <p v-if="exceptionsError" class="field__error">{{ exceptionsError }}</p>
-            </section>
-          </div>
-        </div>
-
-        <footer class="modal__foot">
-          <button class="btn btn--ghost" type="button" @click="dialogOpen = false">取消</button>
-          <button class="btn btn--primary" type="button" :disabled="submitting" @click="submit">
-            {{ submitting ? '保存中…' : '保存' }}
-          </button>
-        </footer>
-      </div>
-    </div>
+    <!-- 用户表单：新建 / 编辑共用，详情页也用同一个组件（见 UserEditDialog） -->
+    <UserEditDialog
+      :open="dialogOpen"
+      :target="editingTarget"
+      :options="options"
+      @close="dialogOpen = false"
+      @saved="onUserSaved"
+    />
 
     <!-- 授权记录：单个用户的时间线 -->
     <GrantHistoryDialog
@@ -1210,266 +1030,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* 表单里的灰色说明（与 Roles.vue 同款：各页 scoped 一份，不进全局） */
-.form-hint {
-  margin: 4px 0 8px;
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--mauth-text-faint);
-}
-
-/* ── 用户表单弹窗 ─────────────────────────────────────────────
- *
- * 宽一档（920）+ 左右两栏：左栏是"这个人是谁、有哪些角色"，右栏是"角色之外的例外"。
- * 单列 560 时角色分组 + 例外列表要滚两屏，优先看的例外永远在折线以下。
- */
-.user-modal {
-  width: min(920px, 100%);
-}
-
-/* 新建没有"例外"这一栏，按原宽度收窄 —— 920 的单列表单每条输入都拉成一条长缝 */
-.user-modal.is-compact {
-  width: min(600px, 100%);
-}
-
-/* 左栏装基本信息与角色岗位，右栏装例外；新建时右栏不存在，退回单列 */
-.user-form-body {
-  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
-  align-items: start;
-  gap: 18px;
-}
-
-.user-form-body.is-single {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.user-form-col {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
-/* 窄屏回单列：两栏挤到 400px 以下时输入框会短到没法用 */
-@media (max-width: 820px) {
-  .user-form-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* 标题 + 账号副标题：编辑时要能一眼确认"我正在改谁" */
-.modal__heading {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-
-.modal__sub {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: var(--mauth-text-faint);
-}
-
-.modal__close {
-  margin-left: auto;
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: var(--mauth-radius-xs);
-  background: transparent;
-  color: var(--mauth-text-soft);
-  cursor: pointer;
-  transition:
-    background 0.16s var(--ease),
-    color 0.16s var(--ease);
-}
-
-.modal__close:hover {
-  background: var(--mauth-hover);
-  color: var(--mauth-text);
-}
-
-/* 分节：基本信息 / 角色与岗位 / 权限例外 —— 用细分隔线断开，避免一长条表单 */
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.form-section + .form-section {
-  padding-top: 14px;
-  border-top: 1px solid var(--mauth-border);
-}
-
-.form-section__head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.form-section__title {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: var(--mauth-track-eyebrow);
-  color: var(--mauth-text-faint);
-}
-
-.form-section__note {
-  font-size: 10.5px;
-  color: var(--mauth-text-faint);
-}
-
-/* 两列网格：窄屏自动落回单列（表单在手机上仍是竖排更好填） */
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 14px;
-}
-
-.form-grid .is-wide {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 560px) {
-  .form-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ── 权限例外 ───────────────────────────────────────────────── */
-
-.exc-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* 一行一条：状态点 / 权限码 / 应用 / 允许拒绝 / 移除 */
-.exc {
-  display: grid;
-  grid-template-columns: 6px minmax(0, 1fr) auto auto auto;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  border: 1px solid var(--mauth-border);
-  border-radius: var(--mauth-radius-xs);
-}
-
-/* 状态点：允许=成功色、拒绝=危险色，比读文字快 */
-.exc__dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--mauth-text-faint);
-}
-
-.exc[data-effect='allow'] .exc__dot {
-  background: var(--mauth-success);
-}
-
-.exc[data-effect='deny'] .exc__dot {
-  background: var(--mauth-danger);
-}
-
-.exc__code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 12.5px;
-}
-
-.exc__app {
-  font-size: 10.5px;
-  color: var(--mauth-text-faint);
-}
-
-/* 允许 / 拒绝分段：点一下就换，不用展开下拉 */
-.exc-toggle {
-  display: inline-flex;
-  flex: none;
-  border: 1px solid var(--mauth-border-strong);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.exc-toggle__btn {
-  height: 22px;
-  padding: 0 9px;
-  border: 0;
-  background: transparent;
-  color: var(--mauth-text-faint);
-  font-size: 11px;
-  cursor: pointer;
-  transition:
-    background 0.16s var(--ease),
-    color 0.16s var(--ease);
-}
-
-.exc-toggle__btn:hover {
-  color: var(--mauth-text);
-}
-
-.exc-toggle__btn.is-on {
-  background: var(--mauth-primary-soft);
-  color: var(--mauth-primary);
-  font-weight: 600;
-}
-
-/* 拒绝态用危险色：这是"收回权限"，视觉上必须与允许区分开 */
-.exc-toggle__btn.is-deny.is-on {
-  background: var(--mauth-danger-soft);
-  color: var(--mauth-danger);
-}
-
-.exc__remove {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 24px;
-  height: 24px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--mauth-text-faint);
-  cursor: pointer;
-  transition:
-    background 0.16s var(--ease),
-    color 0.16s var(--ease);
-}
-
-.exc__remove:hover {
-  background: var(--mauth-danger-soft);
-  color: var(--mauth-danger);
-}
-
-/* 空态：与列表行同高，避免"没有例外"一句话把整节高度塌掉 */
-.exc-empty {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: var(--mauth-radius-xs);
-  background: color-mix(in srgb, var(--mauth-text) 3%, transparent);
-  color: var(--mauth-text-faint);
-  font-size: 12px;
-}
-
-.exc-add {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.exc-add .input {
-  flex: 1;
-  min-width: 0;
+/* 合并后的搜索框（账号 / 邮箱 / 设备码）：比原来两个框省约 200px，一行更从容 */
+.user-search {
+  width: 260px;
 }
 
 /* 勾选列：只放下复选框，宽度收到最小 */
@@ -1678,38 +1241,127 @@ onMounted(async () => {
   flex: 1;
   min-width: 0;
 }
-
-/* 筛选方式：分段按钮（segmented），比 select 紧凑且不参与表单宽度 */
-.mode {
-  display: inline-flex;
-  flex: none;
-  padding: 2px;
-  border: 1px solid var(--mauth-border-strong);
-  border-radius: 8px;
-  background: var(--mauth-surface-2);
-}
-
-.mode__btn {
-  padding: 4px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 12.5px;
-  color: var(--mauth-text-mid);
+/* ── 手机端：一条一行的精简列表 ────────────────────────────────
+   目标是"扫一眼知道有谁"，不是"在一屏里塞下所有字段"：
+   头像 + 账号 + 邮箱（放不下就省略）+ 状态，点整行进详情页看全。 */
+.m-user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 78%, transparent);
   cursor: pointer;
-  transition:
-    background 0.15s var(--ease),
-    color 0.15s var(--ease);
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.14s var(--ease);
 }
 
-.mode__btn:hover {
-  color: var(--mauth-text);
+.m-user:last-child {
+  border-bottom: 0;
 }
 
-.mode__btn.is-on {
-  background: var(--mauth-surface);
+/* 手指按下就变色：手机上等 300ms 的 hover 才给反馈，等于没有反馈 */
+.m-user:active {
+  background: var(--mauth-press);
+}
+
+.m-user:focus-visible {
+  outline: 2px solid var(--mauth-focus);
+  outline-offset: -2px;
+}
+
+.m-user__avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.m-user__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 🔴 min-width: 0 不能省：flex 子项默认不收缩，长邮箱会把状态和箭头挤出屏幕 */
+.m-user__main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.m-user__name {
+  flex: none;
+  max-width: 48%;
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--mauth-text);
-  font-weight: 650;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--mauth-text) 12%, transparent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-user__meta {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--mauth-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 状态只留一个点 + 两个字：正常＝灰字绿点（不抢注意力），冻结＝红字红点 */
+.m-user__state {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+}
+
+.m-user__state::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.m-user__state.is-on::before {
+  background: var(--mauth-success);
+}
+
+.m-user__state.is-off {
+  color: var(--mauth-danger);
+}
+
+.m-user__arrow {
+  flex: none;
+  color: var(--mauth-text-faint);
+  opacity: 0.7;
+}
+
+/* 窄屏：部门树从"左侧一列"变成"列表上方一块"，否则 188px 会把列表压成一条 */
+@media (max-width: 820px) {
+  .users-body {
+    display: block;
+  }
+
+  .dept {
+    width: auto;
+    max-height: 168px;
+    margin-bottom: 10px;
+    overflow-y: auto;
+  }
 }
 </style>

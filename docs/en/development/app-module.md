@@ -36,6 +36,10 @@ export default {
    * Written as `null` when nothing should be granted automatically.
    * Pairs with `is_default: true` on the same role in `permission/roles.js`;
    * config wins, and any mismatch or omission is reported by the boot-time audit.
+   *
+   * 🔴 If this application declares an `access` gate (registered users must not get in,
+   * e.g. an admin console), this MUST be `null` and the role must NOT be `is_default` —
+   * the default role would walk straight through the gate. Assign roles manually instead.
    */
   default_role: 'myapp_user',
 

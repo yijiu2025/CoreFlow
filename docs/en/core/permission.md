@@ -79,6 +79,30 @@ Resolution order (`src/app/oauth21/dao/approval.dao.js`):
 (must be `rank_level <= 20`). `default_role: null` means "intentionally grant nothing" (e.g. `notice`,
 which only has an admin role).
 
+#### Closed applications: use `null`, assign roles manually
+
+Some applications must not be reachable just because someone registered — the admin console is the
+obvious case: `config.access` declares a gate (`anyPermission: ['admin:*']`), and accounts without
+management capability are rejected during `bind-session` with `access.denyMessage`.
+
+Such applications must use `default_role: null` **and** must not mark the role `is_default`:
+
+- If the default role satisfies the gate (`admin_viewer` holds every read code, so `admin:*` matches),
+  any registered user who clicks "authorize" can browse users, departments, roles and logs — the gate
+  is decoration;
+- If it does not satisfy the gate, the user receives a role that cannot open a single page and gets a
+  403 on login — more confusing than granting nothing.
+
+How roles are granted instead:
+
+1. an administrator assigns them in "Users → Assign roles"
+   (`POST /admin/console/v1/users/roles/batch`, append/remove, cross-application);
+2. GLOBAL `superadmin` inherits every application's `{appId}_admin` automatically via
+   `permission-loader` — no per-role assignment needed.
+
+The boot-time `auditDefaultRoles` reports an **error** for "gate + default role", and
+`__tests__/permission/role-rank-levels.test.js` runs it against the real config.
+
 ::: warning Declaring roles means declaring the default role too
 - **Throws at registration** (import time = boot failure): missing `app_id` / `rank_level` /
   `policy.Statement`, two `is_default` roles for one app, or a default role above the normal tier (20).

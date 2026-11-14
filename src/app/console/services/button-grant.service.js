@@ -28,9 +28,6 @@ import { isWildcardMatch } from '../../../framework/security/auth/permission/wil
 import { hasPermissionLike, toPermissionList } from '../utils/permissions.js';
 import menuDao from '../dao/menu.dao.js';
 
-/** 管理后台的权限命名空间（与 app/console/config.js 的 permission_app_id 对应） */
-const ADMIN_NAMESPACE = 'admin';
-
 /** 全站按钮码快照的 TTL */
 const CODES_TTL_MS = 60_000;
 
@@ -91,16 +88,19 @@ async function resolveButtonGate(user) {
   if (!userId) return null;
 
   /*
-   * 预筛：没有任何管理后台的码，就不必付这次查询。
-   * 其它应用（posecraft / retroweb …）的请求走这里直接 null，行为与改造前一致。
+   * 预筛：用户没有任何能与"按钮码命名空间"对上的权限，就不必付后面的授权查询。
+   *
+   * 🔴 不能只看 `admin:` 前缀 —— 支持多应用后，按钮码可能是 `fw:*` / `posecraft:*`。
+   *    前缀集合由快照（60s 缓存，基本是内存读）现算，新应用接入不需要改这里。
    */
-  const allows = toPermissionList(user?.permissions);
-  const touchesAdmin = allows.some(
-    code => code === '*' || code === ADMIN_NAMESPACE || code.startsWith(`${ADMIN_NAMESPACE}:`)
-  );
-  if (!touchesAdmin) return null;
-
   const snap = await loadSnapshot();
+  const allows = toPermissionList(user?.permissions);
+  const prefixes = new Set(snap.all.map(code => code.split(':')[0]));
+  const touches = allows.some(
+    code => code === '*' || [...prefixes].some(prefix => code === prefix || code.startsWith(`${prefix}:`))
+  );
+  if (!touches) return null;
+
   const rolesKey = (user?.roles || []).join(',');
 
   const cached = userCache.get(userId);

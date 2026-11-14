@@ -193,7 +193,12 @@ async function registerSessionRoutes(fastify) {
           .filter(node => Number(node.visible) !== 0)
           .map(node => ({ ...node, children: stripHidden(node.children || []) }));
 
-      const tree = stripHidden(await menuDao.tree({ onlyEnabled: true }));
+      /*
+       * 只取 admin 应用的菜单：同一张 `sys_menu` 现在也承载其它应用（firewall 等）的
+       * 页面与按钮 —— 全量下发会让管理后台的侧栏里冒出防火墙的导航项，点了还是 404。
+       * 别的应用的菜单由它们自己的界面消费。
+       */
+      const tree = stripHidden(await menuDao.tree({ onlyEnabled: true, appId: 'admin' }));
 
       // 全量管理员直接拿整棵树；其余按「角色 → 菜单」过滤，未授权的分支整枝剪掉
       if (isSuperViewer(user)) {

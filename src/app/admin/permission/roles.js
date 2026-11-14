@@ -56,12 +56,17 @@ defineRoles([
     name: '管理观察者',
     rank_level: 10,
     /**
-     * 授权即送的默认角色
+     * 🔴 **不要**标 `is_default: true`（与其他应用的普通角色不同）
      *
-     * console 的登录应用是 `console`，但角色住在命名空间 `admin`
-     * （`config.permission_app_id`）—— 授权解析按命名空间查，这里标了才有意义。
+     * 管理后台是封闭应用（`console/config.js` 有 `access.anyPermission: ['admin:*']`），
+     * 观察者虽然是最低职级，但它持有全站读权限 —— 一旦"授权即送"，任何注册用户
+     * 点一下同意就能看用户、部门、角色与日志。这类角色只能由管理员手工分配，
+     * 所以 `config.default_role` 写的是 `null`，这里也不打默认标记。
+     *
+     * 后果提醒：`admin_viewer` 因此是审计里"最低职级"的兜底对象，而它的 rank 是 10
+     * （普通档），所以即使有人误删了 `default_role: null`，也会**真的**把它发出去。
+     * 两者必须同时保持：config 写 null、这里不标 is_default。
      */
-    is_default: true,
     description: '只读权限：可查看工作台、用户、角色、菜单、部门、岗位与日志，不能做任何修改',
     policy: {
       Version: '2026-06-06',

@@ -21,7 +21,7 @@
  * @author yijiu2025
  * @since 2026-11-12
  */
-import { isProtectedRoleCode, protectedRoleCodes } from '../../../app/console/dao/role.dao.js';
+import { isProtectedRoleCode, isRankLockedRole, protectedRoleCodes } from '../../../app/console/dao/role.dao.js';
 import { roleRegistry } from '../../../framework/security/pbac/index.js';
 
 /*
@@ -60,5 +60,34 @@ describe('受保护角色判据', () => {
     expect(isProtectedRoleCode('')).toBe(false);
     expect(isProtectedRoleCode(null)).toBe(false);
     expect(isProtectedRoleCode(undefined)).toBe(false);
+  });
+});
+
+/*
+ * 职级锁：超管的 `rank_level` 不可改（路由 `PUT /roles/:id` 用它拦）。
+ *
+ * 为什么要单独锁：职级是「能不能动这个角色」的闸（`role.rank_level > myRank` 拒编辑、
+ * 列表 `manageable` 按它算）。把超管从 99 降下来，它立刻失去编辑高职级角色的资格，
+ * 而它往往就是唯一持有 `admin:role:update` 的账号 —— 自己把自己锁在门外。
+ *
+ * 🔴 锁的**只是超管**：代码声明的内置角色（`*_admin` / `*_viewer` …）职级仍可调，
+ *    那是运维的正常诉求。这里第二条用例就是防「顺手把锁扩到全部内置角色」。
+ */
+describe('超管职级锁', () => {
+  test('超管锁死', () => {
+    expect(isRankLockedRole('superadmin')).toBe(true);
+  });
+
+  test('其它内置角色不锁（含代码声明的角色）', () => {
+    expect(roleRegistry.length).toBeGreaterThan(0);
+    for (const role of roleRegistry) {
+      expect(isRankLockedRole(role.code)).toBe(false);
+    }
+  });
+
+  test('空值不锁（未登录/脏入参不该被当成超管）', () => {
+    expect(isRankLockedRole('')).toBe(false);
+    expect(isRankLockedRole(null)).toBe(false);
+    expect(isRankLockedRole(undefined)).toBe(false);
   });
 });

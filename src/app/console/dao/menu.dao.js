@@ -45,10 +45,13 @@ class MenuDao {
    *
    * @param {object} [options] 查询选项
    * @param {boolean} [options.onlyEnabled=false] 只取启用的菜单
+   * @param {string|null} [options.appId=null] 只取某个应用的菜单（null = 全部应用）
    * @returns {Promise<Array<object>>} 菜单列表
    */
-  async listAll({ onlyEnabled = false } = {}) {
+  async listAll({ onlyEnabled = false, appId = null } = {}) {
     const where = onlyEnabled ? { status: 1 } : {};
+    // 应用过滤必须在这里做：树是在内存里拼的，先取全表再过滤会留下"父级不在本应用"的孤儿行
+    if (appId) where.app_id = appId;
     const rows = await getModel('console.SysMenu').findAll({
       where,
       order: [
@@ -65,10 +68,11 @@ class MenuDao {
    *
    * @param {object} [options] 查询选项
    * @param {boolean} [options.onlyEnabled=false] 只取启用的菜单
+   * @param {string|null} [options.appId=null] 只取某个应用的菜单
    * @returns {Promise<Array<object>>} 树形菜单
    */
-  async tree({ onlyEnabled = false } = {}) {
-    return buildTree(await this.listAll({ onlyEnabled }));
+  async tree({ onlyEnabled = false, appId = null } = {}) {
+    return buildTree(await this.listAll({ onlyEnabled, appId }));
   }
 
   /**

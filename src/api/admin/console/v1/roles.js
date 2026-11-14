@@ -27,6 +27,7 @@ import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import roleDao, {
   MENU_LOCKED_CODE,
   isProtectedRoleCode,
+  isRankLockedRole,
   extractPermissions
 } from '../../../../app/console/dao/role.dao.js';
 import menuDao from '../../../../app/console/dao/menu.dao.js';
@@ -34,6 +35,7 @@ import { getModel } from '../../../../framework/persistence/db/index.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 import { hasPermissionLike } from '../../../../app/console/utils/permissions.js';
+import { assertScopeConfigurable } from '../../../../app/console/services/data-scope.service.js';
 import {
   appLabel,
   canWriteApp,
@@ -156,8 +158,13 @@ async function registerRoleRoutes(fastify) {
           description: { type: 'string', maxLength: 255 },
           permissions: { type: 'array', items: { type: 'string' }, default: [] },
           menuIds: { type: 'array', items: { type: 'integer', minimum: 1 }, default: [] },
-          /** 数据范围：1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人 */
-          dataScope: { type: 'integer', enum: [1, 2, 3, 4, 5], default: 1 },
+          /**
+           * 数据范围：1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人
+           *
+           * 默认「仅本人」而不是「全部」：建角色时没人主动选范围，默认给全量是最危险的方向。
+           * 且只有管理员 / 审核员 / 观察者能选非本人档位（见 assertScopeConfigurable）。
+           */
+          dataScope: { type: 'integer', enum: [1, 2, 3, 4, 5], default: 5 },
           /** 自定义数据范围时的部门集合（其它档位忽略） */
           deptIds: { type: 'array', items: { type: 'integer', minimum: 1 }, default: [] }
         }
@@ -181,6 +188,8 @@ async function registerRoleRoutes(fastify) {
        * 只靠职级闸挡不住（职级闸只管 rank）。
        */
       assertCanGrantCodes(request.state.user, payload.permissions, { action: '创建' });
+      // 数据范围的档位限制：非管理员 / 审核员 / 观察者只能「仅本人」
+      assertScopeConfigurable(payload.code, payload.dataScope);
       const role = await roleDao.create(payload);
       if (menuIds.length > 0) {
         await menuDao.setRoleMenus(role.id, menuIds);
@@ -228,6 +237,24 @@ async function registerRoleRoutes(fastify) {
         throw new Error('BUILTIN_PROTECTED:内置角色的权限码不可修改');
       }
 
+      /*
+       * 超管的**职级**同样锁死，理由与上面那条同源：防自锁。
+       *
+       * 职级是「能不能动这个角色」的闸（下方 `> myRank`、列表里的 `manageable`）。
+       * 把 superadmin 从 99 降下来，它立刻失去编辑所有高职级角色的资格 ——
+       * 而它往往就是唯一持有 `admin:role:update` 的账号，等于把自己关在门外，
+       * 只能直连数据库改回来。名称 / 描述 / 数据范围仍可维护，锁的只是这一个数。
+       *
+       * 只判「值真的变了」：表单回传原值不该被拒（编辑弹窗会连未改字段一起提交）。
+       */
+      if (
+        isRankLockedRole(role.code) &&
+        request.body.rankLevel !== undefined &&
+        Number(request.body.rankLevel) !== Number(role.rank_level)
+      ) {
+        throw new Error('BUILTIN_PROTECTED:超级管理员的职级不可修改');
+      }
+
       const myRank = await maxRankOf(request.state.user?.userId);
       if (Number(role.rank_level) > myRank) throw new Error('FORBIDDEN:不能编辑职级高于自己的角色');
       // 应用域：非跨应用管理员只能维护自己应用的角色（改别人的角色 = 改别人的授权效果）
@@ -240,6 +267,8 @@ async function registerRoleRoutes(fastify) {
       }
 
       const { menuIds, ...payload } = request.body;
+      // 档位限制同样作用于编辑：管理员可以把一个普通角色的范围改成全部，这里必须拦住
+      assertScopeConfigurable(role.code, payload.dataScope);
 
       /*
        * 权限码的「前 / 后 / 差」只算一次：授予上限要 added，审计要 added + removed。

@@ -10,6 +10,7 @@
  * @since 2026-11-09
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
+import { getDeclaredDefaultRole, NORMAL_RANK_MAX } from '../../../framework/security/pbac/index.js';
 import grantDao from './grant.dao.js';
 import { hashPassword, validatePasswordStrength } from '../../../framework/security/auth/index.js';
 
@@ -23,6 +24,29 @@ import { hashPassword, validatePasswordStrength } from '../../../framework/secur
  */
 const SUPER_ROLE_CODE = 'superadmin';
 
+/**
+ * 用过「含某段设备码」的所有用户
+ *
+ * 设备码在 `SessionToken.device_id` 上（一个用户可能多端、一台设备可能多账号），
+ * 所以要先换算成 user_id 集合，再落到 users 的 where 上。
+ *
+ * 🔴 `LIKE '%片段%'` 用不上 device_id 的普通索引（前导通配符），是全表扫。会话表规模
+ *    在万级以内、且这是低频的"找人"操作，可以接受；真要更快就得上倒排/前缀表。
+ *
+ * @param {string} fragment 设备码片段
+ * @returns {Promise<number[]>} 去重后的用户 ID（空数组表示没有账号用过这台设备）
+ */
+async function userIdsByDevice(fragment) {
+  const SessionToken = getModel('SessionToken');
+  const { Op } = SessionToken.sequelize.Sequelize;
+  const rows = await SessionToken.findAll({
+    where: { device_id: { [Op.like]: `%${fragment}%` } },
+    attributes: ['user_id'],
+    raw: true
+  });
+  return [...new Set(rows.map(r => Number(r.user_id)))];
+}
+
 class ConsoleUserDao {
   /**
    * 用户分页（含部门 / 角色 / 岗位）
@@ -30,7 +54,7 @@ class ConsoleUserDao {
    * @param {object} params 查询参数
    * @param {number} [params.pageNum=1] 页码
    * @param {number} [params.pageSize=20] 每页条数
-   * @param {string} [params.keyword=''] 账号 / 邮箱模糊搜索
+   * @param {string} [params.keyword=''] 账号 / 邮箱 / 设备码模糊搜索（三者任一命中）
    * @param {number|null} [params.deptId=null] 部门过滤
    * @param {number|null} [params.status=null] 状态过滤
    * @param {string|null} [params.appId=null] 子应用过滤（该应用里有角色的人 + 超管）
@@ -43,6 +67,7 @@ class ConsoleUserDao {
     deptId = null,
     status = null,
     appId = null,
+    deviceId = '',
     scopeAppIds = null,
     dataScope = null
   }) {
@@ -51,7 +76,20 @@ class ConsoleUserDao {
 
     const where = {};
     if (keyword) {
-      where[Op.or] = [{ username: { [Op.like]: `%${keyword}%` } }, { email: { [Op.like]: `%${keyword}%` } }];
+      /*
+       * 一个关键词搜三样：账号 / 邮箱 / 设备码。
+       *
+       * 设备码不在 users 表上（它在 SessionToken.device_id），先查出"用过含这段码的设备"
+       * 的 user_id，再作为 OR 的一支。这样列表只要一个输入框 —— 用户并不知道自己想搜的
+       * 是"某个人"还是"某台机器"，逼他先选一个框只会让人猜错。
+       *
+       * 与 `deviceId` 参数的区别：`deviceId` 是**必须命中设备**（AND，精确排查某台机器）；
+       * `keyword` 是**任一项命中**（OR）。两者同时给时取交集，正好是"先按设备锁定、再按名字缩小"。
+       */
+      const deviceUserIds = await userIdsByDevice(keyword);
+      const or = [{ username: { [Op.like]: `%${keyword}%` } }, { email: { [Op.like]: `%${keyword}%` } }];
+      if (deviceUserIds.length) or.push({ id: { [Op.in]: deviceUserIds } });
+      where[Op.or] = or;
     }
     if (deptId !== null && deptId !== undefined && deptId !== '') where.dept_id = Number(deptId);
 
@@ -114,6 +152,22 @@ class ConsoleUserDao {
       const pendingIds = [...new Set(rows.map(r => Number(r.user_id)))];
       if (pendingIds.length === 0) return { rows: [], total: 0 };
       restrictToUserIds(pendingIds);
+    }
+
+    /*
+     * 按设备码找人
+     *
+     * 设备码在 `session_tokens.device_id`（会话的 DB 兜底记录），不在用户表 ——
+     * 一个设备可能登过多个账号、一个账号也有多台设备，所以这条路必须落到
+     * "哪些用户用过这台设备"，再与其它条件取交集。
+     *
+     * 🔴 **不看 `revoked`**：排查"这台设备都登过谁"时，历史会话才是线索；
+     *    只留未撤销的，等于只能看到"此刻还登着的那个人"。
+     * 🔴 同样要在**分页之前**落到 where（走 restrictToUserIds），否则总数与页大小失真。
+     */
+    if (deviceId) {
+      // restrictToUserIds 在交集为空时写 `IN (-1)`（恒不命中），这里不必再提前 return
+      restrictToUserIds(await userIdsByDevice(deviceId));
     }
 
     /*
@@ -390,6 +444,57 @@ class ConsoleUserDao {
   }
 
   /**
+   * 补齐 GLOBAL 基础角色（与注册口径对齐）
+   *
+   * 🔴 为什么必须有：`app/user/dao/user.js#registerUser` 在没给角色时会补
+   *    `user_normal`，而后台建号（含批量导入）原先只写提交的 `roleIds`。于是
+   *    "管理员导入的账号"与"自己注册的账号"权限不一样：前者没有 `user:base:*`，
+   *    登录后改不了资料、传不了头像，看起来像导入没生效。
+   *
+   * 只在**一个 GLOBAL 角色都没有**时补：管理员显式勾了 GLOBAL 角色（VIP / 小黑屋）
+   * 时尊重他的选择，不额外塞普通角色。
+   *
+   * 查不到基础角色时**不阻断建号**：账号没有角色仍可登录，等管理员补授即可。
+   *
+   * @param {number[]} roleIds 提交的角色 ID
+   * @param {object} transaction 事务
+   * @returns {Promise<number[]>} 补全后的角色 ID
+   */
+  async withGlobalBaseRole(roleIds, transaction) {
+    const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
+    const Role = getModel('Role');
+
+    if (ids.length > 0) {
+      const rows = await Role.findAll({
+        where: { id: ids },
+        attributes: ['id', 'app_id'],
+        raw: true,
+        transaction
+      });
+      // GLOBAL 角色的 app_id 可能因历史写入为 NULL，按"归属全局"处理
+      if (rows.some(row => (row.app_id || 'GLOBAL') === 'GLOBAL')) return ids;
+    }
+
+    const code = getDeclaredDefaultRole('GLOBAL') || 'user_normal';
+    const base = await Role.findOne({
+      where: { app_id: 'GLOBAL', code, delete_version: 0 },
+      attributes: ['id', 'rank_level'],
+      raw: true,
+      transaction
+    });
+    if (!base) return ids;
+
+    /*
+     * 自动补的角色**不经过** `assertGrantable`（它只校验 CSV 提交的那批），
+     * 所以这里必须自己守一道：万一 GLOBAL 的默认角色被配成管理档，补进去就是
+     * 绕过职级闸发管理员。宁可这次不补，也不发。
+     */
+    if (Number(base.rank_level) > NORMAL_RANK_MAX) return ids;
+
+    return [...ids, Number(base.id)];
+  }
+
+  /**
    * 创建用户（用户 + 凭证 + 角色 + 岗位，单事务）
    *
    * @param {object} payload 用户字段
@@ -411,6 +516,28 @@ class ConsoleUserDao {
     if (!validation.valid) throw new Error(`INVALID_PARAM:${validation.errors[0]}`);
     if (await this.isEmailTaken(email)) throw new Error('DUPLICATE:邮箱已存在');
 
+    /*
+     * 没有邮箱时登录标识就是账号名（`UserIdentity.identifier = email || username`），
+     * 而 `user_user.username` 只是展示名、**不唯一**。于是"两个张三都没填邮箱"
+     * 会在写凭证时撞 `(identity_type, identifier, delete_version)` 唯一索引，
+     * 抛出来的是 Sequelize 的 Validation error —— 批量导入里表现为一行看不懂的失败原因。
+     * 这里提前查一次，换成能照着改的提示。
+     */
+    if (!email) {
+      const taken = await getModel('UserIdentity').findOne({
+        where: {
+          identity_type: 'password',
+          identifier: String(username).trim(),
+          delete_version: 0
+        },
+        attributes: ['id'],
+        raw: true
+      });
+      if (taken) {
+        throw new Error('DUPLICATE:账号已被占用（该账号没有邮箱，只能用账号名登录，因此不能重名）');
+      }
+    }
+
     // 哈希放在事务外：scrypt 是 CPU 密集操作，不应占用数据库连接
     const hashedPassword = await hashPassword(password);
 
@@ -431,7 +558,7 @@ class ConsoleUserDao {
         { transaction: t }
       );
 
-      await this.replaceRoles(user.id, roleIds, t, {
+      await this.replaceRoles(user.id, await this.withGlobalBaseRole(roleIds, t), t, {
         username: user.username,
         operator: actor,
         remark: actor?.remark || '新建用户时指定'

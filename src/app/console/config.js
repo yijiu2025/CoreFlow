@@ -41,16 +41,23 @@ const consoleConfig = {
   permission_app_id: 'admin',
 
   /**
-   * 授权即送的默认角色（主口径）
+   * 默认角色：**刻意不自动授予**
    *
-   * 🔴 这个 code 住在命名空间 `admin` 下（上一行的 `permission_app_id`），
-   *    不是 `console`。`resolveDefaultRole` 会用命名空间去查 `iam_role.app_id`，
-   *    所以这里写 `admin_viewer` 能被查到；写成不存在的 `console_*` 会在启动期
-   *    审计里报 error，并在授权时静默回落到最低职级。
+   * 管理后台是**封闭应用**：下方 `access` 闸门要求 `admin:*`，而注册用户不该
+   * 因为"点了授权"就获得管理能力。所以这里写 `null`（而不是 `admin_viewer`）——
+   * 授权流程照常记录，但不发角色；登录时 `checkAppAccess` 判定 `NO_CAPABILITY`，
+   * 直接给出 `access.denyMessage`，进不去后台。
    *
-   * 权限：只读观察者。新授权的账号能进后台看，改数据要管理员另授。
+   * 🔴 不要把这里改成 `admin_viewer`：观察者拥有全站读权限（用户列表 / 部门 /
+   *    角色 / 日志），`admin:*` 闸门会被它直接命中 —— 那等于"注册即可看后台"。
+   *    这类角色只能由管理员在「用户管理 → 分配角色」里手工授予
+   *    （`POST /admin/console/v1/users/roles/batch`），GLOBAL 的 `superadmin`
+   *    则通过 `permission-loader` 自动继承各应用的 `{appId}_admin`。
+   *
+   * 判据：启动期审计会对"有 access 闸门 + 非 null 默认角色"报 error，
+   * `docs/core/permission.md` 的「封闭应用」一节说明了这个组合为什么禁止。
    */
-  default_role: 'admin_viewer',
+  default_role: null,
 
   /**
    * 登录准入（`bind-session` 之前判定，见 `framework/security/auth/permission/app-access.js`）

@@ -342,6 +342,7 @@ function buildOperFilter(filters = {}) {
     endTime = '',
     username = '',
     ip = '',
+    deviceId = '',
     action = '',
     scopeSql = ''
   } = filters;
@@ -351,8 +352,10 @@ function buildOperFilter(filters = {}) {
   if (scopeSql) conditions.push(scopeSql.replace(/^\s*AND\s+/i, ''));
   const replacements = {};
   if (keyword) {
+    // 设备码也进这条 OR：界面上那一个搜索框的占位就写着"设备码"，
+    // 敲完整设备码却搜不到会让人以为没记 —— 记录本身是有的（`audit_logs.device_id`）
     conditions.push(
-      '(a.event LIKE :keyword OR a.ip LIKE :keyword OR u.username LIKE :keyword OR a.app_id LIKE :keyword)'
+      '(a.event LIKE :keyword OR a.ip LIKE :keyword OR u.username LIKE :keyword OR a.app_id LIKE :keyword OR a.device_id LIKE :keyword)'
     );
     replacements.keyword = `%${keyword}%`;
   }
@@ -376,6 +379,13 @@ function buildOperFilter(filters = {}) {
   if (ip) {
     conditions.push('a.ip LIKE :ip');
     replacements.ip = `${ip}%`;
+  }
+  // 设备码用**子串**匹配：它是不透明串（`WEB-DaBOSiwlw7K-tVR07k`），
+  // 排查时手上通常只有其中一段（日志里被缩略成 前12…后4）。清数据前会先给命中条数，
+  // 所以宽匹配不会变成"点一下就删多了"。
+  if (deviceId) {
+    conditions.push('a.device_id LIKE :deviceId');
+    replacements.deviceId = `%${deviceId}%`;
   }
   if (action) {
     conditions.push('a.event = :action');

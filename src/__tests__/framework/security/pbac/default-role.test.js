@@ -199,4 +199,60 @@ describe('auditDefaultRoles', () => {
 
     expect(issues).toEqual([]);
   });
+
+  /*
+   * 封闭应用（有准入闸门）是唯一"不能有默认角色"的形态：
+   * 管理后台的观察者持有 admin:* 读码，一旦授权即送，注册用户点一下同意就能进后台。
+   */
+  describe('封闭应用（config.access 闸门）', () => {
+    const gatedConsole = { app_id: 'console', permission_app_id: 'admin', access: { anyPermission: ['admin:*'] } };
+
+    it('🔴 有闸门却声明默认角色 → error（要么跨闸门放行，要么发个进不去的假角色）', () => {
+      resetDeclaredDefaultRolesForTesting();
+
+      const issues = auditDefaultRoles({
+        configs: [{ ...gatedConsole, default_role: 'admin_viewer' }],
+        roleDefs: [role('admin_viewer', 10, 'admin')]
+      });
+
+      expect(levels(issues)).toEqual(['error']);
+      expect(messages(issues)).toMatch(/封闭应用不能/);
+      expect(messages(issues)).toMatch(/default_role 设为 null/);
+    });
+
+    it('有闸门时只在 roles.js 标 is_default（config 没写 default_role）→ 同样 error', () => {
+      resetDeclaredDefaultRolesForTesting();
+      registerDeclaredDefaultRole('admin', 'admin_viewer');
+
+      const issues = auditDefaultRoles({
+        configs: [gatedConsole],
+        roleDefs: [role('admin_viewer', 10, 'admin')]
+      });
+
+      expect(levels(issues)).toEqual(['error']);
+      expect(messages(issues)).toMatch(/roles\.js="admin_viewer"/);
+    });
+
+    it('闸门 + default_role: null → 合规（这才是封闭应用的正确写法）', () => {
+      resetDeclaredDefaultRolesForTesting();
+
+      const issues = auditDefaultRoles({
+        configs: [{ ...gatedConsole, default_role: null }],
+        roleDefs: [role('admin_viewer', 10, 'admin')]
+      });
+
+      expect(issues).toEqual([]);
+    });
+
+    it('空闸门声明（anyPermission/anyRole 都是空数组）不算封闭', () => {
+      resetDeclaredDefaultRolesForTesting();
+
+      const issues = auditDefaultRoles({
+        configs: [{ app_id: 'demo', default_role: 'demo_user', access: { anyPermission: [], anyRole: [] } }],
+        roleDefs: [role('demo_user', 10)]
+      });
+
+      expect(issues).toEqual([]);
+    });
+  });
 });
