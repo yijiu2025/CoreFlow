@@ -58,6 +58,43 @@ watch(
   { immediate: true }
 );
 
+/**
+ * 按 `sort` 分「级」
+ *
+ * 🔴 **数字相同即同一级**：财务总经理与研发总经理都填 1，就在同一层台阶上并排。
+ * 不单设"职级"字段 —— 多一个要手工维护的字段，就多一处会不一致的地方。
+ * 阶梯此前是"一行一个岗位"，同级岗位被硬拆成上下两级（用户实测：并级显示不出来）；
+ * 现在一级是一层台阶，同级多个岗位在同一层上并排。
+ */
+interface PostLevel {
+  sort: number;
+  posts: LadderPost[];
+}
+
+const levels = computed<PostLevel[]>(() => {
+  const buckets = new Map<number, LadderPost[]>();
+  for (const post of steps.value) {
+    const key = Number(post.sort) || 0;
+    const list = buckets.get(key);
+    if (list) list.push(post);
+    else buckets.set(key, [post]);
+  }
+  return [...buckets.entries()].map(([sort, posts]) => ({ sort, posts })).sort((a, b) => a.sort - b.sort);
+});
+
+/** 最宽的一级有几个岗位：同级并排需要横向空间，舞台最小宽度据此算 */
+const maxParallelOf = computed(() => Math.max(1, ...levels.value.map(level => level.posts.length)));
+
+/**
+ * 岗位处在第几级（0 基）
+ *
+ * @param post 岗位
+ * @returns 级序号；找不到返回 -1
+ */
+function levelIndexOf(post: LadderPost): number {
+  return levels.value.findIndex(level => level.posts.some(p => p.id === post.id));
+}
+
 const active = computed(() => steps.value.find(p => p.id === activeId.value) ?? null);
 
 /**
@@ -106,37 +143,70 @@ const scene = computed<{ nodes: GraphNode[]; links: GraphLink[] }>(() => {
   if (!w || !h || !list.length) return { nodes: [], links: [] };
   const nodes: GraphNode[] = [];
   const links: GraphLink[] = [];
-  const n = list.length;
-  // 台阶沿对角线铺满：左下 → 右上；宽度随数量收缩，绝不出界
+  const groups = levels.value;
+  const n = groups.length;
+  // 一级一层台阶；同级的岗位横向并排，所以宽度要按"最宽的那一级"算
+  const maxParallel = Math.max(1, ...groups.map(level => level.posts.length));
   const pad = Math.max(28, w * 0.03);
-  const width = Math.max(92, Math.min(150, (w - pad * 2) / Math.max(n, 1) - 12));
-  const x0 = pad + width / 2;
-  const x1 = w - pad - width / 2;
+  const gap = 10;
+  const avail = w - pad * 2;
+  /*
+   * 台阶宽度：必须让**最宽的那一级**横向摆得下
+   *
+   * 早先按 `avail / n / maxParallel` 算，然后用满宽的对角线放层级中心 —— 两笔账各自
+   * 合理、加起来就溢出：两级的场景下，右端那一级再并排两块，第二块直接顶出画布
+   * （实测被右边缘切掉半截，还留了一道光柱）。现在先扣掉并排所需的总跨度，再分宽度。
+   */
+  const width = Math.max(72, Math.min(150, (avail - gap * (maxParallel - 1)) / maxParallel));
+  // 最宽一层的横向跨度，两侧各留一半，层级中心只能落在扣完之后的范围里
+  const hSpan = (maxParallel - 1) * (width + gap);
+  const x0 = pad + width / 2 + hSpan / 2;
+  const x1 = w - pad - width / 2 - hSpan / 2;
   const y0 = h - 120;
   const y1 = Math.max(150, h * 0.28);
-  list.forEach((p, i) => {
+  /** 岗位 id → 台阶坐标（空态提示要贴着选中台阶放，不能飘在场地中央） */
+  const slabAt = new Map<number, { x: number; y: number }>();
+  groups.forEach((level, i) => {
     const k = n > 1 ? i / (n - 1) : 0.5;
-    const id = `post:${p.id}`;
-    nodes.push({
-      id,
-      kind: 'slab',
-      x: n > 1 ? x0 + (x1 - x0) * k : (x0 + x1) / 2,
-      y: y0 + (y1 - y0) * k,
-      size: width,
-      rank: `第 ${i + 1} 级`,
-      label: p.postName,
-      sub: p.postCode,
-      count: p.userCount,
-      cat: catOf(i),
-      tone: p.status !== 1 ? 'off' : undefined,
-      delay: 0.1 + i * 0.12
+    // 画布太窄时 x1 可能小于 x0：退化成居中，别再左右横跳
+    const span = x1 > x0 ? x1 - x0 : 0;
+    const baseX = n > 1 && span > 0 ? x0 + span * k : (x0 + x1) / 2;
+    const baseY = y0 + (y1 - y0) * k;
+    const total = level.posts.length;
+    level.posts.forEach((p, j) => {
+      const id = `post:${p.id}`;
+      // 同级并排：以该级中点为中心，左右各偏 (width + 间隙)/2
+      const offset = (j - (total - 1) / 2) * (width + 10);
+      const sameLevel = total > 1 ? ` · ${j + 1}/${total}` : '';
+      slabAt.set(p.id, { x: baseX + offset, y: baseY });
+      nodes.push({
+        id,
+        kind: 'slab',
+        x: baseX + offset,
+        y: baseY,
+        size: width,
+        rank: `第 ${i + 1} 级${sameLevel}`,
+        label: p.postName,
+        sub: p.postCode,
+        count: p.userCount,
+        cat: catOf(i),
+        tone: p.status !== 1 ? 'off' : undefined,
+        delay: 0.1 + i * 0.12 + j * 0.06
+      });
+      // 同级之间横向连一条，跨级连"上一层最后一个 → 本层第一个"
+      if (j > 0) {
+        links.push({ a: `post:${level.posts[j - 1].id}`, b: id, flow: 'forward', shape: 'h', cat: catOf(i) });
+      } else if (i > 0) {
+        const above = groups[i - 1].posts;
+        const prev = above[above.length - 1];
+        if (prev) links.push({ a: `post:${prev.id}`, b: id, flow: 'forward', shape: 'h', cat: catOf(i) });
+      }
     });
-    if (i > 0) links.push({ a: `post:${list[i - 1].id}`, b: id, flow: 'forward', shape: 'h', cat: catOf(i) });
   });
   const post = active.value;
   if (!post) return { nodes, links };
   const root = `post:${post.id}`;
-  const cat = catOf(list.indexOf(post));
+  const cat = catOf(Math.max(0, levelIndexOf(post)));
   const shown = members.value.slice(0, MEMBER_CAP);
   const more = members.value.length - shown.length;
   // 成员排在左上空域（信息卡右侧）：最多两列，从选中台阶触须长出
@@ -163,14 +233,19 @@ const scene = computed<{ nodes: GraphNode[]; links: GraphLink[] }>(() => {
     const c = Math.floor(i / perCol);
     const r = i % perCol;
     const inCol = Math.min(perCol, items.length - c * perCol);
-    const gap = Math.min(50, (bottom - top) / Math.max(inCol - 1, 1));
-    const y = top + (bottom - top) / 2 - (gap * (inCol - 1)) / 2 + r * gap;
+    const rowGap = Math.min(50, (bottom - top) / Math.max(inCol - 1, 1));
+    const y = top + (bottom - top) / 2 - (rowGap * (inCol - 1)) / 2 + r * rowGap;
+    // 空态只有一条提示：贴着选中台阶放，别让它单独飘在场地中央像走丢了
+    const solo = items.length === 1;
+    const slab = slabAt.get(post.id);
+    const soloX = slab ? Math.min(Math.max(slab.x, 160), w - 160) : colX[0];
+    const soloY = slab ? Math.max(90, slab.y - 118) : 110;
     nodes.push({
       id: it.id,
       kind: 'item',
       align: 'left',
-      x: colX[Math.min(c, 1)],
-      y,
+      x: solo ? soloX : colX[Math.min(c, 1)],
+      y: solo ? soloY : y,
       label: it.label,
       sub: it.sub,
       icon: it.id.startsWith('u:') ? 'users' : undefined,
@@ -211,7 +286,7 @@ function onSelect(node: GraphNode): void {
     <RelationGraph
       v-model:size="size"
       class="ladder-stage"
-      :style="{ minWidth: `${steps.length * 112 + 72}px` }"
+      :style="{ minWidth: `${levels.length * 112 + maxParallelOf * 100 + 72}px` }"
       variant="stage"
       label="岗位能量阶梯"
       :nodes="scene.nodes"
@@ -224,14 +299,22 @@ function onSelect(node: GraphNode): void {
       <template v-if="active" #tl>
         <section class="ladder-card m-float" :class="`cat-${(steps.indexOf(active) % 5) + 1}`" aria-live="polite">
           <div class="ladder-card-head">
-            <span class="ladder-card-rank">第 {{ steps.indexOf(active) + 1 }} 级 · 共 {{ steps.length }} 级</span>
-            <span :class="['tag', active.status === 1 ? 'tag--ok' : 'tag--off']">{{ active.status === 1 ? '启用' : '停用' }}</span>
+            <span class="ladder-card-rank">第 {{ levelIndexOf(active) + 1 }} 级 · 共 {{ levels.length }} 级</span>
+            <span :class="['tag', active.status === 1 ? 'tag--ok' : 'tag--off']">{{
+              active.status === 1 ? '启用' : '停用'
+            }}</span>
           </div>
           <h3>{{ active.postName }}</h3>
           <span class="ladder-card-rank">{{ active.postCode }}</span>
           <dl>
-            <div><dt>在岗</dt><dd class="tnum">{{ active.userCount }}<small>人</small></dd></div>
-            <div><dt>排序</dt><dd class="tnum">{{ active.sort }}</dd></div>
+            <div>
+              <dt>在岗</dt>
+              <dd class="tnum">{{ active.userCount }}<small>人</small></dd>
+            </div>
+            <div>
+              <dt>排序</dt>
+              <dd class="tnum">{{ active.sort }}</dd>
+            </div>
           </dl>
           <div class="ladder-card-actions">
             <button
