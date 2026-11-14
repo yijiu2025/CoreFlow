@@ -116,7 +116,16 @@ export function describeLoginEvent(row: LoginSummaryInput): string {
   if (event === 'LOGOUT') return '主动退出，会话已注销。';
 
   if (event === 'KICK') {
-    const base = KICK_REASONS[reason] || `会话被下线（${reason || '原因未记录'}）`;
+    /*
+     * 谁把这条会话下线的
+     *
+     * 会话流水的主键是**当事人**（`user_id` = 被踢的账号），操作者另存在
+     * `details.operatorName` —— 管理员在用户管理里按设备踢人时这俩不是同一个人。
+     * 不写清就只剩「管理员按设备远程下线」这种谁都能套的话，等于没记。
+     */
+    const operator = typeof details.operatorName === 'string' ? details.operatorName : '';
+    const who = operator ? `（操作者：${operator}）` : '';
+    const base = `${KICK_REASONS[reason] || `会话被下线（${reason || '原因未记录'}）`}${who}`;
     // 🔴 只有 details 里**真的有 count** 才提数量。缺这个字段时按 0 处理会凭空
     //    说出"当时没有活跃会话"，把一个没记录的事实编成结论。
     const rawCount = details.count;

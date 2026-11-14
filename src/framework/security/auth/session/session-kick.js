@@ -26,6 +26,7 @@
 
 import { Op } from 'sequelize';
 import { getModel } from '../../../persistence/db/index.js';
+import { requestContext } from '../context/request-context.js';
 import { DEVICE_TYPE } from '../device/device.js';
 import {
   sessionStore,
@@ -138,6 +139,28 @@ async function _revokeOneSession(userId, sid, sd, reason = 'kicked') {
  * @param {string} appId 归属应用（写日志用）
  * @param {object} logDetails SessionLog.details 额外字段
  */
+/**
+ * 当前请求的操作者（谁发起了这次踢出）
+ *
+ * 🔴 会话流水的 `user_id` 是**当事人**（被踢的账号），操作者另存一份：
+ *    管理员在用户管理里按设备踢人时，这两个人不是同一个 —— 早先只记当事人，
+ *    日志只能写「管理员按设备远程下线」，查不出是哪个管理员干的。
+ *
+ * 非请求上下文（定时任务 / 脚本 / 登录时顶掉旧会话）取不到会话，返回空对象，
+ * 前端摘要就退回"按原因描述"的写法。
+ *
+ * @returns {object} 需要并入 details 的操作者字段
+ */
+function actorDetails() {
+  const user = requestContext.getStore()?.state?.user;
+  if (!user) return {};
+  const operatorId = Number(user.userId);
+  return {
+    operatorId: Number.isFinite(operatorId) ? operatorId : null,
+    operatorName: user.username || null
+  };
+}
+
 async function _kickSession(userId, sid, sd, appId, logDetails) {
   const SessionToken = getModel('SessionToken');
   const SessionLog = getModel('SessionLog');
@@ -147,7 +170,7 @@ async function _kickSession(userId, sid, sd, appId, logDetails) {
     user_id: userId,
     event: 'KICK',
     app_id: appId,
-    details: { ...logDetails, kickedSessionId: sid }
+    details: { ...logDetails, ...actorDetails(), kickedSessionId: sid }
   });
 }
 
@@ -309,7 +332,7 @@ async function kickSession(sessionId, userId) {
   await SessionLog.create({
     user_id: userId,
     event: 'KICK',
-    details: { reason: 'user_kicked', kickedSessionId: sessionId }
+    details: { reason: 'user_kicked', ...actorDetails(), kickedSessionId: sessionId }
   });
 }
 
@@ -354,7 +377,7 @@ async function kickAllSessions(userId, keepSessionId = null) {
     user_id: userId,
     event: 'KICK',
     // count 记实际踢出数（排除保留的当前会话）：日志里的数字要和用户看到的一致
-    details: { reason: 'kick_all', count: hashes.length, keptCurrent: Boolean(keepSessionId) }
+    details: { reason: 'kick_all', ...actorDetails(), count: hashes.length, keptCurrent: Boolean(keepSessionId) }
   });
 
   return hashes.length;
@@ -400,7 +423,7 @@ async function kickUser(userId, appId = null) {
     user_id: userId,
     event: 'KICK',
     app_id: appId || 'ALL',
-    details: { kickedCount: kicked }
+    details: { ...actorDetails(), kickedCount: kicked }
   });
 }
 

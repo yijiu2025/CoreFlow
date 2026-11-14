@@ -15,6 +15,12 @@ const defineSysMenu = (sequelize, DataTypes) => {
     'SysMenu',
     {
       id: { type: DataTypes.BIGINT, primaryKey: true, autoIncrement: true },
+      app_id: {
+        type: DataTypes.STRING(32),
+        allowNull: false,
+        defaultValue: 'admin',
+        comment: '归属应用：admin = 管理后台，其它应用用其标识（如 firewall）'
+      },
       parent_id: { type: DataTypes.BIGINT, allowNull: false, defaultValue: 0, comment: '上级菜单，0 为根' },
       name: { type: DataTypes.STRING(50), allowNull: false, comment: '菜单名称' },
       type: {

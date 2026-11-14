@@ -39,9 +39,27 @@ const emit = defineEmits<{ (e: 'close'): void }>();
  * 已注销（名字来自快照）/ 本人（正常记录）/ 未识别（尝试登录但账号没对上，
  * 失败日志常见）。三种都会出现，合并成一种写法会丢信息。
  */
+/** 操作者（谁发起了这条事件）：会话流水里另存的字段，缺省说明没有第二方 */
+const operator = computed(() => {
+  const details = (props.row?.details ?? {}) as Record<string, unknown>;
+  const name = typeof details.operatorName === 'string' ? details.operatorName : '';
+  const id = Number(details.operatorId);
+  if (!name && !Number.isFinite(id)) return null;
+  return { name, id: Number.isFinite(id) ? id : null };
+});
+
+/** 操作者不是当事人 → 这条记录是"被别人动了"，不能标「本人」 */
+const isForeignAction = computed(() => {
+  const id = operator.value?.id;
+  const owner = Number(props.row?.user_id);
+  return id !== null && id !== undefined && Number.isFinite(owner) && id !== owner;
+});
+
 const accountTag = computed(() => {
   if (props.row?.user_status === -1) return '已注销';
-  return props.row?.username ? '本人' : '未识别';
+  if (!props.row?.username) return '未识别';
+  // 被管理员踢下线时，当事人是"被操作账号"，标「本人」会误导成自己点的
+  return isForeignAction.value ? '被操作账号' : '本人';
 });
 
 /** 复制反馈：'idle' | 'ok' | 'fail' */
@@ -167,6 +185,14 @@ watch(
                 <template v-else>{{ row.username || '—' }}</template>
               </dd>
             </div>
+            <div v-if="operator">
+              <dt>操作者</dt>
+              <dd>
+                {{ operator.name || '—' }}
+                <span v-if="operator.id !== null" class="mono sess-code">#{{ operator.id }}</span>
+                <span v-if="!isForeignAction" class="sess-tag-quiet">本人</span>
+              </dd>
+            </div>
             <div>
               <dt>事件</dt>
               <dd>
@@ -188,7 +214,8 @@ watch(
           <!-- 口径说明：不写这一行，读的人会拿它和操作日志的「操作者 / 被操作账号」
                对照，以为这里只是省略了另一半 -->
           <p class="sess-caption">
-            登录日志只记当事人：这一格就是本条记录的登录者本人，没有「操作者 / 被操作账号」之分 —— 那是操作日志的概念。
+            「登录账号」是这条记录的**当事人**（谁被记录了）。多数事件当事人就是操作者本人； 被管理员踢下线这类事件不是
+            —— 那时「操作者」会单独列在下面，别把两者混成一件事。
           </p>
 
           <!-- 说明这段只对已注销账号出现：读日志的人看到「注销-xxx」必须知道这个名字
@@ -380,6 +407,16 @@ watch(
 .sess-code {
   font-size: 11px;
   color: var(--mauth-text-faint);
+}
+
+/* 「本人」这类极轻标记：只做语义补充，不抢正文的注意力 */
+.sess-tag-quiet {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-soft);
+  font-size: 11px;
 }
 
 .sess-copy {
