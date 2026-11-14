@@ -21,6 +21,7 @@ const postBodySchema = {
   properties: {
     postCode: { type: 'string', minLength: 1, maxLength: 50 },
     postName: { type: 'string', minLength: 1, maxLength: 50 },
+    rank: { type: 'integer', minimum: 0, maximum: 999 },
     sort: { type: 'integer', minimum: 0, maximum: 9999 },
     status: { type: 'integer', enum: [0, 1] },
     remark: { type: 'string', maxLength: 255 }
@@ -37,6 +38,7 @@ function toModelFields(body) {
   const payload = {};
   if (body.postCode !== undefined) payload.post_code = body.postCode;
   if (body.postName !== undefined) payload.post_name = body.postName;
+  if (body.rank !== undefined) payload.rank = body.rank;
   if (body.sort !== undefined) payload.sort = body.sort;
   if (body.status !== undefined) payload.status = body.status;
   if (body.remark !== undefined) payload.remark = body.remark;
