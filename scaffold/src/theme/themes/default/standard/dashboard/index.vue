@@ -407,10 +407,11 @@ const {
   color: var(--mauth-text-soft);
 }
 
-/* 成功率读数用主色：绿色在这页是唯一的语义色（失败红），再留一个绿会让"哪个是重点"失焦 */
+/* 成功率读数走工作台自己的令牌：默认就是主色，但能在「外观 → 卡片 → 工作台」里
+   单独换成别的颜色，不用动全站主色（绿在这页是唯一的语义色，再留一个绿会失焦） */
 .side__hint.is-ok {
   font-weight: 650;
-  color: var(--mauth-primary);
+  color: var(--mauth-dash-rate);
 }
 
 .side__hint.is-warn {
@@ -485,27 +486,32 @@ const {
   background:
     repeating-linear-gradient(
       135deg,
-      color-mix(in srgb, var(--mauth-primary) 22%, transparent) 0 1.5px,
+      color-mix(in srgb, var(--mauth-dash-today) 22%, transparent) 0 1.5px,
       transparent 1.5px 6px
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--mauth-primary) 88%, #ffffff),
-      color-mix(in srgb, var(--mauth-primary) 62%, #ffffff)
+      color-mix(in srgb, var(--mauth-dash-today) 88%, #ffffff),
+      color-mix(in srgb, var(--mauth-dash-today) 62%, #ffffff)
     );
-  box-shadow: 0 8px 22px color-mix(in srgb, var(--mauth-primary) 28%, transparent);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--mauth-dash-today) 28%, transparent);
 }
 
-/* 今天：主色渐变 + 斜线填充 + 光晕（其余柱子是中性灰，"今天"用品牌色标出来） */
+/* 今天：主色渐变 + 斜线填充 + 光晕（其余柱子是中性灰，"今天"用品牌色标出来）
+   颜色走工作台令牌：整页想换个色调时不用去动全站主色 */
 .bars__col.is-today {
   background:
     repeating-linear-gradient(
       135deg,
-      color-mix(in srgb, var(--mauth-primary) 18%, transparent) 0 1.5px,
+      color-mix(in srgb, var(--mauth-dash-today) 18%, transparent) 0 1.5px,
       transparent 1.5px 6px
     ),
-    linear-gradient(180deg, var(--mauth-primary), color-mix(in srgb, var(--mauth-primary) 72%, #ffffff));
-  box-shadow: 0 6px 18px var(--mauth-primary-soft);
+    linear-gradient(
+      180deg,
+      var(--mauth-dash-today),
+      color-mix(in srgb, var(--mauth-dash-today) 72%, #ffffff)
+    );
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--mauth-dash-today) 12%, transparent);
 }
 
 .bars__failed {
@@ -539,9 +545,9 @@ const {
   color: var(--mauth-text-faint);
 }
 
-/* 「今天」标签跟主色走：它是标记，不是"成功"状态 */
+/* 「今天」标签与柱子同一项令牌：它是标记，不是"成功"状态 */
 .bars__labels span.is-today {
-  color: var(--mauth-primary);
+  color: var(--mauth-dash-today);
   font-weight: 700;
 }
 
@@ -587,11 +593,11 @@ const {
 }
 
 .ring__tick.is-on {
-  stroke: var(--mauth-primary);
+  stroke: var(--mauth-dash-ring);
 }
 
 .ring__cap {
-  fill: var(--mauth-primary);
+  fill: var(--mauth-dash-ring);
 }
 
 .ring__center {
@@ -692,7 +698,8 @@ const {
   border-top: 1px solid var(--mauth-border);
 }
 
-/* 首字母头像：没有头像字段时也能有"人"的形状，比纯文字列表好扫 */
+/* 首字母头像：没有头像字段时也能有"人"的形状，比纯文字列表好扫
+   底与字走工作台的「小方块」两项（和常用入口图标同一对，改一处两处一起变） */
 .recent__avatar {
   display: grid;
   place-items: center;
@@ -700,8 +707,8 @@ const {
   width: 30px;
   height: 30px;
   border-radius: 999px;
-  background: var(--mauth-primary-soft);
-  color: var(--mauth-primary);
+  background: var(--mauth-dash-chip-bg);
+  color: var(--mauth-dash-chip-ink);
   font-size: 12px;
   font-weight: 620;
 }
@@ -768,8 +775,8 @@ const {
   width: 36px;
   height: 36px;
   border-radius: var(--mauth-radius-xs);
-  background: var(--mauth-primary-soft);
-  color: var(--mauth-primary);
+  background: var(--mauth-dash-chip-bg);
+  color: var(--mauth-dash-chip-ink);
   flex: none;
 }
 

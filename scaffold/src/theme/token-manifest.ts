@@ -2,9 +2,9 @@
  * 设计令牌清单（**元数据**）—— 可视化外观编辑器的唯一数据源
  *
  * === 这份表解决什么问题 ===
- * 配色表里有 60 个 `--mauth-*`，但只有代码注释知道谁管什么。任何"逐组件改色"的界面
+ * 配色表里有六十多个 `--mauth-*`，但只有代码注释知道谁管什么。任何"逐组件改色"的界面
  * 都绕不开三个问题：**它叫什么（中文）**、**它归哪一组**、**它该用哪种控件**。
- * 没有这份表，编辑器只能列出 60 个裸变量名 —— 那种界面没人敢用。
+ * 没有这份表，编辑器只能列出几十个裸变量名 —— 那种界面没人敢用。
  *
  * === 三条约定 ===
  * 1. **只登记配色表里真实存在的键**。新增 token 必须先进配色表（`themes/<包>/<设备>/<页面>/colors/<配色>/`），
@@ -39,7 +39,7 @@ export interface TokenMeta {
   /**
    * 层级：`1` = 常用（面板默认只显示这些），`2` 或缺省 = 高级（收在"显示全部"后面）
    *
-   * 为什么要分：69 个令牌一次摊开，用户第一眼不知道该动哪个（"要设置的太多了"就是这个观感）。
+   * 为什么要分：六十多个令牌一次摊开，用户第一眼不知道该动哪个（"要设置的太多了"就是这个观感）。
    * 常用的其实只有十几个 —— 底、卡片、文字、主色、语义色、圆角；其余（分类色、徽标、
    * 开关、细节描边）都是"知道自己要找什么才会来找"的项。
    */
@@ -56,6 +56,7 @@ export const TOKEN_GROUPS = [
   '分类色',
   '侧栏与顶栏',
   '卡片与表格',
+  '工作台',
   '控件',
   '徽标'
 ] as const;
@@ -155,29 +156,88 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   { key: '--mauth-panel-bg', label: '卡片底', group: '卡片与表格', kind: 'color', scope: 'component', hint: '面板、卡片' , tier: 1 },
   { key: '--mauth-table-head-bg', label: '表头底', group: '卡片与表格', kind: 'color', scope: 'component' },
   { key: '--mauth-table-row-hover', label: '表格行悬停', group: '卡片与表格', kind: 'color', scope: 'component' },
+  /* ── 工作台 ─────────────────────────────────────────────────
+   * 八项都是「只长在后台工作台这一页」的颜色：卡面光/底色、成功率（读数 + 刻度环）、
+   * 浅色方块（最近登录头像 + 常用入口图标）、「今天」那根柱子。
+   *
+   * 为什么要单独一组：这些位置此前全部由 `--mauth-primary` / `--mauth-primary-soft`
+   * 现算或直接引用 —— 想让工作台"暖一点 / 素一点"，只能改主题色，连带按钮、选中态、
+   * 全站链接一起变。成组拆出来之后，改这八项只动这一页。
+   *
+   * 默认值一律写成 `var(--mauth-primary*)`（配色表里合法单值），所以不动它们就等于
+   * 现在的样子；换主题色时这八项仍然跟着走。
+   * ─────────────────────────────────────────────────────────── */
   {
     key: '--mauth-pulse-glow',
-    label: '登录脉搏暖光',
-    group: '卡片与表格',
+    label: '脉搏卡·暖光',
+    group: '工作台',
     kind: 'color',
     scope: 'component',
-    hint: '登录脉搏卡左上角的那团主色光；嫌太艳就把它调淡或换成透明'
+    hint: '登录脉搏卡左上角那团光；嫌艳就调淡或改透明',
+    tier: 1
   },
   {
     key: '--mauth-pulse-bg',
-    label: '登录脉搏底色',
-    group: '卡片与表格',
+    label: '脉搏卡·底色',
+    group: '工作台',
     kind: 'color',
     scope: 'component',
-    hint: '登录脉搏卡的主底色（渐变起点）；改成与「卡片底」一致就完全素了'
+    hint: '卡片渐变起点；改成与「卡片底」一致就完全素了',
+    tier: 1
   },
   {
     key: '--mauth-pulse-bg-2',
-    label: '登录脉搏底色（末端）',
-    group: '卡片与表格',
+    label: '脉搏卡·底色末端',
+    group: '工作台',
     kind: 'color',
     scope: 'component',
-    hint: '渐变到右下角的收尾色'
+    hint: '渐变到右下的收尾色',
+    tier: 1
+  },
+  {
+    key: '--mauth-dash-rate',
+    label: '成功率读数',
+    group: '工作台',
+    kind: 'color',
+    scope: 'component',
+    hint: '「今日操作」卡片右下那个百分比',
+    tier: 1
+  },
+  {
+    key: '--mauth-dash-ring',
+    label: '成功率刻度环',
+    group: '工作台',
+    kind: 'color',
+    scope: 'component',
+    hint: '已点亮的刻度与环上那个端点',
+    tier: 1
+  },
+  {
+    key: '--mauth-dash-chip-bg',
+    label: '小方块底色',
+    group: '工作台',
+    kind: 'color',
+    scope: 'component',
+    hint: '最近登录首字头像、常用入口图标的底',
+    tier: 1
+  },
+  {
+    key: '--mauth-dash-chip-ink',
+    label: '小方块图标',
+    group: '工作台',
+    kind: 'color',
+    scope: 'component',
+    hint: '同一批方块里的首字与图标线',
+    tier: 1
+  },
+  {
+    key: '--mauth-dash-today',
+    label: '「今天」柱',
+    group: '工作台',
+    kind: 'color',
+    scope: 'component',
+    hint: '近 7 天柱状图里今天那根柱子、斜纹与柱下的「今天」二字',
+    tier: 1
   },
 
   /* ── 控件 ───────────────────────────────────────────────── */

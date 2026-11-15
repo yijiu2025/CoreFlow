@@ -30,7 +30,43 @@
     <p class="tok__desc">{{ currentMaterial?.description }}</p>
 
     <div v-for="section in groups" :key="section.group" class="tok__group">
-      <p class="tok__group-name">
+      <!--
+        可收拢的组（工作台）：先是一个"跟随主题 / 自定义"的选择，选了自定义才逐项露出。
+        为什么这样做：这一组八项其实是同一个决定（"工作台这一页要不要跟主题色走"），
+        八行平铺会让用户以为要一项项配；先问模式，再问细节，才是他们脑子里的顺序。
+      -->
+      <template v-if="isCollapsible(section.group)">
+        <div class="tok__group-name">
+          <button
+            type="button"
+            class="tok__fold"
+            :aria-expanded="isOpen(section.group)"
+            @click="toggleGroup(section.group)"
+          >
+            <ChevronRight :size="12" :class="{ 'is-open': isOpen(section.group) }" />
+            {{ section.group }}
+            <span class="tok__dots" aria-hidden="true">
+              <i v-for="dot in dotsOf(section.group)" :key="dot" class="tok__dot" :style="{ background: dot }"></i>
+            </span>
+          </button>
+
+          <span class="tok__mode" role="group" :aria-label="`${section.group}：跟随主题还是自定义`">
+            <button
+              v-for="opt in MODES"
+              :key="opt.id"
+              type="button"
+              :class="['tok__mode-btn', { 'is-on': modeOf(section.group) === opt.id }]"
+              :aria-pressed="modeOf(section.group) === opt.id"
+              @click="pickMode(section.group, opt.id)"
+            >
+              {{ opt.name }}
+            </button>
+          </span>
+        </div>
+        <p class="tok__group-desc">{{ GROUP_NOTES[section.group] ?? '' }}</p>
+      </template>
+
+      <p v-else class="tok__group-name">
         {{ section.group }}
         <button
           v-if="section.items.some(meta => isSet(meta.key))"
@@ -42,61 +78,64 @@
         </button>
       </p>
 
-      <div v-for="meta in section.items" :key="meta.key" class="tok__row">
-        <div class="tok__meta">
-          <span class="tok__label">
-            {{ meta.label }}
-            <em v-if="isSet(meta.key)" class="tok__badge">已改</em>
-            <em v-else-if="meta.scope === 'component'" class="tok__badge tok__badge--soft">局部</em>
-          </span>
-          <span v-if="meta.hint" class="tok__hint">{{ meta.hint }}</span>
-        </div>
+      <div v-if="!isCollapsible(section.group) || isOpen(section.group)">
+        <div v-for="meta in section.items" :key="meta.key" class="tok__row">
+          <div class="tok__meta">
+            <span class="tok__label">
+              {{ meta.label }}
+              <em v-if="isSet(meta.key)" class="tok__badge">已改</em>
+              <em v-else-if="meta.scope === 'component'" class="tok__badge tok__badge--soft">局部</em>
+            </span>
+            <span v-if="meta.hint" class="tok__hint">{{ meta.hint }}</span>
+          </div>
 
-        <div class="tok__ctl">
-          <template v-if="meta.kind === 'color'">
-            <label class="tok__swatch" :title="valueOf(meta.key)">
-              <!-- 颜色层单独一层：半透明的值能透出下面的棋盘格（否则 rgba 全显示成灰块） -->
-              <span class="tok__swatch-fill" :style="{ backgroundColor: valueOf(meta.key) }"></span>
+          <div class="tok__ctl">
+            <template v-if="meta.kind === 'color'">
+              <label class="tok__swatch" :title="valueOf(meta.key)">
+                <!-- 颜色层单独一层：半透明的值能透出下面的棋盘格（否则 rgba 全显示成灰块） -->
+                <span class="tok__swatch-fill" :style="{ backgroundColor: valueOf(meta.key) }"></span>
+                <input
+                  type="color"
+                  :value="pickerHex(meta.key)"
+                  :aria-label="meta.label"
+                  @input="onColor(meta.key, $event)"
+                />
+              </label>
+              <!-- 没有值 = 这一项还没被单独设过，配色表里跟着主题色走（脉搏卡三项默认由 color-mix 现算） -->
+              <code :class="['tok__val', { 'tok__val--inherit': !valueOf(meta.key) }]">
+                {{ shortValue(meta.key) || '跟随主题' }}
+              </code>
+            </template>
+
+            <template v-else>
+              <!--
+                长度一律用滑块：圆角/字号这类值是"连续调到手感对"的，数字输入要反复试
+                才知道 12 和 14 差多少。滑块给的是即时预览，拖到合适就停。
+              -->
               <input
-                type="color"
-                :value="pickerHex(meta.key)"
+                class="tok__range"
+                type="range"
+                :min="rangeOf(meta.key).min"
+                :max="rangeOf(meta.key).max"
+                :step="rangeOf(meta.key).step"
+                :value="lengthOf(meta.key)"
+                :style="{ '--fill': fillOf(meta.key) }"
                 :aria-label="meta.label"
-                @input="onColor(meta.key, $event)"
+                @input="onLength(meta.key, $event)"
               />
-            </label>
-            <code :class="['tok__val', { 'tok__val--inherit': !valueOf(meta.key) }]">
-              {{ shortValue(meta.key) || '跟随主色' }}
-            </code>
-          </template>
+              <span class="tok__unit">{{ lengthOf(meta.key) }}{{ unitOf(meta.key) }}</span>
+            </template>
 
-          <template v-else>
-            <!--
-              长度一律用滑块：圆角/字号这类值是"连续调到手感对"的，数字输入要反复试
-              才知道 12 和 14 差多少。滑块给的是即时预览，拖到合适就停。
-            -->
-            <input
-              class="tok__range"
-              type="range"
-              :min="rangeOf(meta.key).min"
-              :max="rangeOf(meta.key).max"
-              :step="rangeOf(meta.key).step"
-              :value="lengthOf(meta.key)"
-              :style="{ '--fill': fillOf(meta.key) }"
-              :aria-label="meta.label"
-              @input="onLength(meta.key, $event)"
-            />
-            <span class="tok__unit">{{ lengthOf(meta.key) }}{{ unitOf(meta.key) }}</span>
-          </template>
-
-          <button
-            type="button"
-            class="tok__undo"
-            :disabled="!isSet(meta.key)"
-            :title="isSet(meta.key) ? '还原成配色自带的值' : '未修改'"
-            @click="overrides.reset([meta.key])"
-          >
-            还原
-          </button>
+            <button
+              type="button"
+              class="tok__undo"
+              :disabled="!isSet(meta.key)"
+              :title="isSet(meta.key) ? '还原成配色自带的值' : '未修改'"
+              @click="overrides.reset([meta.key])"
+            >
+              还原
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -121,9 +160,11 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { ChevronRight } from 'lucide-vue-next';
 import { MATERIALS, tokensOfMaterial } from '@/theme/materials';
-import { TOKEN_GROUPS, type TokenMeta } from '@/theme/token-manifest';
+import { TOKEN_GROUPS, TOKEN_MANIFEST, type TokenMeta } from '@/theme/token-manifest';
 import { normalizeHex, toPickerHex, withOriginalAlpha } from '@/theme/color';
+import { accentVarOf } from '@/theme/accent-tokens';
 import { useOverridesStore } from '@/stores/overrides';
 import { useThemeStore } from '@/stores/theme';
 
@@ -136,10 +177,130 @@ const tab = ref(MATERIALS[0].id);
 /**
  * 是否显示全部令牌
  *
- * 默认只给 `tier: 1` 的常用项（十几个）—— 69 个一次摊开，用户第一眼不知道该动哪个。
+ * 默认只给 `tier: 1` 的常用项 —— 六十多个一次摊开，用户第一眼不知道该动哪个。
  * 想改分类色、徽标、开关这些细节的，自己展开。
  */
 const showAll = ref(false);
+
+/* ── 可收拢的组：先选"跟随主题 / 自定义"，再逐项 ─────────────
+ * 这一组八项背后其实是**同一个决定**（"工作台这一页跟不跟主题色走"）。八行平铺会让
+ * 用户以为要一项项配，也看不出"现在到底是跟随还是自定义"；先问模式、再问细节才对。
+ *
+ * 模式怎么判定：**有没有任何一项被改过**（`isSet`）。这样"跟随主题"不是另一个要存
+ * 的开关，而是"这一组没有覆盖项"这个事实本身 —— 用户点某一项的「还原」还原到最后一项时，
+ * 模式会自己退回"跟随主题"，不会出现"界面说自定义、实际全跟随"的假状态。
+ * 显式点过「自定义」但还没改任何项的，用一个不落盘的 ref 记住（否则一展开又收回去）。
+ */
+
+/** 需要"先选模式"的组（按需加，不加就是普通的平铺组） */
+const COLLAPSIBLE_GROUPS = ['工作台'];
+
+/** 两个模式（顺序 = 分段控件的顺序） */
+const MODES = [
+  { id: 'theme', name: '跟随主题' },
+  { id: 'custom', name: '自定义' }
+] as const;
+
+type GroupMode = (typeof MODES)[number]['id'];
+
+/** 各组的一句说明（只有可收拢的组需要） */
+const GROUP_NOTES: Record<string, string> = {
+  工作台: '只作用于工作台这一页：卡面光泽、成功率、头像与入口图标、「今天」那根柱子。默认跟着主题色走；选「自定义」才会逐项露出，改哪项只影响哪项。'
+};
+
+/** 明确点过「自定义」的组（还没改任何项时靠它保持展开） */
+const customGroups = ref<string[]>([]);
+
+/** 展开状态的手工覆盖（缺省 = 自定义模式就展开） */
+const openGroups = ref<Record<string, boolean>>({});
+
+/**
+ * 某组下的全部令牌名
+ *
+ * @param group 分组名
+ * @returns 令牌名数组
+ */
+function keysOfGroup(group: string): string[] {
+  return TOKEN_MANIFEST.filter(meta => meta.group === group).map(meta => meta.key);
+}
+
+/**
+ * 这一组是否"先选模式"
+ *
+ * @param group 分组名
+ * @returns 需要返回 true
+ */
+function isCollapsible(group: string): boolean {
+  return COLLAPSIBLE_GROUPS.includes(group);
+}
+
+/**
+ * 这一组当前是哪种模式
+ *
+ * @param group 分组名
+ * @returns `theme`（跟随主题）或 `custom`（自定义）
+ */
+function modeOf(group: string): GroupMode {
+  const touched = keysOfGroup(group).some(key => isSet(key));
+  return touched || customGroups.value.includes(group) ? 'custom' : 'theme';
+}
+
+/**
+ * 这一组是否展开
+ *
+ * @param group 分组名
+ * @returns 展开返回 true
+ */
+function isOpen(group: string): boolean {
+  return openGroups.value[group] ?? modeOf(group) === 'custom';
+}
+
+/**
+ * 手工折叠 / 展开（不影响模式）
+ *
+ * @param group 分组名
+ */
+function toggleGroup(group: string): void {
+  openGroups.value = { ...openGroups.value, [group]: !isOpen(group) };
+}
+
+/**
+ * 切模式
+ *
+ * 「跟随主题」= 还原这一组的全部覆盖项（回到配色表里那份 `var(--mauth-primary)`），
+ * 不做"先留着但不生效"——那种状态用户看不懂，也没法通过界面对齐。
+ *
+ * @param group 分组名
+ * @param mode 目标模式
+ */
+function pickMode(group: string, mode: GroupMode): void {
+  if (mode === 'theme') {
+    overrides.reset(keysOfGroup(group));
+    customGroups.value = customGroups.value.filter(name => name !== group);
+    openGroups.value = { ...openGroups.value, [group]: false };
+    return;
+  }
+  customGroups.value = [...new Set([...customGroups.value, group])];
+  openGroups.value = { ...openGroups.value, [group]: true };
+}
+
+/**
+ * 收拢状态下的小色点：让"这页现在什么调子"一眼可见
+ *
+ * 只取"改动最有感"的几项（成功率读数 / 刻度环 / 小方块底 / 今天柱）；没值的
+ * （仅覆盖型的脉搏卡三项，默认由 `color-mix` 现算）自然不出现。
+ *
+ * @param group 分组名
+ * @returns 颜色值数组（最多 4 个）
+ */
+function dotsOf(group: string): string[] {
+  const keys = keysOfGroup(group);
+  const picked = ['--mauth-dash-rate', '--mauth-dash-ring', '--mauth-dash-chip-bg', '--mauth-dash-today'];
+  return picked
+    .filter(key => keys.includes(key))
+    .map(key => valueOf(key))
+    .filter(Boolean);
+}
 
 /** 各材质的令牌数（tab 角标；跟随"显示全部"切换） */
 const counts = computed<Record<string, number>>(() =>
@@ -175,11 +336,23 @@ const baseTokens = computed<Record<string, string>>(() => theme.themeRecordFor()
 /**
  * 某项当前生效的值
  *
+ * 🔴 配色表允许写 `var(--mauth-primary)` —— 工作台那一组就是这么写的（"默认跟着主色走，
+ *    但可以单独改"）。这种值不能直接喂给取色器与色块：`<input type="color">` 只认 hex，
+ *    一串 `var(...)` 会被当成无效色（灰块 + 看不懂的文本）。
+ *    这里按真实的优先级链把它换成真值：**自定义覆盖 > 主色组（accent 层后写）> 配色表**，
+ *    三者与 `overrides.applyOverrides()` 的顺序一致，所以显示的色就是屏幕上的色。
+ *    读不到（仅覆盖型 `--mauth-pulse-*` 压根没写进配色表）就原样返回，界面显示"跟随主题"。
+ *
  * @param key 令牌名
+ * @param depth 递归层数（防止配色表里写出环）
  * @returns CSS 值
  */
-function valueOf(key: string): string {
-  return overrides.current[key] ?? baseTokens.value[key] ?? '';
+function valueOf(key: string, depth = 0): string {
+  const raw = overrides.current[key] ?? accentVarOf(key) ?? baseTokens.value[key] ?? '';
+  if (depth >= 3) return raw;
+  const ref = /^var\((--mauth-[a-z0-9-]+)\)$/.exec(raw.trim());
+  if (!ref) return raw;
+  return valueOf(ref[1], depth + 1);
 }
 
 /**
@@ -369,6 +542,78 @@ function rangeOf(key: string): { min: number; max: number; step: number } {
   color: var(--mauth-primary);
   font-size: 11px;
   cursor: pointer;
+}
+
+/* ── 可收拢的组：折叠标题 + 模式分段控件 ─────────────────── */
+.tok__fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.tok__fold svg {
+  transition: transform 0.18s var(--ease);
+}
+
+.tok__fold svg.is-open {
+  transform: rotate(90deg);
+}
+
+/* 收拢时的四颗小色点：不用展开就知道这页现在什么调子 */
+.tok__dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 2px;
+}
+
+.tok__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--mauth-border-strong);
+}
+
+.tok__mode {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--mauth-surface-2);
+  box-shadow: inset 0 0 0 1px var(--mauth-border);
+}
+
+.tok__mode-btn {
+  height: 22px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--mauth-text-soft);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.tok__mode-btn.is-on {
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
+  font-weight: 650;
+  box-shadow: var(--e1);
+}
+
+.tok__group-desc {
+  margin: 0 0 8px;
+  color: var(--mauth-text-faint);
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .tok__row {

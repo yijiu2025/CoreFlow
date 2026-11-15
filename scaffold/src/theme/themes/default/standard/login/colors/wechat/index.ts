@@ -80,6 +80,13 @@ export default {
     '--mauth-panel-bg': '#ffffff',
     '--mauth-table-head-bg': '#f7f7f7',
     '--mauth-table-row-hover': 'rgba(0, 0, 0, 0.04)',
+    /* 工作台：只作用于后台工作台（脉搏卡 / 成功率 / 最近登录 / 常用入口），默认跟着主色走 */
+    '--mauth-dash-rate': 'var(--mauth-primary)',
+    '--mauth-dash-ring': 'var(--mauth-primary)',
+    '--mauth-dash-chip-bg': 'var(--mauth-primary-soft)',
+    '--mauth-dash-chip-ink': 'var(--mauth-primary)',
+    '--mauth-dash-today': 'var(--mauth-primary)',
+
     '--mauth-btn-bg': '#ffffff',
     '--mauth-input-bg': '#ffffff',
     '--mauth-modal-bg': '#ffffff',
