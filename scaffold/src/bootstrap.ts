@@ -17,7 +17,8 @@ import type { Plugin } from 'vue';
 import { theme } from 'skinsuite/vue';
 import App from './App.vue';
 import router from './router';
-import { restoreThemePackage } from './composables/useThemePackage';
+import { adoptUrlThemeIntents } from './composables/useThemePackage';
+import { useBackgroundStore } from './stores/background';
 import { maskClose } from './utils/maskClose';
 
 // 0. 设备 ID 全局同步（跨标签页 storage 监听 + 变更回调注册）
@@ -41,9 +42,14 @@ app.directive('mask-close', maskClose);
 // 类型桥接：库的插件声明带可选 options 泛型，与 Vue 的 Plugin 重载不完全同形
 app.use(theme as unknown as Plugin, { router });
 
-// 3. 界面风格（主题包）恢复：必须在挂载前 —— 晚了会先闪一下默认壳再换过去
-//    （URL 带了 `?th=` 时这里自动让位，见 composable 文件头）
-restoreThemePackage();
+// 2.5 背景（壁纸）：实例化即按本地偏好写到 `<html data-mauth-bg>`，早于挂载才不闪
+useBackgroundStore();
+
+// 3. 采纳 URL 里显式写的版式 / 配色（`?th=` / `?th_color=`）：必须在挂载前 ——
+//    一是晚了会先闪一下默认外观，二是"深链即偏好"要把这次意图写进本地，
+//    否则切条路由就丢、刷新回默认（见 composable 文件头）。
+//    落盘的偏好由 `createThemeState` 启动时自己读回来，这里不用再恢复一遍。
+adoptUrlThemeIntents();
 
 // 4. 路由就绪后再挂载，避免首屏闪一个空壳
 router

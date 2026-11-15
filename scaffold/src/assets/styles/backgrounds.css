@@ -1,0 +1,42 @@
+/**
+ * 背景（壁纸）—— 与配色正交的一层
+ *
+ * 由 `theme/backgrounds.ts` 的 `BACKGROUNDS` 驱动，选中时给 `<html>` 加
+ * `data-mauth-bg="<id>"`，样式在这里按属性选择器生效。
+ *
+ * 为什么不做成 token：壁纸是 `url()`，skinsuite 的 token 白名单只收单值
+ * （hex / rgb / px…），复合值会被拦下。放在这里还能顺带写 `background-attachment`
+ * 这类布局属性。
+ *
+ * 🔴 半透明面板 / 侧栏 / 顶栏不在这里写死：它们是**配色**的组件层 token
+ *    （`--mauth-panel-bg` 等）。想"壁纸能透出来"，选一套把这些值做成半透明的配色
+ *    （如 `star`），而不是改这一层 —— 否则换个配色又变成实心，壁纸白挂。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+
+/* ── 星空 ──────────────────────────────────────────────────────────── */
+[data-mauth-bg='star'] .shell,
+[data-mauth-bg='star'] .login {
+  background-image: url('../theme/starfield.jpeg');
+  background-size: cover;
+  background-position: center 28%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/*
+ * 页头必须垫一层渐变遮罩
+ *
+ * 标题直接压在壁纸上，而这张图中段正好是最亮的银河 —— 浅色字落在亮星区会糊成一片
+ * （实测对比度不足）。遮罩从上到下淡出：头部文字可读，表格区仍有壁纸透出。
+ */
+[data-mauth-bg='star'] .page {
+  background: linear-gradient(
+    180deg,
+    rgba(8, 12, 24, 0.66) 0%,
+    rgba(8, 12, 24, 0.34) 38%,
+    rgba(8, 12, 24, 0) 100%
+  );
+}

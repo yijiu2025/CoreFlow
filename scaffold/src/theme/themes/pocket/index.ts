@@ -57,5 +57,10 @@ export default {
   coverage: {
     devices: ['mobile'],
     pages: ['console', 'login']
-  }
+  },
+  /**
+   * 宿主联动项：选中本包时顺手把主色切到这套绿（内核不解释这个字段）。
+   * 写在包定义里，宿主就不用再单独维护一张"包 → 主色"的表。
+   */
+  accent: 'wechat'
 } satisfies MauthThemePackage;

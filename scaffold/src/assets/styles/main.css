@@ -6,6 +6,7 @@
  *   layout        外壳骨架（侧栏 / 顶栏 / 内容区）
  *   components    控件库（按钮 / 输入 / 表格 / 标签 / 浮层）
  *   graphs        图谱与仪器化（权限矩阵 / 关系图 / 底部浮条）
+ *   backgrounds   背景（壁纸）—— 与配色正交，由 `data-mauth-bg` 驱动
  *
  * 🔴 开发时改的是下面某个子文件，但浏览器有时拿不到更新：`@import` 进来的样式
  *    由本文件统一编译，改子文件不一定会触发样式模块热替换（表现是"模板变了、
@@ -21,3 +22,4 @@
 @import './layout.css';
 @import './components.css';
 @import './graphs.css';
+@import './backgrounds.css';

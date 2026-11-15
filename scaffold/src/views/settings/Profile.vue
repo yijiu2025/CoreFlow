@@ -13,7 +13,7 @@
  * @author yijiu2025
  * @since 2026-11-12
  */
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   kickMyDevice,
@@ -25,7 +25,6 @@ import {
 } from '@/api/session';
 import type { MyDeviceRow } from '@/api/types';
 import { useAccentStore } from '@/stores/accent';
-import { useThemePackage } from '@/composables/useThemePackage';
 import { useAuthStore } from '@/stores/auth';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { ThemeView } from 'skinsuite/vue';
@@ -40,7 +39,6 @@ const accentStore = useAccentStore();
  * **主题色**只换主色。两者互不冲突，但"微信"包会顺手把主色切到配套绿
  * （见 `useThemePackage` 文件头）。
  */
-const { packages: stylePackages, current: currentStyle, pick: pickStyle } = useThemePackage();
 const auth = useAuthStore();
 const router = useRouter();
 
@@ -357,17 +355,6 @@ onMounted(loadDevices);
 /** 当前渲染设备：本页只靠 CSS 断点适配，但要告知主题（版式目录按设备查） */
 const device = useRenderDevice();
 
-/** 主色视图：直接给 store 实例（结构上满足 `AccentView`，读到的都是响应式值） */
-const accent = accentStore;
-
-/**
- * 界面风格视图
- *
- * `reactive` 包一层：`current` 是 computed，包成响应式对象后模板里的
- * `styles.current` 才会自动解包（普通对象里的 Ref 不会，比较永远不相等）。
- */
-const styles = reactive({ packages: stylePackages, current: currentStyle, pick: pickStyle });
-
 
 /**
  * 版式上下文
@@ -385,8 +372,6 @@ const ctx: ProfileViewContext = {
   fileInput,
   uploading,
   avatarError,
-  styles,
-  accent,
   devices,
   devicesLoading,
   devicesError,

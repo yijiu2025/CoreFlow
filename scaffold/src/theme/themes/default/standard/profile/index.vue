@@ -28,8 +28,6 @@ const {
   fileInput,
   uploading,
   avatarError,
-  styles,
-  accent,
   devices,
   devicesLoading,
   devicesError,
@@ -109,67 +107,16 @@ const {
       </div>
     </section>
 
+    <!-- 外观与主题：三档（背景 / 颜色 / 版式）收进了独立页面，这里只留入口。
+         为什么不留在本页：三档各有自己的长列表（壁纸 / 主题色 / 配色 / 版式），
+         平铺在这里会把"个人资料"整页顶得非常长；而它们其实是同一件事的三个维度。 -->
     <section class="panel">
       <header class="panel__head">
-        <span class="panel__title">界面风格</span>
+        <span class="panel__title">外观与主题</span>
       </header>
-
       <div class="panel__body">
-        <p class="hint">换一种排布方式，数据与权限都不变。</p>
-
-        <div class="styles" role="radiogroup" aria-label="界面风格">
-          <button
-            v-for="item in styles.packages"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="styles.current === item.id"
-            :class="['style-card', { 'is-on': styles.current === item.id }]"
-            @click="styles.pick(item.id)"
-          >
-            <Layers :size="17" class="style-card__ico" />
-            <span>
-              <span class="style-card__name">{{ item.name }}</span>
-              <span class="style-card__desc">{{ item.description }}</span>
-            </span>
-            <Check v-if="styles.current === item.id" :size="15" class="style-card__check" />
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <header class="panel__head">
-        <span class="panel__title">主题设置</span>
-      </header>
-
-      <div class="panel__body">
-        <p class="hint">选中后会记住，明暗在右上角切换。</p>
-
-        <div class="accents" role="radiogroup" aria-label="主题色">
-          <button
-            v-for="item in accent.presets"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="accent.currentId === item.id"
-            :class="['accent-card', { 'is-on': accent.currentId === item.id }]"
-            @click="accent.pick(item.id)"
-          >
-            <span class="accent-card__swatch" :style="{ background: item.primary }">
-              <Check v-if="accent.currentId === item.id" :size="14" />
-            </span>
-            <span class="accent-card__name">{{ item.name }}</span>
-          </button>
-        </div>
-
-        <p class="status" aria-live="polite">
-          <template v-if="accent.saveState === 'saving'">保存中…</template>
-          <template v-else-if="accent.saveState === 'saved'">已保存</template>
-          <template v-else-if="accent.saveState === 'error'">
-            <span class="status--error">保存失败：{{ accent.errorMessage }}</span>
-          </template>
-        </p>
+        <p class="hint">背景、颜色、版式分三档配，选完即记住，刷新与换页都不会丢。</p>
+        <router-link class="btn btn--sm" to="/settings/theme">打开外观设置</router-link>
       </div>
     </section>
 
@@ -320,76 +267,6 @@ const {
 .accent-card__name {
   font-size: 12.5px;
   color: var(--mauth-text);
-}
-
-/* 界面风格卡：两列起，一行能放下"名字 + 一句说明" */
-.styles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-.style-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border: 1px solid var(--mauth-border);
-  border-radius: var(--mauth-radius-sm);
-  background: var(--mauth-surface);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.15s var(--ease),
-    box-shadow 0.15s var(--ease);
-}
-
-.style-card:hover {
-  border-color: var(--mauth-border-strong);
-  box-shadow: var(--e1);
-}
-
-.style-card.is-on {
-  border-color: var(--mauth-primary);
-  box-shadow: inset 0 0 0 1px var(--mauth-primary);
-}
-
-.style-card__ico {
-  flex: none;
-  margin-top: 1px;
-  color: var(--mauth-text-soft);
-}
-
-.style-card__name {
-  display: block;
-  font-size: 13px;
-  font-weight: 620;
-  color: var(--mauth-text);
-}
-
-.style-card__desc {
-  display: block;
-  margin-top: 4px;
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--mauth-text-soft);
-}
-
-.style-card__check {
-  flex: none;
-  margin-left: auto;
-  color: var(--mauth-primary);
-}
-
-.status {
-  margin: 12px 0 0;
-  min-height: 16px;
-  font-size: 11.5px;
-  color: var(--mauth-text-faint);
-}
-
-.status--error {
-  color: var(--mauth-danger);
 }
 
 /* 面板头右侧的操作键：标题/副标题在左，动作靠右 */

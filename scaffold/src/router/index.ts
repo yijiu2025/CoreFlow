@@ -14,7 +14,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { setUnauthorizedHandler } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
-import { intendedPackageId } from '@/theme/packages';
+import { useThemeStore } from '@/stores/theme';
 
 /** 公开路由（不需要登录） */
 const PUBLIC_PATHS = ['/login', '/access-denied'];
@@ -144,6 +144,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '个人设置' }
       },
       {
+        // 外观与主题：三档配置（背景 / 颜色 / 版式）。不挂权限码 —— 人人可改自己的外观
+        path: 'settings/theme',
+        name: 'settings-theme',
+        component: () => import('@/views/settings/Theme.vue'),
+        meta: { title: '外观与主题' }
+      },
+      {
         path: 'no-access',
         name: 'no-access',
         component: () => import('@/views/error/NoAccess.vue'),
@@ -210,16 +217,20 @@ router.beforeEach(async to => {
    * cell 语言。如果在珍珠玻璃下还能打开，用户会看到"一个不属于这个主题的页面"，
    * 而且它没有任何入口能到达（菜单表里没有），只能靠手输地址或旧收藏撞进来。
    *
-   * 🔴 判据必须走 `intendedPackageId()`，不能用 `themeStore.packageId`：后者由
+   * 🔴 判据必须走 `themeStore.deviceViewOf()`，不能用 `themeStore.packageId`：后者由
    *    `activeView` 解析而来，而 `activeView` 是 `<ThemeView>` **渲染时**才写进去的。
-   *    守卫跑在渲染之前，读到的是上一个页面的值 —— `?th=wechat` 深链会被误判成
+   *    守卫跑在渲染之前，读到的是上一个页面的值 —— `?th=pocket` 深链会被误判成
    *    default，把用户弹回工作台（踩过一次）。
+   *
+   *    `deviceViewOf()` 的优先级是「URL 显式意图 > **落盘的包** > 空」，
+   *    所以不带参数的深链（用户上次选过口袋版）也能判对。
    *
    * 🔴 跳转要带上 `query`：不带的话 `?th=wechat&device=mobile` 会一起丢掉 ——
    *    用户看到的是"跳回工作台并且主题变了"。
    */
   const themePkg = to.meta?.themePkg as string | undefined;
-  if (themePkg && intendedPackageId() !== themePkg) {
+  const themeStore = useThemeStore();
+  if (themePkg && themeStore.deviceViewOf() !== themePkg) {
     return { path: '/dashboard', query: to.query };
   }
 
