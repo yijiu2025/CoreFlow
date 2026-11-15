@@ -16,6 +16,7 @@ import { fetchMe, fetchRoutes, logout as apiLogout } from '@/api/session';
 import { ApiError } from '@/api/http';
 import type { CurrentUser, MenuNode } from '@/api/types';
 import { useAccentStore } from '@/stores/accent';
+import { applyServerAppearance } from '@/composables/useAppearance';
 import { matchPermission } from '@/utils/permission';
 
 /**
@@ -80,8 +81,10 @@ export const useAuthStore = defineStore('auth', () => {
       const [user, routes] = await Promise.all([fetchMe(), fetchRoutes()]);
       me.value = user;
       menus.value = routes;
-      // 登录/刷新后把服务端偏好同步到界面（主题色跟账号走，不跟浏览器走）
+      // 登录/刷新后把服务端偏好同步到界面（外观跟账号走，不跟浏览器走）
       useAccentStore().hydrate(user.preferences?.accent);
+      // 其余四维（配色 / 明暗 / 版式 / 背景）：服务端有值就覆盖本地，没有则保持本地
+      applyServerAppearance(user.preferences);
       loaded.value = true;
       return true;
     } catch (err) {

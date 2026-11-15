@@ -35,7 +35,23 @@ export interface CurrentUser {
    */
   permissions: string[];
   /** 个人偏好（界面设置）：登录后据此恢复主题色等 */
-  preferences?: { accent?: string };
+  /**
+   * 界面偏好（跟账号走，换设备也一致）
+   *
+   * 五个维度就是「外观」的全部：主题色 / 配色 / 明暗 / 版式（包）/ 背景。
+   * 服务端只做**存**，合法性仍由前端每个维度各自的读入口校验（未知 id 回落默认）。
+   */
+  preferences?: {
+    accent?: string;
+    /** 配色 id（`white` / `black` / `star` …） */
+    theme?: string;
+    /** 明暗意图 */
+    mode?: 'system' | 'light' | 'dark';
+    /** 版式（= 主题包）id */
+    view?: string;
+    /** 背景 id */
+    bg?: string;
+  };
   /** 后台内的展示身份（昵称/头像为空时后端已回落到全局值） */
   profile?: { nickname: string; avatar: string };
 }

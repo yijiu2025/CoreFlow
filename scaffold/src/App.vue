@@ -12,6 +12,7 @@ import { ThemeRoot } from 'skinsuite/vue';
 import { useThemeStore } from '@/stores/theme';
 import { useAccentStore } from '@/stores/accent';
 import { alignAccentToPackage } from '@/composables/useThemePackage';
+import { installAppearanceSync } from '@/composables/useAppearance';
 
 /** <ThemeRoot> 的 props 类型（库未导出 ThemeStoreLike，从其 props 反推最稳妥） */
 type ThemeRootProps = InstanceType<typeof ThemeRoot>['$props'];
@@ -36,6 +37,9 @@ const themeStore = useThemeStore() as unknown as ThemeRootProps['themeStore'];
  * `flush: 'post'` 保证在 DOM 更新（也就是 ThemeRoot 写入变量）之后执行，再加一个
  * `nextTick` 兜住「子组件 onMounted 里才注入」的情况。
  */
+// 外观（配色 / 明暗 / 版式 / 背景）上报账号：装一次，改动防抖后自动同步
+installAppearanceSync();
+
 const accentStore = useAccentStore();
 watch(
   () => [themeStore.mode, themeStore.packageId].join('|'),

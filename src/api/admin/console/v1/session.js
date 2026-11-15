@@ -249,7 +249,12 @@ async function registerSessionRoutes(fastify) {
       body: {
         type: 'object',
         properties: {
-          accent: { type: 'string', minLength: 1, maxLength: 32 }
+          accent: { type: 'string', minLength: 1, maxLength: 32 },
+          /* 外观另四维：配色 / 明暗 / 版式（包）/ 背景。都跟账号走，换设备也一致 */
+          theme: { type: 'string', minLength: 1, maxLength: 32 },
+          mode: { type: 'string', enum: ['system', 'light', 'dark'] },
+          view: { type: 'string', minLength: 1, maxLength: 32 },
+          bg: { type: 'string', minLength: 1, maxLength: 32 }
         },
         additionalProperties: false
       }
@@ -261,7 +266,10 @@ async function registerSessionRoutes(fastify) {
       const record = await ensureConsoleProfile(row.id);
       // 合并而不是覆盖：只传 accent 时不该把将来新增的偏好键抹掉
       const next = { ...normalizePrefs(record.preferences) };
-      if (typeof request.body?.accent === 'string') next.accent = request.body.accent;
+      // 逐键合并：只写这次传上来的，其余保持不动（自动保存一次只改一个维度）
+      for (const key of ['accent', 'theme', 'mode', 'view', 'bg']) {
+        if (typeof request.body?.[key] === 'string') next[key] = request.body[key];
+      }
       record.preferences = next;
       await record.save();
       return reply.result.success('已保存', next);

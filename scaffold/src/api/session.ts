@@ -31,12 +31,18 @@ export function changePassword(oldPassword: string, newPassword: string): Promis
 }
 
 /**
- * 保存个人偏好（主题色等）
+ * 保存个人偏好（外观五维）
  *
  * 自动保存用：合并语义，只传变化的键，不会覆盖其它偏好。
  */
-export function savePreferences(payload: { accent?: string }): Promise<{ accent?: string }> {
-  return put<{ accent?: string }>('/admin/console/v1/session/preferences', payload);
+export function savePreferences(payload: {
+  accent?: string;
+  theme?: string;
+  mode?: 'system' | 'light' | 'dark';
+  view?: string;
+  bg?: string;
+}): Promise<Record<string, string>> {
+  return put<Record<string, string>>('/admin/console/v1/session/preferences', payload);
 }
 
 /**

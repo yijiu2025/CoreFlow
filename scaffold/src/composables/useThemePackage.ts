@@ -22,10 +22,16 @@ import { computed } from 'vue';
 import { listPackages } from 'skinsuite';
 import { useAccentStore } from '@/stores/accent';
 import { useThemeStore } from '@/stores/theme';
-import { DEVICES } from '@/views/device/devices';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 
-/** 两个设备都写：否则换屏宽就掉回默认壳，看起来像"设置没保存" */
-const DEVICE_IDS = DEVICES.map(item => item.id);
+/**
+ * 只写**当前设备**
+ *
+ * 早期"两个设备都写"是为了避免"拉宽窗口就换回来"。但那样桌面与手机只能同步，
+ * 而用户明确要的是"桌面一套、手机另一套"。现在按设备落盘（`mauth:view:<设备>`），
+ * 在哪个设备上选就只改那个设备；换屏宽读到的是那台设备自己的偏好。
+ */
+const CURRENT_DEVICE = () => useRenderDevice().value;
 
 /** 一个可选的界面风格（视图层拿到的形状） */
 export interface ThemePackageOption {
@@ -54,34 +60,22 @@ export function themePackageOptions(): ThemePackageOption[] {
 }
 
 /**
- * 采纳 URL 里显式写下的版式 / 配色（"深链即偏好"）
+ * 采纳 URL 里显式写下的版式 / 配色 —— **已废弃，保留空实现**
  *
- * 为什么需要：`?th=pocket&th_color=star` 这类链接是一次性意图 —— 库只把它当**本次**
- * 覆盖，切条路由 query 就没了、刷新就回默认。用户是"点了个链接进去看看"，看完想继续用，
- * 却每次都要重新带参数。所以启动时把这些显式意图**写成本地偏好**（走 store 的写入口，
- * 顺带落盘）；之后不带参数的访问也保持这个外观。
+ * 曾经把 `?th=` / `?th_color=` 直接写成本地偏好，想法是"深链即偏好"。
+ * 实测这个策略是错的：登录页的一个 `?th=pearl` 链接会把**全站**（含主内容、另一台设备）
+ * 的版式一起改掉 —— 用户只是想看登录页某种样子，回去却发现后台换了版式。
  *
- * 🔴 只认显式参数：没有参数时什么都不做，绝不"顺手把默认值写进存储"。
+ * 现在的分工：
+ *   · **URL 参数 = 本次预览**：只影响当前这次会话的这个页面，不落盘，切路由即失效；
+ *   · **设置页 = 记住**：`setDeviceView` / `setTheme` 才写本地 + 服务端。
+ *
+ * 保留函数是为了让 `bootstrap` 的调用点不用改（它现在什么都不做）。
  *
  * @returns 无
  */
 export function adoptUrlThemeIntents(): void {
-  let params: URLSearchParams;
-  try {
-    params = new URLSearchParams(window.location.search);
-  } catch {
-    // 取不到 query 就当作没有意图
-    return;
-  }
-
-  const view = params.get('th') ?? params.get('th_mobile') ?? params.get('th_std');
-  if (view) {
-    const themeStore = useThemeStore();
-    for (const device of DEVICE_IDS) themeStore.setDeviceView(device, view);
-  }
-
-  const color = params.get('th_color') ?? params.get('th_color_mobile') ?? params.get('th_color_std');
-  if (color) useThemeStore().setTheme(color);
+  // 有意留空，见上面注释
 }
 
 /**
@@ -140,8 +134,8 @@ export function useThemePackage() {
   function pick(id: string): void {
     const option = themePackageOptions().find(item => item.id === id);
     if (!option) return;
-    // 两个设备都写 + 落盘（落盘在 store 的写入口里，不在这里手写 localStorage）
-    for (const device of DEVICE_IDS) themeStore.setDeviceView(device, option.id);
+    // 落盘在 store 的写入口里（`mauth:view:<设备>`），这里不手写 localStorage
+    themeStore.setDeviceView(CURRENT_DEVICE(), option.id);
     if (option.accent) accentStore.pick(option.accent);
     // 切回"没指定主色"的包时，把联动时临时换上的绿换回默认色 —— 否则回到珍珠玻璃
     // 会是满屏绿，而用户从未主动选过绿色

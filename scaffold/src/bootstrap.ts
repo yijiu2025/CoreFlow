@@ -45,10 +45,9 @@ app.use(theme as unknown as Plugin, { router });
 // 2.5 背景（壁纸）：实例化即按本地偏好写到 `<html data-mauth-bg>`，早于挂载才不闪
 useBackgroundStore();
 
-// 3. 采纳 URL 里显式写的版式 / 配色（`?th=` / `?th_color=`）：必须在挂载前 ——
-//    一是晚了会先闪一下默认外观，二是"深链即偏好"要把这次意图写进本地，
-//    否则切条路由就丢、刷新回默认（见 composable 文件头）。
-//    落盘的偏好由 `createThemeState` 启动时自己读回来，这里不用再恢复一遍。
+// 3. 主题偏好由 `createThemeState` 启动时自己读回（配色 / 版式各一份，版式按设备存）。
+//    URL 上的 `?th=` / `?th_color=` 只作**本次预览**（库层覆盖），不写偏好 ——
+//    否则登录页的一个链接会把全站版式一起改掉（见 `adoptUrlThemeIntents` 注释）。
 adoptUrlThemeIntents();
 
 // 4. 路由就绪后再挂载，避免首屏闪一个空壳

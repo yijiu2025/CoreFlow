@@ -15,7 +15,11 @@ const defineConsoleUserProfile = (sequelize, DataTypes) => {
       user_id: { type: DataTypes.BIGINT, primaryKey: true, allowNull: false, comment: '用户内部 ID' },
       nickname: { type: DataTypes.STRING(64), allowNull: true, comment: '后台内昵称（空 = username）' },
       avatar: { type: DataTypes.STRING(255), allowNull: true, comment: '后台内头像（空 = 全局头像）' },
-      preferences: { type: DataTypes.JSON, allowNull: true, comment: '界面偏好：{ accent? }' }
+      preferences: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: '界面偏好：{ accent?, theme?, mode?, view?, bg? }'
+      }
     },
     {
       tableName: 'console_user_profile',
