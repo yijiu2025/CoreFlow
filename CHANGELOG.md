@@ -7,6 +7,8 @@
 
 ## 未发布（Unreleased）
 
+## 2.36.0 — 2026-11-15
+
 ### 新增
 
 - **色值表按「包 × 明暗」各一份**：`scaffold/src/theme/palettes/{pearl,spotlight,wechat}-{white,black}.ts`
@@ -22,6 +24,7 @@
 
 - `.rail` 的 `--rail-bg` 与 `.tag--ok` 的 `--leaf-soft` **从未定义** ⇒ 侧栏底色一直是透明的、
   成功标签没有底色（只剩描边）。现由 `--mauth-nav-bg` / `--mauth-tag-ok-bg` 接管。
+
 
 ## 2.35.1 — 2026-11-15
 
