@@ -9,7 +9,7 @@
  * @author yijiu2025
  * @since 2026-11-15
  */
-import { Check, Layers, LogOut, MonitorSmartphone, PowerOff, Trash2 } from 'lucide-vue-next';
+import { Check, ChevronRight, Layers, LogOut, MonitorSmartphone, PowerOff, Trash2 } from 'lucide-vue-next';
 import type { ProfileViewContext } from '@/theme/views/profile';
 
 const props = defineProps<{ ctx: ProfileViewContext }>();
@@ -110,15 +110,21 @@ const {
     <!-- 外观与主题：三档（背景 / 颜色 / 版式）收进了独立页面，这里只留入口。
          为什么不留在本页：三档各有自己的长列表（壁纸 / 主题色 / 配色 / 版式），
          平铺在这里会把"个人资料"整页顶得非常长；而它们其实是同一件事的三个维度。 -->
-    <section class="panel">
-      <header class="panel__head">
-        <span class="panel__title">外观与主题</span>
-      </header>
-      <div class="panel__body">
-        <p class="hint">背景、颜色、版式分三档配，选完即记住，刷新与换页都不会丢。</p>
-        <router-link class="btn btn--sm" to="/settings/theme">打开外观设置</router-link>
-      </div>
-    </section>
+    <!--
+      入口本身做成一行（图标 + 标题 + 说明 + 箭头），整行可点。
+
+      原来是一张空面板：标题独占一条带分隔线的头，正文里一句说明 + 一个 28px 的小按钮，
+      右侧 2/3 全空 —— 一个跳转入口长得像"还没写完的表单"。一行式既省纵向空间，
+      也让"能点"这件事由整行 + 箭头 + hover 明说，不必再靠按钮文案。
+    -->
+    <router-link class="panel look-card" to="/settings/theme">
+      <span class="look-card__ico"><Layers :size="17" /></span>
+      <span class="look-card__text">
+        <b>外观与主题</b>
+        <small>背景、颜色、版式三档，选完即记住，刷新与换页都不会丢</small>
+      </span>
+      <ChevronRight :size="16" class="look-card__chev" />
+    </router-link>
 
     <!-- 登录设备：本人自助踢下线（管理员踢别人在用户管理 → 详情 → 设备） -->
     <section class="panel">
@@ -221,6 +227,81 @@ const {
   margin: 0 0 12px;
   font-size: 12px;
   color: var(--mauth-text-faint);
+}
+
+/*
+ * 外观与主题入口
+ *
+ * 复用 `.panel`（底色 / 描边 / 圆角 / 阴影与上下两张卡同源），只加"一行 + 可点"的部分：
+ * 整行是 `<a>`，所以 hover 整个卡片都在回应，而不是只有右边一个小按钮。
+ */
+.look-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+  transition:
+    border-color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease);
+}
+
+.look-card:hover {
+  border-color: var(--mauth-border-strong);
+  box-shadow: var(--e2);
+}
+
+/* 键盘聚焦：`.panel` 有 overflow: hidden，光靠浏览器默认 outline 会被裁掉一圈 */
+.look-card:focus-visible {
+  outline: 2px solid var(--mauth-focus);
+  outline-offset: -2px;
+}
+
+/* 图标底片：与设置页里各档的图标同一处理（主色淡化底 + 主色线条） */
+.look-card__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+}
+
+.look-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.look-card__text b {
+  font-size: 14px;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+
+.look-card__text small {
+  color: var(--mauth-text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* 箭头：hover 时右移 2px，指向"点进去" */
+.look-card__chev {
+  flex: none;
+  color: var(--mauth-text-faint);
+  transition:
+    color 0.16s var(--ease),
+    transform 0.16s var(--ease);
+}
+
+.look-card:hover .look-card__chev {
+  color: var(--mauth-text-soft);
+  transform: translateX(2px);
 }
 
 .accents {

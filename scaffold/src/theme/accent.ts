@@ -72,7 +72,23 @@ export interface AccentPreset {
 /**
  * 预设主题色
  *
- * `ocean` 与 `palette.ts` 的默认主色一致，保证"不改设置"时视觉零变化。
+ * === 数组顺序 = 面板里的排列顺序 ===
+ * 排布规则（改顺序前先读这段）：
+ *
+ *   ① **纯色按色相走**：蓝 → 青 → 紫 → 橙 → 玫 → 绿 → 绿，视觉上是一条渐变带；
+ *      中性色（石墨）压在这条带的末尾 —— 它没有色相，接在彩色的收尾处最不打断节奏。
+ *   ② **「跟随配色」排在纯色之后**：它不是一支颜色，是"别用我的主色，用配色自带的"，
+ *      属于另一种模式；混在彩色中间会被误读成一格怪色。
+ *   ③ **「自定义」由面板自己追加在最末**（`views/settings/Theme.vue` 的 `swatch--custom`），
+ *      不在本数组里 —— 它是入口不是预设，且要带原生取色器。
+ *
+ * 所以显示顺序是：海蓝 青碧 靛紫 琥珀 玫瑰 青绿 微信绿 石墨 跟随配色 自定义。
+ *
+ * 首位的 `ocean` 同时也是**默认主色**（与 `palette.ts` 一致）：不改设置时视觉零变化，
+ * 而它正好是色相带的起点，所以"默认排第一"与上面的规则不冲突。
+ *
+ * 🔴 别把 `auto` 挪到第一位：`Theme.vue` 用 `presets[0].primary` 当自定义取色器的初值，
+ *    而 `auto` 的 `primary` 是空串（它没有色值）。
  */
 const ACCENTS: AccentPreset[] = [
   {
@@ -163,6 +179,15 @@ const ACCENTS: AccentPreset[] = [
     tint: '#07c160'
   },
   {
+    id: 'graphite',
+    name: '石墨',
+    primary: '#3f4a52',
+    hover: '#2f3940',
+    soft: 'rgba(63, 74, 82, 0.12)',
+    focus: 'rgba(63, 74, 82, 0.75)',
+    tint: '#3f4a52'
+  },
+  {
     id: 'auto',
     name: '跟随配色',
     /*
@@ -179,15 +204,6 @@ const ACCENTS: AccentPreset[] = [
     soft: '',
     focus: '',
     tint: ''
-  },
-  {
-    id: 'graphite',
-    name: '石墨',
-    primary: '#3f4a52',
-    hover: '#2f3940',
-    soft: 'rgba(63, 74, 82, 0.12)',
-    focus: 'rgba(63, 74, 82, 0.75)',
-    tint: '#3f4a52'
   }
 ];
 
