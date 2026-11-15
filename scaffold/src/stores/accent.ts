@@ -23,6 +23,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { savePreferences } from '@/api/session';
 import { ACCENTS, applyAccent, readAccentId, setAccent } from '@/theme/accent';
+import { restoreAccentVars } from '@/theme/accent-tokens';
 import { normalizeHex } from '@/theme/color';
 import { useThemeStore } from '@/stores/theme';
 
@@ -124,22 +125,13 @@ export const useAccentStore = defineStore('accent', () => {
     }
     const themeStore = useThemeStore();
     const tokens = themeStore.themeRecordFor().tokens ?? {};
-    const root = document.documentElement;
-    const primary = tokens['--mauth-primary'];
     /*
-     * 拿不到记录就**什么都不做**（不能退回 ocean）：启动早期 `activePage` 还是空串，
-     * 此时 `themeRecordFor()` 返回空记录；退回 ocean 会把"跟随配色"变成"蓝色"，
-     * 而且之后没人再纠正它（实测：选石墨夜后主色仍是珍珠白的蓝）。
-     * 主题层已经把这套配色的 token 写好了，我们再写一遍只是"压住它"，不写反而正确。
+     * 整组回写（含派生：侧栏选中底、信息徽标）。记录未就绪时它返回 false 且不写任何东西 ——
+     * 不能退回内置默认色：启动早期 `activePage` 还是空串，此时 `themeRecordFor()` 返回
+     * 空记录；退回默认色会把"跟随配色"变成"海蓝"，而且之后没人再纠正它。
      */
-    if (!primary) return;
-    root.style.setProperty('--mauth-primary', primary);
-    root.style.setProperty('--mauth-primary-hover', tokens['--mauth-primary-hover'] ?? primary);
-    root.style.setProperty('--mauth-primary-soft', tokens['--mauth-primary-soft'] ?? primary);
-    root.style.setProperty('--mauth-tint', tokens['--mauth-tint'] ?? primary);
-    root.style.setProperty('--mauth-focus', tokens['--mauth-focus'] ?? primary);
-    root.style.setProperty('--mauth-on-primary', tokens['--mauth-on-primary'] ?? '#fff');
-    root.dataset.accent = 'auto';
+    if (!restoreAccentVars(tokens)) return;
+    document.documentElement.dataset.accent = 'auto';
   }
 
   return { presets, currentId, isCustom, saveState, errorMessage, pick, adopt, hydrate, sync };

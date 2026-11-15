@@ -4,12 +4,17 @@
  * 为什么是运行时覆盖而不是新增配色目录：
  * 骨架（侧栏/顶栏/内容区）的颜色来自 skinsuite 主题包，配色目录是「包 × 设备 × 页面 × 配色」
  * 的**构建期**矩阵（8 份壳文件共享 `palette.ts`）。用户想换的只是"主色调"这一个维度，
- * 为它复制 8×N 份壳文件既难维护，也没必要 —— 主色只有 4 个 token。
+ * 为它复制 8×N 份壳文件既难维护，也没必要 —— 主色只有一组 token。
  *
- * 所以这里走**外部覆写层**：只改 `--mauth-primary*` / `--focus` 四个变量，
+ * 所以这里走**外部覆写层**：只改主色组（`accent-tokens.ts` 是清单的**唯一来源**），
  * 其余（表面、文字、语义色）仍由主题包决定。这样：
  *   - 明暗切换、版式切换、设备切换全部照旧（它们不改主色）；
  *   - 任何用到 `var(--mauth-primary)` 的组件自动跟随，业务代码不用感知。
+ *
+ * 🔴 主色组**不止** `--mauth-primary*`：`--mauth-nav-active-bg`（侧栏选中底）与
+ *    `--mauth-tag-info-bg/ink`（信息徽标）本质也是主色，只是名字里没有 primary。
+ *    曾经漏掉这三个 ⇒ 选琥珀后按钮是琥珀、徽标与选中底还是配色表的蓝（2026-11-15 实测）。
+ *    改主色一律调 `writeAccentVars()`，别在这里逐个 `setProperty`。
  *
  * 🔴 写的是 `document.documentElement.style`（inline）。主题包也是往同一位置写 inline，
  *    靠**写入顺序**决胜 —— 所以必须在主题应用**之后**调用（见 main.ts 的启动顺序）。
@@ -21,6 +26,7 @@
  */
 
 import { deriveAccent, normalizeHex } from './color';
+import { writeAccentVars, accentVarsOf } from './accent-tokens';
 
 /** 一个可选主题色 */
 export interface AccentPreset {
@@ -273,22 +279,14 @@ function applyAccent(id: string, tone: 'light' | 'dark' = currentTone()): Accent
      * 🔴 不能 `removeProperty`：配色层的 value 也是**同一元素上的 inline 声明**
      *    （ThemeRoot 把 token 写成 `html` 的 style），删掉会把配色自己的主色一起删掉，
      *    结果是 `--mauth-primary` 空值、按钮透明（实测踩过）。
-     *    正确做法由 `stores/accent.ts` 的 `sync()` 负责：从当前配色记录里把这几项
+     *    正确做法由 `stores/accent.ts` 的 `sync()` 负责：从当前配色记录里把这一组
      *    **回写**一遍。这里只标记状态。
      */
     root.dataset.accent = preset.id;
     return preset;
   } else {
-    root.style.setProperty('--mauth-primary', preset.primary);
-    root.style.setProperty('--mauth-primary-hover', preset.hover);
-    root.style.setProperty('--mauth-primary-soft', preset.soft);
-    root.style.setProperty('--mauth-tint', preset.tint);
-    root.style.setProperty('--mauth-focus', preset.focus);
-    /*
-     * 自定义色要把"主色上的文字色"一起写：主色被提亮到 `#ffe066` 时白字只有 1.3:1，
-     * 实心按钮会看不清。预设不写这一项 —— 它们由配色表给（都是手调过的配对）。
-     */
-    if (preset.onPrimary) root.style.setProperty('--mauth-on-primary', preset.onPrimary);
+    /* 整组一起写（含派生：选中底、信息徽标），清单见 `accent-tokens.ts` */
+    writeAccentVars(accentVarsOf(preset));
   }
   /* 自定义色统一标成 `custom`：CSS 侧不该为每种 hex 单独开选择器 */
   root.dataset.accent = preset.custom ? 'custom' : preset.id;

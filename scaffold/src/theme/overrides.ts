@@ -27,6 +27,7 @@
  *    其余文件保持无后缀风格，只有"要被 Node 直接加载"的模块需要这样写。
  */
 import { TOKEN_BY_KEY } from './token-manifest.ts';
+import { accentVarOf } from './accent-tokens.ts';
 
 /** localStorage 键（与 `mauth:accent` / `mauth:density` 同一命名族） */
 export const OVERRIDES_STORAGE_KEY = 'mauth:overrides';
@@ -122,12 +123,16 @@ export function applyOverrides(overrides: TokenOverrides, baseTokens: TokenOverr
 
   /*
    * ① 先还原"上一轮覆盖过、这一轮不覆盖了"的令牌。
-   *    写回配色记录的基值而不是 removeProperty —— 配色层也是 inline，
+   *    写回基值而不是 removeProperty —— 配色层也是 inline，
    *    删掉会把它的值一起删（那一项直接变空）。
+   *
+   * 🔴 "基值"不等于"配色记录里的值"：主色组（`accent-tokens.ts`）的真值由 accent 层
+   *    后写，配色记录里那份只是构建期的默认色。照抄记录 = 用户取消自定义后，
+   *    主色从他的琥珀退回配色表的蓝（同源 bug：徽标不跟主色）。
    */
   for (const key of applied) {
     if (overrides[key]) continue;
-    const base = baseTokens[key];
+    const base = accentVarOf(key) ?? baseTokens[key];
     if (base) root.style.setProperty(key, base);
     else root.style.removeProperty(key);
   }
