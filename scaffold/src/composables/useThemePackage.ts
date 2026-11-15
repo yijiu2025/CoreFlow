@@ -28,6 +28,24 @@ import { DEVICES } from '@/views/device/devices';
 /** 包没声明 coverage.devices 时视为覆盖全部设备 */
 const ALL_DEVICES = DEVICES.map(item => item.id);
 
+/** 包没声明 coverage.pages 时视为覆盖全部页面 */
+const ALL_PAGES = ['console', 'login'];
+
+/**
+ * 「主题（版式）」选择器可用的包：在当前设备上**真的能换掉后台壳**
+ *
+ * 判据两条：设备被覆盖 + 声明了 `console` 页。缺一条就说明选了也没变化（如聚光只有
+ * 登录页版式、口袋版只有手机端），列出来只会造成"点了没反应"的困惑。
+ *
+ * @param device 当前设备 id
+ * @returns 可切换的包（顺序同注册表）
+ */
+export function shellPackageOptions(device: string): ThemePackageOption[] {
+  return themePackageOptions().filter(
+    item => item.devices.includes(device) && item.pages.includes('console')
+  );
+}
+
 /**
  * 只写**当前设备**
  *
@@ -48,6 +66,13 @@ export interface ThemePackageOption {
   /** 选中时联动的主色预设 id（包定义里的 `accent`） */
   accent?: string;
   /**
+   * 这个包覆盖哪些**页面**（包定义里的 `coverage.pages`；缺省 = 全部）
+   *
+   * 选择器只收「有后台壳版式」的包：`console` 不在其中说明它只做了登录页，
+   * 选了也不会改变后台布局 —— 列出来只会让人以为坏了。
+   */
+  pages: string[];
+  /**
    * 这个包覆盖哪些设备（包定义里的 `coverage.devices`；缺省 = 全设备）
    *
    * 选择器按它过滤：口袋版只有手机端版式，在桌面上列出来只会让人点了一下发现没反应。
@@ -66,6 +91,7 @@ export function themePackageOptions(): ThemePackageOption[] {
     name: def.meta.name,
     description: def.meta.description ?? '',
     accent: def.accent,
+    pages: def.coverage?.pages ?? ALL_PAGES,
     devices: def.coverage?.devices ?? ALL_DEVICES
   }));
 }
@@ -153,8 +179,9 @@ export function useThemePackage() {
      */
     const device = CURRENT_DEVICE();
     if (!device) return;
-    // 这个包在当前设备上没有版式（如口袋版在桌面）：直接不切换，也不写脏数据
-    if (!option.devices.includes(device)) return;
+    // 这个包在当前设备上没有**后台壳**版式（口袋版在桌面 / 聚光在任意设备）：
+    // 不切换，也不写脏数据 —— 保证"能点就一定有效果"
+    if (!option.devices.includes(device) || !option.pages.includes('console')) return;
     // 落盘在 store 的写入口里（`mauth:view:<设备>`），这里不手写 localStorage
     themeStore.setDeviceView(device, option.id);
     // 清掉 URL 上的临时版式意图：否则下一次路由 query 同步会把这次选择覆盖回去
@@ -165,6 +192,7 @@ export function useThemePackage() {
     else if (accentStore.currentId === 'wechat') accentStore.pick('ocean');
   }
 
+  // 返回**全部**包；要不要显示某个包由调用方按设备/页面过滤（见 `shellPackageOptions`）
   return { packages: themePackageOptions(), current, pick };
 }
 

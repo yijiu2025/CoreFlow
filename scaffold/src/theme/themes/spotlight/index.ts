@@ -26,8 +26,18 @@ export default {
     preview: { primary: '#236de9', accent: '#8bd94f' }
   },
   // 只覆盖「登录页」：console 壳与其它页面回退 default
+  /**
+   * 实际交付范围：**只有登录页版式**（`<设备>/login/index.vue`）。
+   *
+   * 后台壳没有自己的版式 —— 选它时 console 页会回退到 default 的壳，只换配色。
+   * 所以它**不进「主题（版式）」选择器**：一列进去，用户点了发现壳没变，还以为坏了。
+   * 要它生效有两个正当入口：`?th=spotlight` 预览，或给本包补一套 console 版式。
+   *
+   * 配色仍覆盖 console（`<设备>/console/colors/`）：那是在回退壳下取 token 用的，
+   * 与"有没有版式"是两件事。
+   */
   coverage: {
     devices: ['standard', 'mobile'],
-    pages: ['login', 'console']
+    pages: ['login']
   }
 } satisfies MauthThemePackage;

@@ -84,12 +84,16 @@ function swatchOf(id: string): Record<string, string> {
 const { packages, pick: pickPackage } = useThemePackage();
 
 /**
- * 只列出**当前设备真的有版式**的包
+ * 只列出**当前设备上真能换掉后台壳**的包
  *
- * 口袋版只有手机端版式：在桌面上列出来，用户点了一下发现毫无变化，还以为坏了。
- * 判定用包自己声明的 `coverage.devices`（缺省 = 全设备）。
+ * 两条判据（都来自包自己的 `coverage` 声明）：
+ *   · 设备被覆盖 —— 口袋版只有手机端，桌面上不显示；
+ *   · 声明了 `console` 页 —— 聚光只有登录页版式，选它也不改变后台布局。
+ * 缺一条就是"点了没反应"，那正是最容易被当成 bug 的形态。
  */
-const availPackages = computed(() => packages.filter(item => item.devices.includes(device.value)));
+const availPackages = computed(() =>
+  packages.filter(item => item.devices.includes(device.value) && item.pages.includes('console'))
+);
 </script>
 
 <template>

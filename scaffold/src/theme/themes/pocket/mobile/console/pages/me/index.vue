@@ -21,7 +21,8 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Check, ChevronRight, LogOut, Moon, UserRound } from 'lucide-vue-next';
 import AppSwitch from '@/components/ui/AppSwitch.vue';
-import { useThemePackage } from '@/composables/useThemePackage';
+import { shellPackageOptions, useThemePackage } from '@/composables/useThemePackage';
+import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 import { useThemeStore } from '@/stores/theme';
 
@@ -29,8 +30,14 @@ const auth = useAuthStore();
 const router = useRouter();
 const themeStore = useThemeStore();
 
-/** 界面风格选择器（写 store + 落本地 + 主色联动，见 composable） */
-const { packages, current, pick } = useThemePackage();
+/**
+ * 界面风格选择器（写 store + 落本地 + 主色联动，见 composable）
+ *
+ * `shellPackageOptions` 只留"在这台设备上真能换掉这个壳"的包：只有登录页版式的包
+ * （聚光）在这里点了不会变，列出来只会让人以为坏了。
+ */
+const { current, pick } = useThemePackage();
+const packages = shellPackageOptions(useRenderDevice().value);
 
 /** 深色开关（三态里的"跟随系统"在手机上不给入口：这个开关只表达当前明暗） */
 const isDark = computed(() => themeStore.isDark);
