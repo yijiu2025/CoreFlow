@@ -255,7 +255,17 @@ async function registerSessionRoutes(fastify) {
           mode: { type: 'string', enum: ['system', 'light', 'dark'] },
           view: { type: 'string', minLength: 1, maxLength: 32 },
           bg: { type: 'string', minLength: 1, maxLength: 32 },
-          density: { type: 'string', enum: ['comfy', 'regular', 'compact'] }
+          density: { type: 'string', enum: ['comfy', 'regular', 'compact'] },
+          /*
+           * 自定义模式的逐令牌覆盖。**对象**而不是扁平键：令牌有 60+ 个，
+           * 每个都开一个 schema 属性既写不完也改不动。
+           * 值只做长度与类型约束，合法性由前端按令牌清单校验（服务端不认识令牌）。
+           */
+          overrides: {
+            type: 'object',
+            maxProperties: 80,
+            additionalProperties: { type: 'string', maxLength: 64 }
+          }
         },
         additionalProperties: false
       }
@@ -270,6 +280,17 @@ async function registerSessionRoutes(fastify) {
       // 逐键合并：只写这次传上来的，其余保持不动（自动保存一次只改一个维度）
       for (const key of ['accent', 'theme', 'mode', 'view', 'bg', 'density']) {
         if (typeof request.body?.[key] === 'string') next[key] = request.body[key];
+      }
+      /*
+       * `overrides` 是**覆盖式**而不是合并式：用户清空某一项后，别的设备必须能跟着还原。
+       * 合并的话"删掉的项"永远删不掉 —— 换台电脑又回来了。
+       */
+      if (
+        request.body?.overrides &&
+        typeof request.body.overrides === 'object' &&
+        !Array.isArray(request.body.overrides)
+      ) {
+        next.overrides = { ...request.body.overrides };
       }
       record.preferences = next;
       await record.save();
