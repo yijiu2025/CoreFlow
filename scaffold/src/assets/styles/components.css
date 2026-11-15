@@ -101,7 +101,8 @@
 }
 
 .btn--sm {
-  height: 30px;
+  /* 跟着密度走：写死 30px 会让"紧凑档"里的小按钮比标准控件还高（32 vs 30 看不出，但一行里会错位） */
+  height: calc(var(--control-h) - 6px);
   padding: 0 10px;
   font-size: 12px;
 }

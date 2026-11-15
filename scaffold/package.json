@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && npm run check:sfc && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit && npm run check:sfc",
+    "typecheck": "vue-tsc --noEmit && npm run check:sfc && npm run check:tokens",
+    "check:tokens": "node scripts/check-token-manifest.mjs",
     "check:sfc": "node scripts/check-sfc-components.mjs src"
   },
   "dependencies": {

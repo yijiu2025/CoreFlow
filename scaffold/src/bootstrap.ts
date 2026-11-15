@@ -19,6 +19,7 @@ import App from './App.vue';
 import router from './router';
 import { adoptUrlThemeIntents } from './composables/useThemePackage';
 import { useBackgroundStore } from './stores/background';
+import { useDensityStore } from './stores/density';
 import { maskClose } from './utils/maskClose';
 
 // 0. 设备 ID 全局同步（跨标签页 storage 监听 + 变更回调注册）
@@ -42,8 +43,9 @@ app.directive('mask-close', maskClose);
 // 类型桥接：库的插件声明带可选 options 泛型，与 Vue 的 Plugin 重载不完全同形
 app.use(theme as unknown as Plugin, { router });
 
-// 2.5 背景（壁纸）：实例化即按本地偏好写到 `<html data-mauth-bg>`，早于挂载才不闪
+// 2.5 背景（壁纸）+ 密度：实例化即按本地偏好写到 `<html data-*>`，早于挂载才不闪
 useBackgroundStore();
+useDensityStore();
 
 // 3. 主题偏好由 `createThemeState` 启动时自己读回（配色 / 版式各一份，版式按设备存）。
 //    URL 上的 `?th=` / `?th_color=` 只作**本次预览**（库层覆盖），不写偏好 ——

@@ -25,6 +25,7 @@
 import { watch } from 'vue';
 import { savePreferences } from '@/api/session';
 import { useBackgroundStore } from '@/stores/background';
+import { useDensityStore } from '@/stores/density';
 import { useThemeStore } from '@/stores/theme';
 
 /** 一次上报的载荷（只带变化的键） */
@@ -33,6 +34,7 @@ type AppearancePayload = {
   mode?: 'system' | 'light' | 'dark';
   view?: string;
   bg?: string;
+  density?: string;
 };
 
 /** 防抖时长：与主题色那边（400ms）同一档，避免拖面板时连打 */
@@ -59,6 +61,7 @@ export function applyServerAppearance(prefs?: {
   mode?: 'system' | 'light' | 'dark';
   view?: string;
   bg?: string;
+  density?: string;
 }): void {
   if (!prefs) return;
   applying = true;
@@ -75,6 +78,7 @@ export function applyServerAppearance(prefs?: {
     if (prefs.mode) themeStore.setMode(prefs.mode);
     if (prefs.theme) themeStore.setTheme(prefs.theme);
     if (prefs.bg) useBackgroundStore().pick(prefs.bg);
+    if (prefs.density) useDensityStore().pick(prefs.density);
   } finally {
     applying = false;
   }
@@ -88,6 +92,7 @@ export function applyServerAppearance(prefs?: {
 export function installAppearanceSync(): () => void {
   const themeStore = useThemeStore();
   const backgroundStore = useBackgroundStore();
+  const densityStore = useDensityStore();
 
   /**
    * 版式取「用户显式选过的那个」而不是 `packageId`
@@ -99,7 +104,13 @@ export function installAppearanceSync(): () => void {
   const viewOf = (): string => themeStore.persistedViewOf(themeStore.activeDevice) ?? 'default';
 
   const snapshot = (): string =>
-    JSON.stringify([themeStore.themeId, themeStore.mode, viewOf(), backgroundStore.currentId]);
+    JSON.stringify([
+      themeStore.themeId,
+      themeStore.mode,
+      viewOf(),
+      backgroundStore.currentId,
+      densityStore.currentId
+    ]);
 
   /**
    * 收集当前外观并（防抖后）上报
@@ -117,7 +128,8 @@ export function installAppearanceSync(): () => void {
         theme: themeStore.themeId,
         mode: themeStore.mode,
         view: viewOf(),
-        bg: backgroundStore.currentId
+        bg: backgroundStore.currentId,
+        density: densityStore.currentId
       };
       lastSent = next;
       // 失败静默：外观是"锦上添花"，网络不好不该弹错误打断操作；

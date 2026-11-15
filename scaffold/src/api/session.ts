@@ -41,6 +41,7 @@ export function savePreferences(payload: {
   mode?: 'system' | 'light' | 'dark';
   view?: string;
   bg?: string;
+  density?: string;
 }): Promise<Record<string, string>> {
   return put<Record<string, string>>('/admin/console/v1/session/preferences', payload);
 }

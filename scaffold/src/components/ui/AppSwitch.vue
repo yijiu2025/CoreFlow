@@ -51,14 +51,14 @@ function toggle(): void {
   padding: 0;
   border: 0;
   border-radius: 999px;
-  /* 关：凹槽色；开：状态色（青柠/成功色，深浅两态都由令牌决定） */
-  background: color-mix(in srgb, var(--mauth-text) 16%, transparent);
+  /* 关：凹槽色；开：状态色 —— 两者都是**组件级 token**，可单独调而不牵动别处 */
+  background: var(--mauth-switch-track, color-mix(in srgb, var(--mauth-text) 16%, transparent));
   cursor: pointer;
   transition: background 0.2s var(--ease);
 }
 
 .switch.is-on {
-  background: var(--mauth-success);
+  background: var(--mauth-switch-on, var(--mauth-success));
 }
 
 .switch:disabled {
@@ -78,7 +78,7 @@ function toggle(): void {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--mauth-surface);
+  background: var(--mauth-switch-knob, var(--mauth-surface));
   box-shadow: 0 1px 2px color-mix(in srgb, var(--mauth-text) 22%, transparent);
   transition: transform 0.2s var(--ease-out);
 }

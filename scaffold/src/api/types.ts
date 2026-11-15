@@ -51,6 +51,8 @@ export interface CurrentUser {
     view?: string;
     /** 背景 id */
     bg?: string;
+    /** 密度档位（comfy / regular / compact） */
+    density?: string;
   };
   /** 后台内的展示身份（昵称/头像为空时后端已回落到全局值） */
   profile?: { nickname: string; avatar: string };

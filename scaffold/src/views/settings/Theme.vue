@@ -25,11 +25,13 @@ import { getThemeRecord, listColorsOf } from 'skinsuite';
 import { themePackageOptions, useThemePackage } from '@/composables/useThemePackage';
 import { useAccentStore } from '@/stores/accent';
 import { useBackgroundStore } from '@/stores/background';
+import { useDensityStore } from '@/stores/density';
 import { useThemeStore } from '@/stores/theme';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 
 const device = useRenderDevice();
 const bg = useBackgroundStore();
+const density = useDensityStore();
 const accent = useAccentStore();
 const theme = useThemeStore();
 
@@ -226,6 +228,24 @@ const availPackages = computed(() =>
       </button>
 
       <div v-if="open === 'theme'" class="lrow__body">
+        <p class="field-label">密度</p>
+        <div class="segs" role="radiogroup" aria-label="密度">
+          <button
+            v-for="item in density.presets"
+            :key="item.id"
+            type="button"
+            role="radio"
+            :aria-checked="density.currentId === item.id"
+            :class="['seg', { 'is-on': density.currentId === item.id }]"
+            :title="item.description"
+            @click="density.pick(item.id)"
+          >
+            {{ item.name }}
+          </button>
+        </div>
+        <p class="hint">密度只改行高与内距（一屏放多少内容），不动字号与配色，可与任意外观组合。</p>
+
+        <p class="field-label">版式</p>
         <div class="tiles" role="radiogroup" aria-label="版式">
           <button
             v-for="item in availPackages"
@@ -244,7 +264,7 @@ const availPackages = computed(() =>
           </button>
         </div>
         <p class="hint">
-          这里只列**当前设备有版式**的包（桌面上不显示只有手机端的口袋版）。
+          版式列表只含**当前设备有后台壳版式**的包（桌面上不显示只有手机端的口袋版）。
           版式 = 布局：只换颜色请用上面的「颜色主题」；安装 / 创建包需要在代码里加目录。
         </p>
       </div>

@@ -89,5 +89,9 @@ export default {
     '--mauth-tag-off-ink': '#fa5151',
     '--mauth-tag-info-bg': 'rgba(7, 193, 96, 0.12)',
     '--mauth-tag-info-ink': '#0b8f45',
+    /* 开关：轨道 / 开态 / 滑块分开，便于单独调（此前开态写死成成功色，不跟主题） */
+    '--mauth-switch-track': 'rgba(25, 25, 25, 0.16)',
+    '--mauth-switch-on': '#2aa650',
+    '--mauth-switch-knob': '#ffffff',
   }
 } satisfies MauthThemeColor;

@@ -7,6 +7,23 @@
 
 ## 未发布（Unreleased）
 
+### 新增
+
+- **密度档位**（宽松 / 标准 / 紧凑）：只覆盖 `--row-h` / `--cell-px` / `--control-h` 三个尺寸，
+  表格、工具栏、分页、小按钮全自动跟随；不动字号与配色，可与任意外观组合。入口在
+  「外观与主题 → 主题 → 密度」，随账号同步（`preferences.density`）。
+- **令牌清单 `theme/token-manifest.ts`**：63 个 `--mauth-*` 的中文名 / 分组 / 控件类型 /
+  作用范围 / 影响说明 —— 可视化外观编辑器的唯一数据源。
+- 关卡 `scripts/check-token-manifest.mjs`（并入 `npm run typecheck`）：清单与配色表双向比对，
+  任一侧多出/缺少 token 就失败（否则编辑器会写出不存在的变量，点了没反应）。
+
+### 修复
+
+- **开关不跟主题**：`AppSwitch` 的开态写死成功色、轨道/滑块用 `color-mix` 现算。现在三项都是
+  组件级 token（`--mauth-switch-track` / `-on` / `-knob`），可单独调。已写进全部 38 份配色表。
+- `LogPurgeDialog` 的 `#dc2626` / `#b91c1c` 改走 `--mauth-danger`，不再绕过主题。
+- `.btn--sm` 高度写死 30px，紧凑档下会与标准控件错位；改成 `calc(var(--control-h) - 6px)`。
+
 ## 2.39.0 — 2026-11-15
 
 ### 新增

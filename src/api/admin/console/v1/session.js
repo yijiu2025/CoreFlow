@@ -254,7 +254,8 @@ async function registerSessionRoutes(fastify) {
           theme: { type: 'string', minLength: 1, maxLength: 32 },
           mode: { type: 'string', enum: ['system', 'light', 'dark'] },
           view: { type: 'string', minLength: 1, maxLength: 32 },
-          bg: { type: 'string', minLength: 1, maxLength: 32 }
+          bg: { type: 'string', minLength: 1, maxLength: 32 },
+          density: { type: 'string', enum: ['comfy', 'regular', 'compact'] }
         },
         additionalProperties: false
       }
@@ -267,7 +268,7 @@ async function registerSessionRoutes(fastify) {
       // 合并而不是覆盖：只传 accent 时不该把将来新增的偏好键抹掉
       const next = { ...normalizePrefs(record.preferences) };
       // 逐键合并：只写这次传上来的，其余保持不动（自动保存一次只改一个维度）
-      for (const key of ['accent', 'theme', 'mode', 'view', 'bg']) {
+      for (const key of ['accent', 'theme', 'mode', 'view', 'bg', 'density']) {
         if (typeof request.body?.[key] === 'string') next[key] = request.body[key];
       }
       record.preferences = next;

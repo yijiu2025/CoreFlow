@@ -232,9 +232,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
   gap: 10px;
   padding: 12px 14px;
   border-radius: var(--mauth-radius-sm);
-  border: 1px solid color-mix(in srgb, #dc2626 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mauth-danger) 28%, transparent);
   background: color-mix(in srgb, #dc2626 6%, var(--mauth-surface));
-  color: #b91c1c;
+  color: color-mix(in srgb, var(--mauth-danger) 82%, #000);
 }
 
 .purge__danger-title {
