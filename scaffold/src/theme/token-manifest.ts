@@ -81,6 +81,14 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   { key: '--mauth-primary-hover', label: '主色（悬停）', group: '语义色', kind: 'color', scope: 'global' },
   { key: '--mauth-primary-soft', label: '主色（浅底）', group: '语义色', kind: 'color', scope: 'global', hint: '选中行、图标底' },
   { key: '--mauth-tint', label: '主色（大面积）', group: '语义色', kind: 'color', scope: 'global', hint: '卡面渐变、光斑用的饱和版' },
+  {
+    key: '--mauth-on-primary',
+    label: '主色上的文字',
+    group: '语义色',
+    kind: 'color',
+    scope: 'global',
+    hint: '实心按钮/徽标的字色：亮主色配深字，深主色配白字（自定义色会自动算）'
+  },
   { key: '--mauth-success', label: '成功', group: '语义色', kind: 'color', scope: 'global', hint: '开关打开、正常标签' },
   { key: '--mauth-success-soft', label: '成功（浅底）', group: '语义色', kind: 'color', scope: 'global' },
   { key: '--mauth-danger', label: '危险', group: '语义色', kind: 'color', scope: 'global', hint: '删除、停用、错误' },

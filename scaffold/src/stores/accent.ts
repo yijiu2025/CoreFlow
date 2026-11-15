@@ -19,10 +19,11 @@
  * @author yijiu2025
  * @since 2026-11-12
  */
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { savePreferences } from '@/api/session';
 import { ACCENTS, applyAccent, readAccentId, setAccent } from '@/theme/accent';
+import { normalizeHex } from '@/theme/color';
 import { useThemeStore } from '@/stores/theme';
 
 /** 自动保存状态 */
@@ -31,6 +32,12 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 export const useAccentStore = defineStore('accent', () => {
   const presets = ACCENTS;
   const currentId = ref(readAccentId());
+  /**
+   * 当前是否是**自定义色**（调色盘选的任意 hex）
+   *
+   * 预设表里没有它，所以面板要用这个值判断"要不要把色轮标成选中态"。
+   */
+  const isCustom = computed(() => normalizeHex(currentId.value) !== null);
   const saveState = ref<SaveState>('idle');
   const errorMessage = ref('');
   /** 防抖定时器（同一时刻只应有一个待发请求） */
@@ -52,7 +59,7 @@ export const useAccentStore = defineStore('accent', () => {
   /**
    * 选择主题色：立即生效 + 防抖落库
    *
-   * @param id 预设 ID
+   * @param id 预设 id 或任意 hex（hex 会现场派生 hover/soft/focus/tint）
    */
   function pick(id: string): void {
     currentId.value = setAccent(id).id;
@@ -73,7 +80,12 @@ export const useAccentStore = defineStore('accent', () => {
    * @param accent 服务端保存的主题色 ID
    */
   function hydrate(accent?: string): void {
-    const known = accent && presets.some(item => item.id === accent);
+    /*
+     * 合法值两种形态：预设 id 与自定义 hex。
+     * 只认预设会让"在 A 电脑上选的自定义色"在 B 电脑上被当成脏数据丢掉 ——
+     * 表现为换设备后主色回到默认，而服务端明明存着。
+     */
+    const known = !!accent && (presets.some(item => item.id === accent) || normalizeHex(accent) !== null);
     if (known && accent !== currentId.value) {
       currentId.value = setAccent(accent).id;
       return;
@@ -103,6 +115,10 @@ export const useAccentStore = defineStore('accent', () => {
    */
   function sync(): void {
     if (currentId.value !== 'auto') {
+      /*
+       * 每次主题变化都重新应用：自定义色要按**当前明暗**重新钳制对比度
+       * （同一支色，浅色下压深、深色下提亮），否则切到石墨夜后主色会糊在暗底上。
+       */
       applyAccent(currentId.value);
       return;
     }
@@ -122,8 +138,9 @@ export const useAccentStore = defineStore('accent', () => {
     root.style.setProperty('--mauth-primary-soft', tokens['--mauth-primary-soft'] ?? primary);
     root.style.setProperty('--mauth-tint', tokens['--mauth-tint'] ?? primary);
     root.style.setProperty('--mauth-focus', tokens['--mauth-focus'] ?? primary);
+    root.style.setProperty('--mauth-on-primary', tokens['--mauth-on-primary'] ?? '#fff');
     root.dataset.accent = 'auto';
   }
 
-  return { presets, currentId, saveState, errorMessage, pick, adopt, hydrate, sync };
+  return { presets, currentId, isCustom, saveState, errorMessage, pick, adopt, hydrate, sync };
 });

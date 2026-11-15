@@ -45,6 +45,7 @@ export default {
     '--mauth-primary-hover': '#a1c6ff',
     '--mauth-primary-soft': 'rgba(127, 176, 255, 0.18)',
     '--mauth-tint': '#7fb0ff',
+    '--mauth-on-primary': '#101418',
     '--mauth-success': '#8fd45a',
     '--mauth-success-soft': 'rgba(143, 212, 90, 0.16)',
     '--mauth-danger': '#ff7a70',

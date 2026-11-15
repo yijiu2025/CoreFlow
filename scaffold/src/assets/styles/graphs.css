@@ -336,8 +336,8 @@
   width: 20px;
   height: 20px;
   border-radius: 7px;
-  /* 勾选标跟随主色底，所以文字与 .btn--primary 一致用白（原先配青柠底用的是深绿） */
-  color: #fff;
+  /* 勾选标跟随主色底，字色与 .btn--primary 同源（原先配青柠底用的是深绿） */
+  color: var(--mauth-on-primary, #fff);
   border: 1.5px solid rgba(var(--shade), 0.2);
   background: var(--input-bg);
   transition:

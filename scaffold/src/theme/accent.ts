@@ -20,6 +20,8 @@
  * @since 2026-11-12
  */
 
+import { deriveAccent, normalizeHex } from './color';
+
 /** 一个可选主题色 */
 export interface AccentPreset {
   id: string;
@@ -51,6 +53,14 @@ export interface AccentPreset {
    * 不换色的主题一律填 `primary`（行为与之前完全一致）。
    */
   tint: string;
+  /** `true` = 用户用调色盘选的自定义色（值现场派生，不来自预设表） */
+  custom?: boolean;
+  /** 自定义色是否被自动调整过明度（对比度不足时的补救，UI 据此提示） */
+  adjusted?: boolean;
+  /** 调整后主色对当前底色的对比度（预设不填） */
+  contrast?: number;
+  /** 落在主色上的文字色（自定义色必填；预设由配色表给，此处留空） */
+  onPrimary?: string;
 }
 
 /**
@@ -150,7 +160,8 @@ const ACCENTS: AccentPreset[] = [
     id: 'auto',
     name: '跟随配色',
     /*
-     * 空色值 + `inherit`：`applyAccent` 会把 inline 变量删掉，主色回到配色自己声明的值。
+     * 空色值 + `inherit`：`applyAccent` 只标记状态，由 `stores/accent` 的 `sync()`
+     * 从**当前配色记录**回写主色组（不能删 inline 变量：配色自己的值也在同一槽位）。
      *
      * 为什么需要它：主色是**后写的 inline 变量**，优先级高于配色层。用户在「颜色主题」里
      * 换了石墨夜/珍珠白，按钮却还是上一套绿 —— 因为 accent 把 `--mauth-primary` 压住了。
@@ -185,11 +196,67 @@ const STORAGE_KEY = 'mauth:accent';
 function readAccentId(): string {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && ACCENTS.some(item => item.id === saved)) return saved;
+    if (!saved) return ACCENTS[0].id;
+    // 预设 id 与自定义 hex 都合法（`#rrggbb` 走派生，见 `resolveAccent`）
+    if (ACCENTS.some(item => item.id === saved)) return saved;
+    const hex = normalizeHex(saved);
+    if (hex) return hex;
   } catch {
     // 隐私模式下 localStorage 可能抛错：按默认色走，不阻塞启动
   }
   return ACCENTS[0].id;
+}
+
+/**
+ * 当前明暗（决定自定义色往哪个方向钳制对比度）
+ *
+ * 读 DOM 的 `dark` 类而不是 pinia：本文件是**纯函数层**（无 store 依赖），
+ * 而 `dark` 类由主题层在写 token 时同步维护，任何时刻都与实际底色一致。
+ *
+ * @returns 'light' | 'dark'
+ */
+function currentTone(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light';
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+}
+
+/**
+ * 把一个 id 解析成完整的主题色定义
+ *
+ * 两种来源：
+ *   · **预设 id**（`ocean` / `leaf` / `auto` …）—— 手调过的值，原样使用；
+ *   · **任意 hex**（`#rrggbb`）—— 现场派生 hover / soft / focus / tint，并按当前
+ *     明暗把 primary 钳制到对比度 ≥ 4.5（详见 `theme/color.ts`）。
+ *
+ * @param id 预设 id 或 hex
+ * @param tone 明暗（不给则读 DOM）
+ * @returns 主题色定义（未知 id 回落第一个预设）
+ */
+function resolveAccent(id: string, tone: 'light' | 'dark' = currentTone()): AccentPreset {
+  const preset = ACCENTS.find(item => item.id === id);
+  if (preset) return preset;
+
+  const hex = normalizeHex(id);
+  if (!hex) return ACCENTS[0];
+
+  const derived = deriveAccent(hex, tone);
+  if (!derived) return ACCENTS[0];
+
+  return {
+    id: hex,
+    /* 自定义色没有名字：面板上直接显示色值，比"自定义 1"更有信息量 */
+    name: hex.toUpperCase(),
+    primary: derived.primary,
+    hover: derived.hover,
+    soft: derived.soft,
+    focus: derived.focus,
+    tint: derived.tint,
+    onPrimary: derived.onPrimary,
+    /* 供 UI 提示"已按对比度自动压深/提亮" */
+    custom: true,
+    adjusted: derived.adjusted,
+    contrast: derived.contrast
+  };
 }
 
 /**
@@ -198,8 +265,8 @@ function readAccentId(): string {
  * @param id 预设 ID（未知值按默认处理）
  * @returns 实际生效的预设
  */
-function applyAccent(id: string): AccentPreset {
-  const preset = ACCENTS.find(item => item.id === id) ?? ACCENTS[0];
+function applyAccent(id: string, tone: 'light' | 'dark' = currentTone()): AccentPreset {
+  const preset = resolveAccent(id, tone);
   const root = document.documentElement;
   if (preset.inherit) {
     /*
@@ -217,19 +284,26 @@ function applyAccent(id: string): AccentPreset {
     root.style.setProperty('--mauth-primary-soft', preset.soft);
     root.style.setProperty('--mauth-tint', preset.tint);
     root.style.setProperty('--mauth-focus', preset.focus);
+    /*
+     * 自定义色要把"主色上的文字色"一起写：主色被提亮到 `#ffe066` 时白字只有 1.3:1，
+     * 实心按钮会看不清。预设不写这一项 —— 它们由配色表给（都是手调过的配对）。
+     */
+    if (preset.onPrimary) root.style.setProperty('--mauth-on-primary', preset.onPrimary);
   }
-  root.dataset.accent = preset.id;
+  /* 自定义色统一标成 `custom`：CSS 侧不该为每种 hex 单独开选择器 */
+  root.dataset.accent = preset.custom ? 'custom' : preset.id;
   return preset;
 }
 
 /**
  * 切换并持久化主题色
  *
- * @param id 预设 ID
+ * @param id 预设 id 或任意 hex
+ * @param tone 明暗（不给则读 DOM）
  * @returns 实际生效的预设
  */
-function setAccent(id: string): AccentPreset {
-  const preset = applyAccent(id);
+function setAccent(id: string, tone: 'light' | 'dark' = currentTone()): AccentPreset {
+  const preset = applyAccent(id, tone);
   try {
     localStorage.setItem(STORAGE_KEY, preset.id);
   } catch {
@@ -238,4 +312,4 @@ function setAccent(id: string): AccentPreset {
   return preset;
 }
 
-export { ACCENTS, STORAGE_KEY, readAccentId, applyAccent, setAccent };
+export { ACCENTS, STORAGE_KEY, readAccentId, applyAccent, setAccent, resolveAccent, currentTone };

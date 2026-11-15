@@ -24,6 +24,7 @@ import { Check, ChevronRight, Image, Moon, MonitorSmartphone, Palette, Pencil, S
 import { getThemeRecord, listColorsOf } from 'skinsuite';
 import { themePackageOptions, useThemePackage } from '@/composables/useThemePackage';
 import { useAccentStore } from '@/stores/accent';
+import { normalizeHex, deriveAccent } from '@/theme/color';
 import { useBackgroundStore } from '@/stores/background';
 import { useDensityStore } from '@/stores/density';
 import { useThemeStore } from '@/stores/theme';
@@ -34,6 +35,63 @@ const bg = useBackgroundStore();
 const density = useDensityStore();
 const accent = useAccentStore();
 const theme = useThemeStore();
+
+/**
+ * 当前明暗
+ *
+ * 用 `theme.isDark` 而不是读 DOM 类：它是响应式的，切明暗后提示里的对比度
+ * 会立刻重算（读 DOM 要等下一帧，而且 computed 不会自己跟踪 class 变化）。
+ */
+const tone = computed<'light' | 'dark'>(() => (theme.isDark ? 'dark' : 'light'));
+
+/**
+ * 自定义色的派生信息（只有当前选的是 hex 时才有）
+ *
+ * 拿它同时喂三处：色块显示的**原色**、提示里的**实际主色**与对比度。
+ * 用 `resolveAccent` 而不是自己算 —— 保证与真正写进 CSS 的值同源。
+ */
+const customInfo = computed(() => {
+  const hex = normalizeHex(accent.currentId);
+  /* 用 `deriveAccent` 而不是 `resolveAccent`：前者保证 `contrast` 一定有值（提示要用），
+     两者底层是同一条派生逻辑，读到的 primary 与真正写进 CSS 的完全一致。 */
+  return hex ? deriveAccent(hex, tone.value) : null;
+});
+
+/**
+ * 色块的填充
+ *
+ * **对角双色**：左半是用户选的原色，右半是实际生效的 primary。
+ * 只显示原色会骗人（浅黄被压成 `#917300` 后，界面上其实没有浅黄），
+ * 只显示 primary 又看不出"我选的是哪个"。两个都放上去，一眼就能对上。
+ */
+const chipStyle = computed(() => {
+  const info = customInfo.value;
+  if (!info) return { background: accent.presets[0].primary };
+  return { background: `linear-gradient(135deg, ${info.tint} 0 48%, ${info.primary} 48% 100%)` };
+});
+
+/** 取色器的 value 必须是 hex：没有自定义色时给默认色 */
+const customHex = computed(() => customInfo.value?.tint ?? accent.presets[0].primary);
+
+/** hex 输入框草稿（回车 / 失焦才提交，避免每敲一个字符就换一次主题） */
+const hexDraft = ref('');
+
+/**
+ * 原生取色器选色
+ *
+ * @param ev input 事件
+ */
+function onCustomPick(ev: Event): void {
+  const value = (ev.target as HTMLInputElement).value;
+  if (normalizeHex(value)) accent.pick(value);
+}
+
+/** 提交手输的 hex（非法值直接丢弃，输入框清空） */
+function onHexCommit(): void {
+  const hex = normalizeHex(hexDraft.value);
+  if (hex) accent.pick(hex);
+  hexDraft.value = '';
+}
 
 /** 展开的档位（同时只开一个，避免三块长列表堆在一起） */
 const open = ref<'bg' | 'color' | 'theme' | ''>('color');
@@ -187,6 +245,45 @@ const availPackages = computed(() =>
             <span class="swatch__name">{{ item.name }}</span>
           </button>
         </div>
+        <div class="custom-color">
+          <label class="custom-color__pick" :class="{ 'is-on': accent.isCustom }" title="自定义任意颜色">
+            <input
+              type="color"
+              class="custom-color__input"
+              :value="customHex"
+              aria-label="自定义主题色"
+              @input="onCustomPick"
+            />
+            <span class="custom-color__chip" :style="chipStyle"></span>
+            <span class="custom-color__name">自定义</span>
+          </label>
+          <input
+            v-model="hexDraft"
+            class="custom-color__hex"
+            type="text"
+            maxlength="7"
+            spellcheck="false"
+            placeholder="#2C8500"
+            aria-label="主题色十六进制值"
+            @change="onHexCommit"
+            @keyup.enter="onHexCommit"
+          />
+        </div>
+        <p class="hint">
+          <template v-if="customInfo && customInfo.adjusted">
+            所选色直接当文字色对比度不够，已自动调整到 <b>{{ customInfo.primary }}</b>
+            （对当前底色 {{ customInfo.contrast.toFixed(1) }}:1，正文需 ≥ 4.5）；
+            原色仍用于卡面等大面积浅底。
+          </template>
+          <template v-else-if="customInfo">
+            主色 <b>{{ customInfo.primary }}</b> · 对当前底色
+            {{ customInfo.contrast.toFixed(1) }}:1（正文需 ≥ 4.5）。
+          </template>
+          <template v-else>
+            点「自定义」可用任意色：主色会自动满足对比度要求，hover / 浅底 / 焦点环一并派生。
+          </template>
+        </p>
+
         <p class="status" aria-live="polite">
           <template v-if="accent.saveState === 'saving'">保存中…</template>
           <template v-else-if="accent.saveState === 'saved'">已保存</template>
@@ -434,6 +531,70 @@ const availPackages = computed(() =>
   background:
     repeating-linear-gradient(135deg, var(--mauth-text-faint) 0 2px, transparent 2px 6px),
     var(--mauth-surface-2);
+}
+
+.custom-color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.custom-color__pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px 0 6px;
+  border-radius: 999px;
+  background: var(--mauth-surface);
+  box-shadow: inset 0 0 0 1px var(--mauth-border);
+  cursor: pointer;
+}
+
+.custom-color__pick.is-on {
+  box-shadow: inset 0 0 0 1.5px var(--mauth-primary);
+}
+
+.custom-color__input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* 色块本身：一半原色、一半主色，能同时看出"你选的"和"实际生效的" */
+.custom-color__chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--mauth-border-strong);
+}
+
+.custom-color__name {
+  font-size: 13px;
+  color: var(--mauth-text-mid);
+}
+
+.custom-color__hex {
+  width: 108px;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-input-bg, var(--mauth-surface));
+  box-shadow: inset 0 0 0 1px var(--mauth-border);
+  color: var(--mauth-text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.custom-color__hex:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--mauth-focus, var(--mauth-primary));
 }
 
 .swatch.is-on .swatch__dot {

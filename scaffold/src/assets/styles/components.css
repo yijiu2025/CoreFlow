@@ -55,7 +55,8 @@
 .btn--primary {
   background: linear-gradient(180deg, color-mix(in srgb, #fff 14%, var(--mauth-primary)), var(--mauth-primary));
   border-color: color-mix(in srgb, var(--mauth-primary) 78%, #0b1b33);
-  color: #fff;
+  /* 主色亮的时候白字看不清（深色模式下的浅主色尤甚）：字色由配色/派生决定 */
+  color: var(--mauth-on-primary, #fff);
   font-weight: 600;
   box-shadow:
     0 1px 2px color-mix(in srgb, var(--mauth-primary) 34%, transparent),
