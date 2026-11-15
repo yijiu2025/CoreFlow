@@ -299,6 +299,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 .purge__error {
   margin: 0;
   font-size: 12px;
-  color: #b91c1c;
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
 }
 </style>

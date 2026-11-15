@@ -7,6 +7,26 @@
 
 ## 未发布（Unreleased）
 
+### 新增
+
+- **`--mauth-warning` / `--mauth-warning-soft`**（第 65–66 个令牌）：此前完全没有提醒色，
+  三个弹窗只能写死 `#f59e0b`（深色下偏刺眼且不跟配色）。已写进全部 38 份配色表
+  （浅色 `#b45309` / 深色 `#f0b453`），并登记进令牌清单 → 「信号」材质可编辑。
+
+### 修复
+
+- **语义色全面收口**：`UserDangerDialog`（13 处）、`RiskVerifyDialog`（7 处）、
+  `StepUpField`、`LogPurgeDialog`、`UserProfileDrawer`、`roles` / `users` 版式里的
+  `#ef4444` / `#10b981` / `#f59e0b` / `#b91c1c` / `#92400e` 等硬编码全部改走
+  `--mauth-danger` / `--mauth-success` / `--mauth-warning`。软底上的文字用
+  `color-mix(in srgb, 语义色 78%, var(--mauth-text))` —— 浅色下压深、深色下提亮，自适应。
+- **主色实底上的白字改用 `--mauth-on-primary`**：登录页 logo、`profile` 主色小方块、
+  口袋版主按钮 / 图标块 / 底部 TabBar 选中项、`UserProfileDrawer` 的选中 tab。
+  深色配色主色偏亮（如石墨夜 `#6ea8ff`）时，白字只有 2.4:1。
+- **口袋版开关滑块**改用 `--mauth-switch-knob`（此前写死 `#fff`，深色下也是白的）。
+- 口袋版登录页 logo 块：底色是 `--mauth-tint`（鲜绿），白字只有 1.6:1 —— 固定用深墨，
+  并在注释里写明"tint 是鲜色，不能套 on-primary（那是按 primary 深档算的）"。
+
 ## 2.42.0 — 2026-11-15
 
 ### 新增

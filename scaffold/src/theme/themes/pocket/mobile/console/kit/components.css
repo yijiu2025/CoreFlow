@@ -114,7 +114,7 @@
   border: 0;
   border-radius: var(--mauth-radius-sm);
   background: var(--mauth-primary);
-  color: #fff;
+  color: var(--mauth-on-primary, #fff);
   font-size: var(--wx-fs-sub);
 }
 

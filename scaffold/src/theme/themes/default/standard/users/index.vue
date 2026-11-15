@@ -466,7 +466,7 @@ const {
 
 /* 高危入口：常态低调，只在悬停时泛红 —— 常红会让人对红色麻木 */
 .danger-trigger:hover:not(:disabled) {
-  color: #b91c1c;
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
   border-color: color-mix(in srgb, #ef4444 45%, var(--mauth-border-strong));
 }
 

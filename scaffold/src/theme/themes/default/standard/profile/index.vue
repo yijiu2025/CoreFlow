@@ -261,7 +261,8 @@ const {
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  color: #fff;
+  /* 主色小方块上的字母：主色亮时白字会糊 */
+  color: var(--mauth-on-primary, #fff);
 }
 
 .accent-card__name {

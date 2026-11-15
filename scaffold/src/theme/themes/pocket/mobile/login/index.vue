@@ -108,7 +108,12 @@ defineProps<LoginViewProps>();
   height: 56px;
   border-radius: 14px;
   background: var(--mauth-tint);
-  color: #fff;
+  /*
+   * 🔴 这里**故意**用固定深墨而不是 `--mauth-on-primary`：
+   *    `--mauth-tint` 的语义就是"鲜色"（品牌绿 #82dd2d），两种明暗下都很亮，
+   *    白字在它上面只有 1.6:1 —— 而 on-primary 是按 primary（深档）算出来的白色，套过来正好错。
+   */
+  color: #101418;
   font-size: 26px;
   font-weight: 600;
   letter-spacing: 0.02em;

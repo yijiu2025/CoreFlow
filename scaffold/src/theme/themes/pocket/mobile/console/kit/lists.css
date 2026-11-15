@@ -468,7 +468,7 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  color: #fff;
+  color: var(--mauth-on-primary, #fff);
   background: var(--mauth-primary);
 }
 

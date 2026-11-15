@@ -50,6 +50,9 @@ export default {
     '--mauth-success-soft': 'rgba(143, 212, 90, 0.16)',
     '--mauth-danger': '#ff7a70',
     '--mauth-danger-soft': 'rgba(255, 122, 112, 0.16)',
+    /* 提醒色：此前三个弹窗写死 #f59e0b，深色下偏刺眼且不跟配色 */
+    '--mauth-warning': '#f0b453',
+    '--mauth-warning-soft': 'rgba(240, 180, 83, 0.16)',
     '--mauth-focus': 'rgba(127, 176, 255, 0.9)',
     '--mauth-border': 'rgba(150, 180, 255, 0.16)',
     '--mauth-border-strong': 'rgba(150, 180, 255, 0.26)',

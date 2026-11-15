@@ -222,7 +222,7 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 | 卡片 | 面板、表头、行悬停 | 3 |
 | 控件 | 按钮、输入框、弹窗、分段、开关 | 8 |
 | 文字 | 四档文字、描边、圆角字号 | 13 |
-| 信号 | 主色、语义色、徽标、分类色 | 28 |
+| 信号 | 主色、语义色（含提醒色）、徽标、分类色 | 30 |
 
 🔴 **材质不新增任何令牌**，只是 `token-manifest` 分组（10 个）的归并视图。CSS 一行没改，
 `check:tokens` 继续守清单与配色表的一致性。
@@ -253,10 +253,17 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 
 ## 令牌清单（可视化编辑器的地基）
 
-`theme/token-manifest.ts` 是 64 个 `--mauth-*` 的**元数据表**：中文名、分组、控件类型
+`theme/token-manifest.ts` 是 66 个 `--mauth-*` 的**元数据表**：中文名、分组、控件类型
 （color/length）、作用范围（global/component）、一句"改了会影响什么"。
 
 没有这份表，任何"逐组件改色"的界面都只能列出 64 个裸变量名 —— 那种界面没人敢用。
+
+🔴 **组件里不要再写颜色字面量**。语义色有 `--mauth-success` / `--mauth-danger` /
+`--mauth-warning`（各带 `-soft`），主色实底上的字用 `--mauth-on-primary`。
+软底上的语义色文字写 `color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text))` ——
+浅色下压深、深色下提亮，不要用固定深色（深色主题下会糊）。
+只有三类字面量是允许的：遮罩（`mask-image` 的 `#000`）、光效高光（`#fff 55% inset`）、
+内容图标色板（口袋版入口的彩色图标）。
 
 🔴 `npm run typecheck` 会跑 `scripts/check-token-manifest.mjs` **双向**比对清单 vs 配色表：
 清单有、配色表没有（编辑器写出空变量）；配色表有、清单没有（用户看不到这一项）。

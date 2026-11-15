@@ -243,8 +243,8 @@ onUnmounted(() => {
   width: 26px;
   height: 26px;
   border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, #f59e0b 16%, transparent);
-  color: #b45309;
+  background: color-mix(in srgb, var(--mauth-warning) 16%, transparent);
+  color: color-mix(in srgb, var(--mauth-warning) 78%, var(--mauth-text));
 }
 
 .risk-body {
@@ -271,7 +271,7 @@ onUnmounted(() => {
 }
 
 .risk-track.is-done {
-  border-color: color-mix(in srgb, #10b981 55%, var(--mauth-border-strong));
+  border-color: color-mix(in srgb, var(--mauth-success) 55%, var(--mauth-border-strong));
 }
 
 .risk-track__fill {
@@ -282,7 +282,7 @@ onUnmounted(() => {
 }
 
 .risk-track.is-done .risk-track__fill {
-  background: color-mix(in srgb, #10b981 16%, transparent);
+  background: color-mix(in srgb, var(--mauth-success) 16%, transparent);
 }
 
 .risk-track__hint {
@@ -299,7 +299,7 @@ onUnmounted(() => {
 }
 
 .risk-track.is-done .risk-track__hint {
-  color: #047857;
+  color: color-mix(in srgb, var(--mauth-success) 78%, var(--mauth-text));
   font-weight: 600;
 }
 
@@ -336,8 +336,10 @@ onUnmounted(() => {
 }
 
 .risk-track.is-done .risk-thumb {
-  background: #10b981;
+  background: var(--mauth-success);
   border-right-color: transparent;
+  /* 🔴 这里是 success 底、不是主色底，不能套 `--mauth-on-primary`（那是按主色算的）。
+     滑块里只有箭头图标，按图形对比标准（3:1）白字在两种明暗下都够。 */
   color: #fff;
   cursor: default;
 }
@@ -345,7 +347,7 @@ onUnmounted(() => {
 .risk-error {
   margin: 0;
   font-size: 12px;
-  color: #dc2626;
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
 }
 
 .risk-hint {

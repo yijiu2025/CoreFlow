@@ -364,12 +364,12 @@ defineExpose({ buildPayload, hint, reset, ready, reloadFactors: loadFactors });
 .stepup__warn {
   margin: 0;
   font-size: 12px;
-  color: #92400e;
+  color: color-mix(in srgb, var(--mauth-warning) 78%, var(--mauth-text));
 }
 
 .stepup__error {
   margin: 0;
   font-size: 11.5px;
-  color: #b91c1c;
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
 }
 </style>

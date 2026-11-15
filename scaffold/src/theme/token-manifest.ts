@@ -93,6 +93,22 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   { key: '--mauth-success-soft', label: '成功（浅底）', group: '语义色', kind: 'color', scope: 'global' },
   { key: '--mauth-danger', label: '危险', group: '语义色', kind: 'color', scope: 'global', hint: '删除、停用、错误' },
   { key: '--mauth-danger-soft', label: '危险（浅底）', group: '语义色', kind: 'color', scope: 'global' },
+  {
+    key: '--mauth-warning',
+    label: '提醒色',
+    group: '语义色',
+    kind: 'color',
+    scope: 'global',
+    hint: '需要注意但不致命：风险提示、待确认、即将过期'
+  },
+  {
+    key: '--mauth-warning-soft',
+    label: '提醒（浅底）',
+    group: '语义色',
+    kind: 'color',
+    scope: 'global',
+    hint: '提醒色作背景的淡版'
+  },
   { key: '--mauth-focus', label: '焦点环', group: '语义色', kind: 'color', scope: 'global', hint: '键盘聚焦时的外圈' },
 
   /* ── 描边 ───────────────────────────────────────────────── */

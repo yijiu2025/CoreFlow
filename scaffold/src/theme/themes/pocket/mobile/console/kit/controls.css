@@ -41,7 +41,7 @@
   height: 40px;
   padding: 0 18px;
   background: var(--mauth-primary);
-  color: #fff;
+  color: var(--mauth-on-primary, #fff);
   font-size: var(--wx-fs-row);
   font-weight: 500;
 }
@@ -188,7 +188,7 @@
 .wx .wxbody .toolbar .btn--primary,
 .wx .wxbody .filterbar .btn--primary {
   background: var(--mauth-primary);
-  color: #fff;
+  color: var(--mauth-on-primary, #fff);
 }
 
 /* 下拉筛选：微信是"白胶囊"，不是白方块（方块会和列表块混成一片） */
@@ -353,6 +353,7 @@
   width: 23px;
   height: 23px;
   border-radius: 50%;
-  background: #fff;
+  /* 滑块是"面上的凸起"，跟 `--mauth-switch-knob`（此前写死 #fff，深色下也没变） */
+  background: var(--mauth-switch-knob, #fff);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }

@@ -1019,7 +1019,7 @@ const {
 
 /* 删除：平时是普通图标，悬停才泛红 —— 一排按钮里不该有个常驻的红点抢视线 */
 .role-del:hover:not(:disabled) {
-  color: #b91c1c;
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
   border-color: color-mix(in srgb, #ef4444 45%, var(--mauth-border-strong));
 }
 

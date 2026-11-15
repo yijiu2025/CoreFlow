@@ -577,7 +577,8 @@ loadPulse();
    （深色底上主色是唯一还亮着的强调色，与主卡本身的语义一致） */
 .dark .pulse__link {
   background: var(--mauth-primary);
-  color: #ffffff;
+  /* 主色被自定义成浅色时白字会糊：字色跟着主色明度走（与 .btn--primary 同源） */
+  color: var(--mauth-on-primary, #fff);
   box-shadow:
     0 6px 18px color-mix(in srgb, var(--mauth-primary) 22%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.35);
@@ -591,7 +592,7 @@ loadPulse();
 }
 
 .dark .pulse__link:hover {
-  color: #ffffff;
+  color: var(--mauth-on-primary, #fff);
   box-shadow:
     0 8px 22px color-mix(in srgb, var(--mauth-primary) 32%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);

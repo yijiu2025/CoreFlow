@@ -662,8 +662,8 @@ async function copyIssued(): Promise<void> {
   width: 26px;
   height: 26px;
   border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, #ef4444 14%, transparent);
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--mauth-danger) 14%, transparent);
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
 }
 
 .danger-tabs {
@@ -704,8 +704,8 @@ async function copyIssued(): Promise<void> {
   margin: 0;
   padding: 8px 10px;
   border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, #10b981 12%, transparent);
-  color: #047857;
+  background: color-mix(in srgb, var(--mauth-success) 12%, transparent);
+  color: color-mix(in srgb, var(--mauth-success) 78%, var(--mauth-text));
   font-size: 12.5px;
   line-height: 1.6;
 }
@@ -714,8 +714,8 @@ async function copyIssued(): Promise<void> {
   margin: 0;
   padding: 8px 10px;
   border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, #ef4444 10%, transparent);
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--mauth-danger) 10%, transparent);
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
   font-size: 12.5px;
 }
 
@@ -751,22 +751,22 @@ async function copyIssued(): Promise<void> {
 }
 
 .danger-strong {
-  color: #b91c1c;
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
   font-weight: 600;
 }
 
 .danger-kick {
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--mauth-border));
+  border: 1px solid color-mix(in srgb, var(--mauth-warning) 45%, var(--mauth-border));
   border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, #f59e0b 7%, transparent);
+  background: color-mix(in srgb, var(--mauth-warning) 7%, transparent);
 }
 
 .danger-kick__title {
   margin: 0 0 4px;
   font-size: 12px;
   font-weight: 620;
-  color: #92400e;
+  color: color-mix(in srgb, var(--mauth-warning) 78%, var(--mauth-text));
 }
 
 .danger-kick__row {
@@ -796,15 +796,15 @@ async function copyIssued(): Promise<void> {
   display: grid;
   gap: 6px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, #f59e0b 45%, var(--mauth-border));
+  border: 1px solid color-mix(in srgb, var(--mauth-warning) 45%, var(--mauth-border));
   border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, #f59e0b 8%, transparent);
+  background: color-mix(in srgb, var(--mauth-warning) 8%, transparent);
 }
 
 .danger-pending__title {
   font-size: 13px;
   font-weight: 620;
-  color: #92400e;
+  color: color-mix(in srgb, var(--mauth-warning) 78%, var(--mauth-text));
 }
 
 .danger-pending__sub {
@@ -855,16 +855,16 @@ async function copyIssued(): Promise<void> {
 
 .danger-secret {
   padding: 12px;
-  border: 1px solid color-mix(in srgb, #10b981 45%, var(--mauth-border));
+  border: 1px solid color-mix(in srgb, var(--mauth-success) 45%, var(--mauth-border));
   border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, #10b981 8%, transparent);
+  background: color-mix(in srgb, var(--mauth-success) 8%, transparent);
 }
 
 .danger-secret__label {
   margin: 0 0 6px;
   font-size: 11.5px;
   font-weight: 620;
-  color: #047857;
+  color: color-mix(in srgb, var(--mauth-success) 78%, var(--mauth-text));
 }
 
 .danger-secret__row {

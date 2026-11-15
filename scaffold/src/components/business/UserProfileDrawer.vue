@@ -931,13 +931,13 @@ watch(
 .drawer--page .tabbar .tab.is-on {
   border-color: var(--mauth-primary);
   background: var(--mauth-primary);
-  color: #fff;
+  color: var(--mauth-on-primary, #fff);
   font-weight: 600;
   box-shadow: none;
 }
 
 .drawer--page .tabbar .tab.is-on:hover {
-  color: #fff;
+  color: var(--mauth-on-primary, #fff);
 }
 
 /*
@@ -1395,8 +1395,8 @@ watch(
 
 /* 「个人拒绝」会盖掉角色授予，是最需要被注意的一种 */
 .perm__effect[data-effect='deny'] {
-  background: color-mix(in srgb, #dc2626 9%, transparent);
-  color: #b91c1c;
+  background: color-mix(in srgb, var(--mauth-danger) 9%, transparent);
+  color: color-mix(in srgb, var(--mauth-danger) 78%, var(--mauth-text));
 }
 
 /* 设备列表：一台设备一张小卡，右侧是操作 —— 行内信息多但不该挤成一坨 */
