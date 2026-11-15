@@ -20,19 +20,32 @@
  * @since 2026-11-15
  */
 import { computed, ref } from 'vue';
-import { Check, ChevronRight, Image, Moon, MonitorSmartphone, Palette, Pencil, Sun } from 'lucide-vue-next';
+import {
+  Check,
+  ChevronRight,
+  Image,
+  Moon,
+  MonitorSmartphone,
+  Palette,
+  Pencil,
+  SlidersHorizontal,
+  Sun
+} from 'lucide-vue-next';
 import { getThemeRecord, listColorsOf } from 'skinsuite';
 import { themePackageOptions, useThemePackage } from '@/composables/useThemePackage';
 import { useAccentStore } from '@/stores/accent';
 import { normalizeHex, deriveAccent } from '@/theme/color';
 import { useBackgroundStore } from '@/stores/background';
 import { useDensityStore } from '@/stores/density';
+import { useOverridesStore } from '@/stores/overrides';
+import TokenEditor from '@/components/settings/TokenEditor.vue';
 import { useThemeStore } from '@/stores/theme';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 
 const device = useRenderDevice();
 const bg = useBackgroundStore();
 const density = useDensityStore();
+const overrides = useOverridesStore();
 const accent = useAccentStore();
 const theme = useThemeStore();
 
@@ -94,14 +107,17 @@ function onHexCommit(): void {
 }
 
 /** 展开的档位（同时只开一个，避免三块长列表堆在一起） */
-const open = ref<'bg' | 'color' | 'theme' | ''>('color');
+/** 四个档位的 key（加一档只改这里） */
+type LookSection = 'bg' | 'color' | 'theme' | 'custom';
+
+const open = ref<LookSection | ''>('color');
 
 /**
  * 收起 / 展开某一档
  *
  * @param key 档位
  */
-function toggle(key: 'bg' | 'color' | 'theme'): void {
+function toggle(key: LookSection): void {
   open.value = open.value === key ? '' : key;
 }
 
@@ -160,7 +176,9 @@ const availPackages = computed(() =>
   <div class="look">
     <header class="look__head">
       <h2 class="look__title">外观与主题</h2>
-      <p class="look__sub">背景、颜色、版式分三档配，互不干扰；选完即记住，刷新与换页都不会丢。</p>
+      <p class="look__sub">
+        背景、颜色、主题、自定义分四档配，互不干扰；选完即记住，刷新与换页都不会丢。
+      </p>
     </header>
 
     <!-- ① 背景 -->
@@ -364,6 +382,29 @@ const availPackages = computed(() =>
           版式列表只含**当前设备有后台壳版式**的包（桌面上不显示只有手机端的口袋版）。
           版式 = 布局：只换颜色请用上面的「颜色主题」；安装 / 创建包需要在代码里加目录。
         </p>
+      </div>
+    </section>
+
+    <!-- ④ 自定义：逐令牌覆盖 -->
+    <section class="panel">
+      <button class="lrow" type="button" :aria-expanded="open === 'custom'" @click="toggle('custom')">
+        <span class="lrow__ico"><SlidersHorizontal :size="17" /></span>
+        <span class="lrow__text">
+          <b>自定义</b>
+          <small>
+            逐个改颜色与尺寸{{ overrides.count ? `（已改 ${overrides.count} 项）` : '' }}
+          </small>
+        </span>
+        <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'custom' }" />
+      </button>
+
+      <div v-if="open === 'custom'" class="lrow__body">
+        <p class="hint">
+          按「材质」分组，只列当前配色里真实存在的令牌。改动只影响你自己的账号，
+          会压过配色与主题色（三层顺序：配色 → 主题色 → 自定义）。
+          侧栏 / 面板的<b>半透明会被保留</b> —— 改色相不会把玻璃质感弄丢。
+        </p>
+        <TokenEditor />
       </div>
     </section>
   </div>

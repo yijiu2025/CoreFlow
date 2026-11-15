@@ -157,15 +157,16 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 
 调试：`?debug=theme` 打开面板；`?th_color=black` 强制深色；`?device=mobile` 锁定手机版。
 
-## 外观：五维 + 密度
+## 外观：四档
 
-`/settings/theme`（`views/settings/Theme.vue`）把外观拆成**互相正交**的几档，各自落盘：
+`/settings/theme`（`views/settings/Theme.vue`）把外观拆成**互相正交**的四档，各自落盘：
 
 | 档 | 内容 | 存储键 |
 | --- | --- | --- |
 | 背景 | 纯色 / 星空壁纸 | `mauth:bg` |
 | 颜色 | 明暗（system/light/dark）、主题色、颜色主题（配色 id） | `mauth:mode` / `mauth:accent` / `mauth:theme` |
 | 主题 | 密度（宽松/标准/紧凑）、版式（= 主题包） | `mauth:density` / `mauth:view:<设备>` |
+| 自定义 | 逐令牌覆盖（按「材质」分组，见下） | `mauth:overrides` |
 
 **存储分两层**：本机 localStorage（立即生效）→ 登录后与服务端对齐
 （`PUT /session/preferences`，JSON 合并，服务端优先；新账号把本地值上报一次）。
@@ -208,6 +209,47 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 
 🔴 **主题色（accent）会盖住配色自带的主色**：它是后写的 inline 变量。想"换配色按钮就跟着变"，
 选「**跟随配色**」—— 它把配色记录里的主色组回写一遍（不能删变量：配色自己的值也在同一槽位）。
+
+### 自定义模式（逐令牌覆盖）
+
+`/settings/theme → 自定义`：64 个令牌全部可改，但**不是**摊成 64 个色轮。
+
+**先按「材质」收口成 5 类**（`theme/materials.ts`）——这是用户脑子的分层，不是代码模块：
+
+| 材质 | 管什么 | 令牌数 |
+| --- | --- | --- |
+| 画布 | 页面底色、侧栏、顶栏（整体亮不亮） | 12 |
+| 卡片 | 面板、表头、行悬停 | 3 |
+| 控件 | 按钮、输入框、弹窗、分段、开关 | 8 |
+| 文字 | 四档文字、描边、圆角字号 | 13 |
+| 信号 | 主色、语义色、徽标、分类色 | 28 |
+
+🔴 **材质不新增任何令牌**，只是 `token-manifest` 分组（10 个）的归并视图。CSS 一行没改，
+`check:tokens` 继续守清单与配色表的一致性。
+
+优先级三层（都写 `html` 的 inline，靠写入顺序决胜）：
+
+```
+配色（theme-runtime） → 主题色（accent） → 自定义覆盖（overrides）
+```
+
+`App.vue` 的 watch 在 `flush: 'post'` + `nextTick` 里按这个顺序依次调 —— **顺序不能颠倒**。
+
+两个必须守住的细节：
+
+1. 🔴 **改色要保留原透明度**（`withOriginalAlpha`）。侧栏 / 顶栏 / 面板是 `rgba(…, .72)`，
+   一改就变实心的话，玻璃质感与壁纸透出全没了。实测：`rgba(255,255,255,.72)` → 改绿色 →
+   `rgba(0,255,0,.72)`。
+2. 🔴 **重置不能 `removeProperty`**。配色层的 token 也是同一元素的 inline，删掉会把配色
+   自己的值一起删（那一项直接变空）。正确做法是把**当前配色记录里的基值写回去**，
+   所以换配色后"没被覆盖的项"自动变成新配色的值（实测：石墨夜下 `nav-bg` 变
+   `rgba(22,26,29,.72)`）。
+
+存储语义：`overrides` 是**覆盖式**（不是合并）—— 用户清空某项后，别的设备必须能跟着还原。
+其余六个键是合并式（自动保存一次只改一个维度）。
+
+关卡：`scripts/check-color.mjs`（并入 `npm run typecheck`）用 Node 直接加载 `.ts` 跑纯函数断言
+（29 项）：对比度钳制、`on-primary` 取色、alpha 保留、注入串拒绝、脏数据过滤。
 
 ## 令牌清单（可视化编辑器的地基）
 

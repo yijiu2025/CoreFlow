@@ -17,6 +17,7 @@ import { ApiError } from '@/api/http';
 import type { CurrentUser, MenuNode } from '@/api/types';
 import { useAccentStore } from '@/stores/accent';
 import { applyServerAppearance } from '@/composables/useAppearance';
+import { useOverridesStore } from '@/stores/overrides';
 import { matchPermission } from '@/utils/permission';
 
 /**
@@ -85,6 +86,8 @@ export const useAuthStore = defineStore('auth', () => {
       useAccentStore().hydrate(user.preferences?.accent);
       // 其余四维（配色 / 明暗 / 版式 / 背景）：服务端有值就覆盖本地，没有则保持本地
       applyServerAppearance(user.preferences);
+      // 逐令牌覆盖单独水合：它的语义是"覆盖式"，不能跟其它键一起合并
+      useOverridesStore().hydrate(user.preferences?.overrides);
       loaded.value = true;
       return true;
     } catch (err) {

@@ -277,3 +277,72 @@ export function deriveAccent(input: string, tone: 'light' | 'dark'): DerivedAcce
     contrast
   };
 }
+
+/**
+ * 把任意颜色值转成 `<input type="color">` 能吃的 `#rrggbb`
+ *
+ * 配色表里的值可能是 `rgba(...)`（半透明面板、侧栏）、`#rgb`、甚至 `color-mix(...)`。
+ * 原生取色器只认 6 位 hex，所以要归一化；认不出来的（如 `color-mix`）回退成中性灰，
+ * 让用户至少能从这里改出一个明确的值。
+ *
+ * @param value CSS 颜色值
+ * @returns `#rrggbb`
+ */
+export function toPickerHex(value: string): string {
+  const raw = String(value ?? '').trim();
+  const hex = normalizeHex(raw);
+  if (hex) return hex;
+
+  // rgb() / rgba()：取前三个数字
+  const rgb = /^rgba?\(([^)]+)\)$/i.exec(raw);
+  if (rgb) {
+    const parts = rgb[1].split(/[,/\s]+/).filter(Boolean).slice(0, 3).map(Number);
+    if (parts.length === 3 && parts.every(n => Number.isFinite(n))) {
+      return rgbToHex(parts as [number, number, number]);
+    }
+  }
+
+  // hsl()：交给浏览器解析太麻烦，这里只做最基本的换算
+  const hsl = /^hsla?\(([^)]+)\)$/i.exec(raw);
+  if (hsl) {
+    const [h, sat, l] = hsl[1].split(/[,/\s]+/).filter(Boolean).map(Number);
+    if ([h, sat, l].every(n => Number.isFinite(n))) {
+      return hslToHex(h, sat, l);
+    }
+  }
+
+  return '#888888';
+}
+
+/** HSL（h 0~360，s/l 0~100）→ hex */
+function hslToHex(h: number, s: number, l: number): string {
+  const sat = Math.max(0, Math.min(100, s)) / 100;
+  const lig = Math.max(0, Math.min(100, l)) / 100;
+  const k = (n: number): number => (n + h / 30) % 12;
+  const a = sat * Math.min(lig, 1 - lig);
+  const f = (n: number): number => lig - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return rgbToHex([f(0) * 255, f(8) * 255, f(4) * 255]);
+}
+
+/**
+ * 用新的 hex 替换原值，但**保留原来的透明度**
+ *
+ * 为什么必须保留：侧栏 / 顶栏 / 面板的底色是半透明的（`rgba(…, .72)`），
+ * 用户只想换个色相，一改就变成不透明的话，玻璃质感和壁纸透出全没了 —— 那是最典型的
+ * "改个颜色把设计改坏了"。
+ *
+ * @param original 原 CSS 值
+ * @param hex 新颜色
+ * @returns 保留 alpha 的新值
+ */
+export function withOriginalAlpha(original: string, hex: string): string {
+  const normalized = normalizeHex(hex);
+  if (!normalized) return original;
+  const m = /^rgba?\(([^)]+)\)$/i.exec(String(original ?? '').trim());
+  if (!m) return normalized;
+  const parts = m[1].split(/[,/\s]+/).filter(Boolean);
+  const alpha = parts.length >= 4 ? Number(parts[3]) : 1;
+  if (!Number.isFinite(alpha) || alpha >= 1) return normalized;
+  const [r, g, b] = hexToRgb(normalized);
+  return `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(2))})`;
+}

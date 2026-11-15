@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "jsx": "preserve",
     "resolveJsonModule": true,
     "isolatedModules": true,

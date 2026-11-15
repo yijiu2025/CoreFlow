@@ -42,6 +42,13 @@ export function savePreferences(payload: {
   view?: string;
   bg?: string;
   density?: string;
+  /**
+   * 自定义模式的逐令牌覆盖（`{ '--mauth-panel-bg': '#fff' }`）
+   *
+   * **覆盖式**语义：传 `{}` 就是"全部还原"。与服务端其它键的合并语义不同 ——
+   * 部分合并会导致"我清空了某项，换设备又回来了"。
+   */
+  overrides?: Record<string, string>;
 }): Promise<Record<string, string>> {
   return put<Record<string, string>>('/admin/console/v1/session/preferences', payload);
 }

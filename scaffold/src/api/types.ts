@@ -53,6 +53,8 @@ export interface CurrentUser {
     bg?: string;
     /** 密度档位（comfy / regular / compact） */
     density?: string;
+    /** 自定义模式的逐令牌覆盖（覆盖式：`{}` = 全部还原） */
+    overrides?: Record<string, string>;
   };
   /** 后台内的展示身份（昵称/头像为空时后端已回落到全局值） */
   profile?: { nickname: string; avatar: string };

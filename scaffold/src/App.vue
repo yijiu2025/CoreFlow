@@ -11,6 +11,7 @@ import { nextTick, watch } from 'vue';
 import { ThemeRoot } from 'skinsuite/vue';
 import { useThemeStore } from '@/stores/theme';
 import { useAccentStore } from '@/stores/accent';
+import { useOverridesStore } from '@/stores/overrides';
 import { alignAccentToPackage } from '@/composables/useThemePackage';
 import { installAppearanceSync } from '@/composables/useAppearance';
 
@@ -41,6 +42,7 @@ const themeStore = useThemeStore() as unknown as ThemeRootProps['themeStore'];
 installAppearanceSync();
 
 const accentStore = useAccentStore();
+const overridesStore = useOverridesStore();
 watch(
   /*
    * 三个源都要盯：
@@ -56,6 +58,12 @@ watch(
     // 先让"主色跟上主题包"（用户没选过色时），再写变量 —— 顺序反了就白写一次
     alignAccentToPackage();
     accentStore.sync();
+    /*
+     * 🔴 自定义覆盖必须**最后**写：三层都是 `html` 的 inline 声明，后写者胜。
+     *    顺序 = 配色（theme-runtime）→ 主色（accent）→ 覆盖（overrides）。
+     *    这里换配色/明暗/版式时也要重跑：被取消的覆盖要还原成**新**配色的基值。
+     */
+    overridesStore.apply();
   },
   { immediate: true, flush: 'post' }
 );
