@@ -7,6 +7,15 @@
 
 ## 未发布（Unreleased）
 
+### 修复
+
+- **手机端切不回珍珠玻璃**：`pick()` 里调了 `useRenderDevice()`（内部 `useRoute()`），而它是
+  事件回调、不在 setup 上下文里 —— `useRoute()` 返回 undefined，取 `.query` 直接抛 TypeError，
+  于是"点了一下什么都没发生，也没有提示"。改用 `themeStore.activeDevice`。
+- **主题列表只列当前设备有版式的包**：口袋版只有手机端，在桌面上列出来点了没反应。
+  按包自己声明的 `coverage.devices` 过滤（桌面上现在是「珍珠玻璃 / 聚光」）。
+- 显式选包后**清掉 URL 上的 `?th` 临时意图**：否则下一次路由 query 同步会把选择覆盖回去。
+
 ## 2.38.1 — 2026-11-15
 
 ### 新增

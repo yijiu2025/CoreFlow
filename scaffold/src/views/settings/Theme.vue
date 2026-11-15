@@ -82,6 +82,14 @@ function swatchOf(id: string): Record<string, string> {
 
 /** 可选版式（包自带显示名 / 描述 / 配套主色，不再有宿主清单） */
 const { packages, pick: pickPackage } = useThemePackage();
+
+/**
+ * 只列出**当前设备真的有版式**的包
+ *
+ * 口袋版只有手机端版式：在桌面上列出来，用户点了一下发现毫无变化，还以为坏了。
+ * 判定用包自己声明的 `coverage.devices`（缺省 = 全设备）。
+ */
+const availPackages = computed(() => packages.filter(item => item.devices.includes(device.value)));
 </script>
 
 <template>
@@ -213,7 +221,7 @@ const { packages, pick: pickPackage } = useThemePackage();
       <div v-if="open === 'theme'" class="lrow__body">
         <div class="tiles" role="radiogroup" aria-label="版式">
           <button
-            v-for="item in packages"
+            v-for="item in availPackages"
             :key="item.id"
             type="button"
             role="radio"
@@ -229,7 +237,8 @@ const { packages, pick: pickPackage } = useThemePackage();
           </button>
         </div>
         <p class="hint">
-          版式 = 布局。只换颜色请用上面的「颜色主题」，不要新建版式；安装 / 创建包需要在代码里加目录。
+          这里只列**当前设备有版式**的包（桌面上不显示只有手机端的口袋版）。
+          版式 = 布局：只换颜色请用上面的「颜色主题」；安装 / 创建包需要在代码里加目录。
         </p>
       </div>
     </section>

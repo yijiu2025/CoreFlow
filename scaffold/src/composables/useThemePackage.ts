@@ -19,10 +19,14 @@
  * @since 2026-11-14
  */
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { listPackages } from 'skinsuite';
 import { useAccentStore } from '@/stores/accent';
 import { useThemeStore } from '@/stores/theme';
-import { useRenderDevice } from '@/views/device/useRenderDevice';
+import { DEVICES } from '@/views/device/devices';
+
+/** 包没声明 coverage.devices 时视为覆盖全部设备 */
+const ALL_DEVICES = DEVICES.map(item => item.id);
 
 /**
  * 只写**当前设备**
@@ -31,7 +35,7 @@ import { useRenderDevice } from '@/views/device/useRenderDevice';
  * 而用户明确要的是"桌面一套、手机另一套"。现在按设备落盘（`mauth:view:<设备>`），
  * 在哪个设备上选就只改那个设备；换屏宽读到的是那台设备自己的偏好。
  */
-const CURRENT_DEVICE = () => useRenderDevice().value;
+const CURRENT_DEVICE = (): string => useThemeStore().activeDevice;
 
 /** 一个可选的界面风格（视图层拿到的形状） */
 export interface ThemePackageOption {
@@ -43,6 +47,12 @@ export interface ThemePackageOption {
   description: string;
   /** 选中时联动的主色预设 id（包定义里的 `accent`） */
   accent?: string;
+  /**
+   * 这个包覆盖哪些设备（包定义里的 `coverage.devices`；缺省 = 全设备）
+   *
+   * 选择器按它过滤：口袋版只有手机端版式，在桌面上列出来只会让人点了一下发现没反应。
+   */
+  devices: string[];
 }
 
 /**
@@ -55,7 +65,8 @@ export function themePackageOptions(): ThemePackageOption[] {
     id: def.meta.id,
     name: def.meta.name,
     description: def.meta.description ?? '',
-    accent: def.accent
+    accent: def.accent,
+    devices: def.coverage?.devices ?? ALL_DEVICES
   }));
 }
 
@@ -134,8 +145,20 @@ export function useThemePackage() {
   function pick(id: string): void {
     const option = themePackageOptions().find(item => item.id === id);
     if (!option) return;
+    /*
+     * 🔴 当前设备只能从 store 取（`activeDevice` 由壳渲染时写入）。
+     *    不能调 `useRenderDevice()`：它内部用 `useRoute()`，而 `pick()` 是**事件回调**、
+     *    不在 setup 上下文里 —— `useRoute()` 会返回 undefined，取 `.query` 直接抛
+     *    TypeError，表现为"点了一下什么都没发生，也没有报错提示"（2026-11-15 用户反馈）。
+     */
+    const device = CURRENT_DEVICE();
+    if (!device) return;
+    // 这个包在当前设备上没有版式（如口袋版在桌面）：直接不切换，也不写脏数据
+    if (!option.devices.includes(device)) return;
     // 落盘在 store 的写入口里（`mauth:view:<设备>`），这里不手写 localStorage
-    themeStore.setDeviceView(CURRENT_DEVICE(), option.id);
+    themeStore.setDeviceView(device, option.id);
+    // 清掉 URL 上的临时版式意图：否则下一次路由 query 同步会把这次选择覆盖回去
+    clearUrlViewIntent();
     if (option.accent) accentStore.pick(option.accent);
     // 切回"没指定主色"的包时，把联动时临时换上的绿换回默认色 —— 否则回到珍珠玻璃
     // 会是满屏绿，而用户从未主动选过绿色
@@ -143,4 +166,29 @@ export function useThemePackage() {
   }
 
   return { packages: themePackageOptions(), current, pick };
+}
+
+/**
+ * 清掉 URL 上的版式临时意图（`?th` / `?th_std` / `?th_mobile`）
+ *
+ * 用户在设置页显式选了包，就不该再被地址栏里那个"看一眼"的参数往回拽。
+ * 只改 query、不动其它参数；`replace` 不留历史记录。
+ *
+ * @returns 无
+ */
+function clearUrlViewIntent(): void {
+  try {
+    const router = useRouter();
+    const query = { ...router.currentRoute.value.query };
+    let touched = false;
+    for (const key of ['th', 'th_std', 'th_mobile']) {
+      if (key in query) {
+        delete query[key];
+        touched = true;
+      }
+    }
+    if (touched) void router.replace({ query });
+  } catch {
+    // 没有 router（单测 / 非路由环境）：本来就是可选行为，忽略
+  }
 }
