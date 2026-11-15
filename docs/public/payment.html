@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>感谢支持 · CoreFlow</title>
+    <meta name="description" content="CoreFlow 赞助页：微信 / 支付宝扫码。项目以 MIT 协议开源，赞助完全自愿。" />
+    <!-- 个人收款页没必要被搜索引擎收录 -->
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="logo.svg" type="image/svg+xml" />
+    <style>
+      /*
+       * 独立静态页（放在 docs/public 下，构建时原样拷进站点根）。
+       *
+       * 不复用 VitePress 的样式是有意的：这一页只有两种内容（两枚二维码 + 一段说明），
+       * 引主题反而要跟着主题升级走。所有路径都用相对路径，本地双击打开也能正常看。
+       *
+       * 🔴 二维码图片放在 docs/public/donate/ 下（真实素材在 oauth21/.github/assets/）：
+       *      wechat.png            微信收款码
+       *      alipay.png            支付宝收款码
+       *      official-account.jpg  公众号二维码
+       *    没放图时会显示一块虚线占位（见 .qr__frame.is-empty），不会出现裂图。
+       */
+      :root {
+        color-scheme: light;
+        --bg: #f7f7fb;
+        --card: #ffffff;
+        --ink: #16181d;
+        --ink-soft: #5b616e;
+        --ink-faint: #8a919e;
+        --line: rgba(22, 24, 29, 0.09);
+        --brand: #6366f1;
+        --brand-soft: rgba(99, 102, 241, 0.1);
+        --radius: 16px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          color-scheme: dark;
+          --bg: #0f1116;
+          --card: #171a21;
+          --ink: #e8eaf0;
+          --ink-soft: #a2a9b8;
+          --ink-faint: #7b8394;
+          --line: rgba(255, 255, 255, 0.1);
+          --brand: #8b8ef8;
+          --brand-soft: rgba(139, 142, 248, 0.14);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 28px 20px 56px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'Microsoft YaHei',
+          sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .wrap {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+
+      /* ── 顶栏：品牌 + 回文档 ── */
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-bottom: 22px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        text-decoration: none;
+      }
+
+      .brand img {
+        width: 20px;
+        height: 20px;
+      }
+
+      .back {
+        margin-left: auto;
+        color: var(--ink-soft);
+        font-size: 13px;
+        text-decoration: none;
+      }
+
+      .back:hover {
+        color: var(--brand);
+      }
+
+      /* ── 正文 ── */
+      h1 {
+        margin: 8px 0 10px;
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+      }
+
+      .lead {
+        margin: 0 0 34px;
+        max-width: 38em;
+        color: var(--ink-soft);
+        font-size: 14.5px;
+      }
+
+      h2 {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 14px;
+        color: var(--ink-faint);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h2::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--line);
+      }
+
+      /* ── 二维码卡 ── */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .qr {
+        margin: 0;
+        padding: 18px 18px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--card);
+        text-align: center;
+        transition:
+          border-color 0.16s ease,
+          transform 0.16s ease;
+      }
+
+      .qr:hover {
+        border-color: color-mix(in srgb, var(--brand) 45%, var(--line));
+      }
+
+      .qr__frame {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+        /* 白底 + 一圈留白：二维码规范要求四周有"静区"，贴边会明显掉识别率 */
+        padding: 16px;
+        border-radius: 10px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .qr__frame img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      /* 图没放 / 加载失败：给一块说明，而不是一个裂图图标 */
+      .qr__frame.is-empty {
+        padding: 14px;
+        border: 1px dashed var(--line);
+        background: transparent;
+        color: var(--ink-faint);
+        font-size: 12px;
+        line-height: 1.6;
+        text-align: center;
+      }
+
+      .qr__frame.is-empty img {
+        display: none;
+      }
+
+      /* 缺图时显示放图路径：只在没放图的时候出现，有图时页面上不残留任何多余文字 */
+      #qr-wechat.is-empty::after {
+        content: '收款码待补充：docs/public/donate/wechat.png';
+      }
+
+      #qr-alipay.is-empty::after {
+        content: '收款码待补充：docs/public/donate/alipay.png';
+      }
+
+      .qr figcaption {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        margin-top: 12px;
+      }
+
+      .qr figcaption b {
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+
+      .qr figcaption span {
+        color: var(--ink-faint);
+        font-size: 12px;
+      }
+
+      /* ── 关注公众号：横向一条，二维码在左 ── */
+      .follow {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-top: 14px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--card);
+      }
+
+      .follow__qr {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 108px;
+        height: 108px;
+        padding: 5px;
+        border-radius: 10px;
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .follow__qr img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      #qr-official.is-empty {
+        padding: 8px;
+        border: 1px dashed var(--line);
+        background: transparent;
+        color: var(--ink-faint);
+        font-size: 11px;
+        line-height: 1.5;
+        text-align: center;
+      }
+
+      #qr-official.is-empty img {
+        display: none;
+      }
+
+      #qr-official.is-empty::after {
+        content: '待补充：docs/public/donate/official-account.jpg';
+      }
+
+      .follow__text {
+        min-width: 0;
+      }
+
+      .follow__text b {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 13.5px;
+        font-weight: 600;
+      }
+
+      .follow__text p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 12.5px;
+        line-height: 1.65;
+      }
+
+      /* ── 底部说明 ── */
+      .note {
+        margin: 26px 0 0;
+        padding: 12px 14px;
+        border-left: 2px solid var(--brand);
+        border-radius: 0 8px 8px 0;
+        background: var(--brand-soft);
+        color: var(--ink-soft);
+        font-size: 12.5px;
+        line-height: 1.7;
+      }
+
+      footer {
+        margin-top: 40px;
+        color: var(--ink-faint);
+        font-size: 12px;
+        text-align: center;
+      }
+
+      @media (max-width: 520px) {
+        body {
+          padding: 20px 14px 40px;
+        }
+
+        h1 {
+          font-size: 25px;
+        }
+
+        .grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <a class="brand" href="./">
+          <img src="logo.svg" alt="" />
+          CoreFlow
+        </a>
+        <a class="back" href="./">返回文档 →</a>
+      </header>
+
+      <main>
+        <h1>感谢支持</h1>
+        <p class="lead">
+          CoreFlow 从第一行代码起就是 MIT 开源，没有「付费版」，也没有藏在后面的企业功能。
+          如果它替我省下你的一些时间，可以扫下面任意一个码 —— 这笔钱会变成继续维护它的工时。
+        </p>
+
+        <h2>投喂方式 / Donate</h2>
+        <div class="grid">
+          <figure class="qr">
+            <div class="qr__frame" id="qr-wechat">
+              <img
+                src="donate/wechat.png"
+                alt="微信收款码"
+                loading="lazy"
+                onerror="this.parentElement.classList.add('is-empty')"
+              />
+            </div>
+            <figcaption>
+              <b>微信</b>
+              <span>扫一扫</span>
+            </figcaption>
+          </figure>
+
+          <figure class="qr">
+            <div class="qr__frame" id="qr-alipay">
+              <img
+                src="donate/alipay.png"
+                alt="支付宝收款码"
+                loading="lazy"
+                onerror="this.parentElement.classList.add('is-empty')"
+              />
+            </div>
+            <figcaption>
+              <b>支付宝</b>
+              <span>扫一扫</span>
+            </figcaption>
+          </figure>
+        </div>
+
+        <!-- 关注公众号：README 里也是"赞助之外，关注就是最直接的支持"这一层 -->
+        <div class="follow">
+          <div class="follow__qr" id="qr-official">
+            <img
+              src="donate/official-account.jpg"
+              alt="公众号二维码"
+              loading="lazy"
+              onerror="this.parentElement.classList.add('is-empty')"
+            />
+          </div>
+          <div class="follow__text">
+            <b>关注公众号「柒染靓月」</b>
+            <p>
+              CoreFlow、skinsuite、OAuth Web 等项目的更新动态与技术分享都会第一时间发在这里 ——
+              扫码关注，新版本与新特性不再错过。赞助之外，关注也是最直接的支持。
+            </p>
+          </div>
+        </div>
+
+        <p class="note">
+          赞助完全自愿：不赞助也能用全部功能，项目也不会因此多出收费项或功能限制。
+          这笔钱只用于维护、文档与回归测试的机器开销。若你更想出力，提 PR / 报 issue 同样珍贵。
+        </p>
+      </main>
+
+      <footer>© 2026 CoreFlow · 基于 MIT 协议开源</footer>
+    </div>
+  </body>
+</html>

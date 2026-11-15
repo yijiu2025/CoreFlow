@@ -1,0 +1,14 @@
+# 仓库侧栏的「赞助本项目」卡片
+#
+# 触发条件：默认分支上存在本文件（.github/FUNDING.yml），且仓库 Features 里的
+# Sponsorships 未被关掉。配置了 `custom` 就能显示，**不需要**先开通 GitHub Sponsors
+# （开通 Sponsors 需要 Stripe / 银行账户，那是另一回事）。
+#
+# 🔴 GitHub 只接受链接、不支持内嵌图片：卡片里显示的就是 URL 本身（一行文字）。
+#    二维码放不下，所以这里指向文档站的赞助页，由那个页面承载微信 / 支付宝两枚码。
+#    页面源码：docs/public/payment.html（构建后即 https://yijiu2025.github.io/CoreFlow/payment.html）
+#
+# 可选键与上限：github / patreon / open_collective / ko_fi / tidelift / community_bridge /
+# liberapay / issuehunt / polar / buy_me_a_coffee / thanks_dev 各一个，custom 最多 4 个。
+# 含 `:` 的 URL 必须加引号，否则 YAML 会把 `https:` 当成映射键。
+custom: ['https://yijiu2025.github.io/CoreFlow/payment.html']
