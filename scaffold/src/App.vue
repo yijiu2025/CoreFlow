@@ -12,7 +12,7 @@ import { ThemeRoot } from 'skinsuite/vue';
 import { useThemeStore } from '@/stores/theme';
 import { useAccentStore } from '@/stores/accent';
 import { useOverridesStore } from '@/stores/overrides';
-import { alignAccentToPackage } from '@/composables/useThemePackage';
+import { alignAccentToPackage, alignAccentToTheme } from '@/composables/useThemePackage';
 import { installAppearanceSync } from '@/composables/useAppearance';
 import ToastHost from '@/components/ui/ToastHost.vue';
 import CommandPalette from '@/components/layout/CommandPalette.vue';
@@ -77,7 +77,8 @@ watch(
   () => [themeStore.mode, themeStore.packageId, themeStore.themeId, themeStore.activePage].join('|'),
   async () => {
     await nextTick();
-    // 先让"主色跟上主题包"（用户没选过色时），再写变量 —— 顺序反了就白写一次
+    // 顺序：先跟随**配色**、再让**包**覆盖（包的配套色优先级更高），最后才写变量
+    alignAccentToTheme();
     alignAccentToPackage();
     accentStore.sync();
     /*

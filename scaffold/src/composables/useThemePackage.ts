@@ -133,6 +133,31 @@ function hasExplicitAccent(): boolean {
 }
 
 /**
+ * 让主色跟上**当前配色**（用户没表达过主色偏好时才动）
+ *
+ * === 为什么需要这一步 ===
+ * 主色是后写的 inline 变量，优先级高于配色层。而 `readAccentId()` 在"没设置过"时
+ * 返回的是**首个预设（海蓝 #236de9）**，于是出现：选了「微信绿」，按钮/链接/选中态
+ * 仍是海蓝 —— 配色只改了底与字，主色被 accent 层压住（真实事故：2026-11-15 加
+ * 「岛屿米」时发现，微信绿与星空其实一直是蓝按钮）。
+ *
+ * 现在的规则：**没表达过偏好 ⇒ 主色跟随配色**（`auto` 档，从配色记录整组回写）。
+ * 珍珠白的主色组与「海蓝」预设逐值相同，所以默认外观零变化；而一旦用户点过任何色卡，
+ * `mauth:accent` 就有值，这里不再插手。
+ *
+ * 🔴 必须排在 `alignAccentToPackage()` **之前**：主题包的配套主色（口袋版 = 微信绿）
+ *    优先级更高，先跟随配色再让包覆盖，否则包联动会被这步冲掉。
+ *
+ * @returns 无
+ */
+export function alignAccentToTheme(): void {
+  const accentStore = useAccentStore();
+  if (hasExplicitAccent()) return;
+  if (accentStore.currentId === 'auto') return;
+  accentStore.adopt('auto');
+}
+
+/**
  * 让主色跟上当前主题包（用户没表达过主色偏好时才动）
  *
  * 为什么不在 `pick()` 里做：`?th=pocket` 深链、或上次会话留在口袋版时不会经过

@@ -79,11 +79,15 @@ export function buildSsoLoginUrl(nonce: string = Math.random().toString()): stri
   //
   // 后半句是两个前端"联调"的关键：宿主切到深色（`?th_color=black` 或用户偏好），
   // iframe 里如果还是白底，就是一个深色页面中间嵌一块白卡 —— 再好看也像没做完。
-  // 宿主的生效配色 id 由主题运行期写在 `data-mauth-theme` 上，白/黑两侧同名，
-  // 所以这里可以原样透传；其它值（自定义配色）不猜，交给 oauth21 的兜底链。
+  // 宿主的生效配色 id 由主题运行期写在 `data-mauth-theme` 上，白/黑两侧同名，所以原样透传。
+  //
+  // 🔴 以前只透传 white / black（怕"宿主有、SSO 没有"的 id 会白屏）。实测两侧解析链都是
+  //    "查不到 → 回落自己那套默认配色"，未知 id 不会报错也不会白屏，所以放宽成**任何 id**：
+  //    否则宿主要是切到 island（奶油米），登录卡里仍是一块白蓝表单，看着像没做完。
+  //    真对不上的 id（例如只有宿主侧存在的 wechat / star）就按 oauth21 的默认配色渲染，
+  //    与"完全不透传"的结果一致，没有新的失败模式。
   const hostColor = document.documentElement.getAttribute('data-mauth-theme');
-  const color =
-    import.meta.env.VITE_SSO_THEME_COLOR || (hostColor === 'white' || hostColor === 'black' ? hostColor : '');
+  const color = import.meta.env.VITE_SSO_THEME_COLOR || hostColor || '';
   if (view) params.set('th', view);
   if (color) params.set('th_color', color);
 
