@@ -7,6 +7,21 @@
 
 ## 未发布（Unreleased）
 
+### 新增
+
+- **外观三档**（`/settings/theme`）：背景（纯色 / 星空壁纸）、颜色（明暗 / 主题色 / 颜色主题）、
+  主题（版式包）三个正交维度，各自独立。个人设置页只留一个入口。
+- **背景升级为独立一维**：`theme/backgrounds.ts` + `assets/styles/backgrounds.css` +
+  `<html data-mauth-bg>`，壁纸不再绑死在某个配色里，任意配色都能配。
+- 主题包清单改由 skinsuite `listPackages()` 从各包 `index.ts` 读取（显示名 / 描述 /
+  配套主色 `accent` 都在包身上），删除宿主的 `theme/packages.ts`。
+
+### 修复
+
+- **主题选择不再依赖 URL**：此前 `?th=` / `?th_color=` 只活一次 —— 切条路由 query 就没了、
+  刷新回默认，用户以为"选了不生效"。现在配色与版式都落盘（`mauth:theme` / `mauth:view`），
+  带参首次进入还会被**采纳成本地偏好**；实测「带参进入 → 点导航 → 无参刷新」三步不回退。
+
 ## 2.37.0 — 2026-11-15
 
 ### 变更（主题边界：包 = 版式，配色 = 搭配）
