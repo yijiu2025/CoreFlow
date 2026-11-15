@@ -176,7 +176,10 @@ const availPackages = computed(() =>
             :title="item.name"
             @click="accent.pick(item.id)"
           >
-            <span class="swatch__dot" :style="{ background: item.primary }">
+            <span
+              :class="['swatch__dot', { 'swatch__dot--auto': item.inherit }]"
+              :style="item.inherit ? undefined : { background: item.primary }"
+            >
               <Check v-if="accent.currentId === item.id" :size="12" />
             </span>
             <span class="swatch__name">{{ item.name }}</span>
@@ -404,6 +407,13 @@ const availPackages = computed(() =>
   border-radius: 999px;
   color: #fff;
   box-shadow: inset 0 0 0 1px var(--mauth-border-strong);
+}
+
+/* 「跟随配色」没有自己的色值：画一条"取自配色"的斜纹，而不是一个空圆 */
+.swatch__dot--auto {
+  background:
+    repeating-linear-gradient(135deg, var(--mauth-text-faint) 0 2px, transparent 2px 6px),
+    var(--mauth-surface-2);
 }
 
 .swatch.is-on .swatch__dot {

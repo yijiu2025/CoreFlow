@@ -23,6 +23,7 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 import { savePreferences } from '@/api/session';
 import { ACCENTS, applyAccent, readAccentId, setAccent } from '@/theme/accent';
+import { useThemeStore } from '@/stores/theme';
 
 /** 自动保存状态 */
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error';
@@ -94,9 +95,34 @@ export const useAccentStore = defineStore('accent', () => {
     currentId.value = applyAccent(id).id;
   }
 
-  /** 主题变化后重写变量（明暗/主题包切换会重写 token） */
+  /**
+   * 主题变化后重写变量（明暗/主题包切换会重写 token）
+   *
+   * 「跟随配色」时不能用 `applyAccent`（它会删/写固定值），而要把**当前配色记录**里的
+   * 主色组回写一遍 —— 主题层刚把 token 整批重写过，此时读到的就是这一套配色的真值。
+   */
   function sync(): void {
-    applyAccent(currentId.value);
+    if (currentId.value !== 'auto') {
+      applyAccent(currentId.value);
+      return;
+    }
+    const themeStore = useThemeStore();
+    const tokens = themeStore.themeRecordFor().tokens ?? {};
+    const root = document.documentElement;
+    const primary = tokens['--mauth-primary'];
+    /*
+     * 拿不到记录就**什么都不做**（不能退回 ocean）：启动早期 `activePage` 还是空串，
+     * 此时 `themeRecordFor()` 返回空记录；退回 ocean 会把"跟随配色"变成"蓝色"，
+     * 而且之后没人再纠正它（实测：选石墨夜后主色仍是珍珠白的蓝）。
+     * 主题层已经把这套配色的 token 写好了，我们再写一遍只是"压住它"，不写反而正确。
+     */
+    if (!primary) return;
+    root.style.setProperty('--mauth-primary', primary);
+    root.style.setProperty('--mauth-primary-hover', tokens['--mauth-primary-hover'] ?? primary);
+    root.style.setProperty('--mauth-primary-soft', tokens['--mauth-primary-soft'] ?? primary);
+    root.style.setProperty('--mauth-tint', tokens['--mauth-tint'] ?? primary);
+    root.style.setProperty('--mauth-focus', tokens['--mauth-focus'] ?? primary);
+    root.dataset.accent = 'auto';
   }
 
   return { presets, currentId, saveState, errorMessage, pick, adopt, hydrate, sync };

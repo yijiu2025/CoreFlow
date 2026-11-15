@@ -186,10 +186,13 @@ export function useThemePackage() {
     themeStore.setDeviceView(device, option.id);
     // 清掉 URL 上的临时版式意图：否则下一次路由 query 同步会把这次选择覆盖回去
     clearUrlViewIntent();
-    if (option.accent) accentStore.pick(option.accent);
-    // 切回"没指定主色"的包时，把联动时临时换上的绿换回默认色 —— 否则回到珍珠玻璃
-    // 会是满屏绿，而用户从未主动选过绿色
-    else if (accentStore.currentId === 'wechat') accentStore.pick('ocean');
+    /*
+     * 配套主色**只在用户没表达过偏好时**跟着换，而且用 `adopt`（只改当前视觉、不落盘）：
+     *   · 用户显式选过「跟随配色」或某个色卡 ⇒ 换包不该改他的主色；
+     *   · 不落盘 ⇒ 用户下次手动改色时不会被这次的临时绿色干扰。
+     * 关掉页面再进来由 `alignAccentToPackage()` 按同一规则再对一次。
+     */
+    if (option.accent && !hasExplicitAccent()) accentStore.adopt(option.accent);
   }
 
   // 返回**全部**包；要不要显示某个包由调用方按设备/页面过滤（见 `shellPackageOptions`）

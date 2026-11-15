@@ -24,7 +24,7 @@
   --lime: #82dd2d;
   --lime-soft: rgba(130, 221, 45, 0.16);
   /* 青柠上的深色文字（勾选标记用） */
-  --leaf-text: #4a7c14;
+  --leaf-text: #2c8500;
   /* 表格内嵌控件底色（未勾选的方框） */
   --input-bg: #ffffff;
   /* 接触阴影：与 tokens.css 的 --e1 同量级，但只做贴边一层 */
@@ -492,7 +492,7 @@
 
 .rg-pulse { fill: currentColor; opacity: 0; stroke: var(--pulse-halo); stroke-width: 6; paint-order: stroke; }
 
-.rg-pulse.is-back { fill: var(--leaf-text); stroke: rgba(130, 221, 45, .2); }
+.rg-pulse.is-back { fill: var(--mauth-success, #58a021); stroke: rgba(130, 221, 45, .2); }
 
 .rg-node {
   position: absolute; left: 0; top: 0; width: 0; height: 0;

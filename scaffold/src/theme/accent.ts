@@ -24,6 +24,14 @@
 export interface AccentPreset {
   id: string;
   name: string;
+  /**
+   * `true` = 不写主色（跟随配色自带的主色）
+   *
+   * 这是"换配色按钮却不跟着变"的解药：主色是**后写的 inline 变量**，
+   * 一旦写过就压过配色层的 `--mauth-primary`，于是选了石墨夜/珍珠白，按钮还是绿的。
+   * `auto` 会把那几个 inline 变量删掉，让配色自己说话。
+   */
+  inherit?: boolean;
   /** 主色（按钮、链接、选中态、图表主线） */
   primary: string;
   /** 深一档（hover / active） */
@@ -107,13 +115,18 @@ const ACCENTS: AccentPreset[] = [
      * `rgb(211,240,183)`（色相 91°、饱和度 0.66）—— 同样的配方混出来的绿
      * 明显"脏"一档，因为混的是深色而不是鲜色。
      *
-     * 所以拆开：`primary` 取青柠家族的深档（白字/浅底上都能落，5.0:1），
-     * `tint` 取鲜青柠 `#82dd2d` 专供大面积浅底（卡面渐变、光斑）。
+     * 所以拆开：`primary` 取青柠家族的深档、`tint` 取鲜青柠 `#82dd2d` 专供大面积浅底。
+     *
+     * 🔴 2026-11-15 再修一档「不够纯正」：旧值 `#4a7c14`（H89° S72% L28%）虽是深档，
+     * 但饱和度只有 72%、色相偏黄，实心按钮与链接看起来发"脏绿/橄榄绿"。
+     * 现在取色相 100°、饱和度 100% 的 `#2c8500`（白底对比 4.73:1，仍过 AA 文字线）——
+     * 同一亮度下把"灰味"去掉，才是参考站点那种清透的青柠。
+     * 已经不能再亮了：再往亮里走（如 `#58a021` 3.25:1）就不适合当文字色。
      */
-    primary: '#4a7c14',
-    hover: '#3d6710',
-    soft: 'rgba(130, 221, 45, 0.18)',
-    focus: 'rgba(74, 124, 20, 0.8)',
+    primary: '#2c8500',
+    hover: '#237000',
+    soft: 'rgba(44, 133, 0, 0.12)',
+    focus: 'rgba(44, 133, 0, 0.75)',
     tint: '#82dd2d'
   },
   {
@@ -132,6 +145,23 @@ const ACCENTS: AccentPreset[] = [
     soft: 'rgba(7, 193, 96, 0.12)',
     focus: 'rgba(7, 193, 96, 0.7)',
     tint: '#07c160'
+  },
+  {
+    id: 'auto',
+    name: '跟随配色',
+    /*
+     * 空色值 + `inherit`：`applyAccent` 会把 inline 变量删掉，主色回到配色自己声明的值。
+     *
+     * 为什么需要它：主色是**后写的 inline 变量**，优先级高于配色层。用户在「颜色主题」里
+     * 换了石墨夜/珍珠白，按钮却还是上一套绿 —— 因为 accent 把 `--mauth-primary` 压住了。
+     * 想要"换了配色按钮就跟着变"，就选这一档（它也会让选包联动失效，符合预期）。
+     */
+    inherit: true,
+    primary: '',
+    hover: '',
+    soft: '',
+    focus: '',
+    tint: ''
   },
   {
     id: 'graphite',
@@ -171,11 +201,23 @@ function readAccentId(): string {
 function applyAccent(id: string): AccentPreset {
   const preset = ACCENTS.find(item => item.id === id) ?? ACCENTS[0];
   const root = document.documentElement;
-  root.style.setProperty('--mauth-primary', preset.primary);
-  root.style.setProperty('--mauth-primary-hover', preset.hover);
-  root.style.setProperty('--mauth-primary-soft', preset.soft);
-  root.style.setProperty('--mauth-tint', preset.tint);
-  root.style.setProperty('--mauth-focus', preset.focus);
+  if (preset.inherit) {
+    /*
+     * 🔴 不能 `removeProperty`：配色层的 value 也是**同一元素上的 inline 声明**
+     *    （ThemeRoot 把 token 写成 `html` 的 style），删掉会把配色自己的主色一起删掉，
+     *    结果是 `--mauth-primary` 空值、按钮透明（实测踩过）。
+     *    正确做法由 `stores/accent.ts` 的 `sync()` 负责：从当前配色记录里把这几项
+     *    **回写**一遍。这里只标记状态。
+     */
+    root.dataset.accent = preset.id;
+    return preset;
+  } else {
+    root.style.setProperty('--mauth-primary', preset.primary);
+    root.style.setProperty('--mauth-primary-hover', preset.hover);
+    root.style.setProperty('--mauth-primary-soft', preset.soft);
+    root.style.setProperty('--mauth-tint', preset.tint);
+    root.style.setProperty('--mauth-focus', preset.focus);
+  }
   root.dataset.accent = preset.id;
   return preset;
 }

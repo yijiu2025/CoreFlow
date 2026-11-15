@@ -42,7 +42,15 @@ installAppearanceSync();
 
 const accentStore = useAccentStore();
 watch(
-  () => [themeStore.mode, themeStore.packageId].join('|'),
+  /*
+   * 三个源都要盯：
+   *   mode     —— 明暗切换会整批重写 token；
+   *   packageId —— 换版式（包）同理；
+   *   themeId  —— **换配色**也必须重跑。漏了它，「跟随配色」会一直显示上一套配色的主色
+   *               （2026-11-15 实测：选石墨夜后主色仍是珍珠白的蓝）；
+   *   activePage —— 首帧它还是空串（壳还没渲染），此时读不到配色记录，等它落定再同步一次。
+   */
+  () => [themeStore.mode, themeStore.packageId, themeStore.themeId, themeStore.activePage].join('|'),
   async () => {
     await nextTick();
     // 先让"主色跟上主题包"（用户没选过色时），再写变量 —— 顺序反了就白写一次
