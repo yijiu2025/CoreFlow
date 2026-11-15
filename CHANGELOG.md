@@ -7,6 +7,8 @@
 
 ## 未发布（Unreleased）
 
+## 2.40.0 — 2026-11-15
+
 ### 新增
 
 - **密度档位**（宽松 / 标准 / 紧凑）：只覆盖 `--row-h` / `--cell-px` / `--control-h` 三个尺寸，
@@ -23,6 +25,7 @@
   组件级 token（`--mauth-switch-track` / `-on` / `-knob`），可单独调。已写进全部 38 份配色表。
 - `LogPurgeDialog` 的 `#dc2626` / `#b91c1c` 改走 `--mauth-danger`，不再绕过主题。
 - `.btn--sm` 高度写死 30px，紧凑档下会与标准控件错位；改成 `calc(var(--control-h) - 6px)`。
+
 
 ## 2.39.0 — 2026-11-15
 
