@@ -7,6 +7,8 @@
 
 ## 未发布（Unreleased）
 
+## 2.43.0 — 2026-11-15
+
 ### 新增
 
 - **统一操作反馈**：`stores/toast.ts` + `ToastHost`（底部胶囊，悬停暂停，最多 4 条）、
@@ -24,6 +26,7 @@
   `toast: Ref<string>` 字段与版式里的 `<div class="toast">` 一并删除（契约少一个字段）。
   `PostLadder` / `UserProfileDrawer` 的组件内 toast 同样收口。
 - 删除 `components.css` 里已无消费者的 `.toast` 与 `@keyframes toast-in`。
+
 
 ## 2.42.2 — 2026-11-15
 
