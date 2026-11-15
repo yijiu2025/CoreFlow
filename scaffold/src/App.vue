@@ -7,7 +7,7 @@
  *
  * @author yijiu2025
  */
-import { nextTick, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, watch } from 'vue';
 import { ThemeRoot } from 'skinsuite/vue';
 import { useThemeStore } from '@/stores/theme';
 import { useAccentStore } from '@/stores/accent';
@@ -15,6 +15,8 @@ import { useOverridesStore } from '@/stores/overrides';
 import { alignAccentToPackage } from '@/composables/useThemePackage';
 import { installAppearanceSync } from '@/composables/useAppearance';
 import ToastHost from '@/components/ui/ToastHost.vue';
+import CommandPalette from '@/components/layout/CommandPalette.vue';
+import { openCommandPalette } from '@/composables/useCommandPalette';
 import ConfirmHost from '@/components/ui/ConfirmHost.vue';
 
 /** <ThemeRoot> 的 props 类型（库未导出 ThemeStoreLike，从其 props 反推最稳妥） */
@@ -29,6 +31,24 @@ type ThemeRootProps = InstanceType<typeof ThemeRoot>['$props'];
  * 这里只做类型桥接，不改运行时行为。
  */
 const themeStore = useThemeStore() as unknown as ThemeRootProps['themeStore'];
+
+/**
+ * 全局快捷键：Ctrl / ⌘ + K 唤起命令面板
+ *
+ * 挂在 `window` 而不是某个元素上 —— 用户焦点可能在表格里、输入框里、甚至刚点完按钮，
+ * 命令面板都该唤得起来（这正是它与"页面内的搜索框"的区别）。
+ *
+ * @param event 键盘事件
+ */
+function onGlobalKeydown(event: KeyboardEvent): void {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    openCommandPalette();
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onGlobalKeydown));
+onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown));
 
 /**
  * 主题色的写入时机
@@ -77,5 +97,7 @@ watch(
     <!-- 全局反馈宿主：提示与确认框各只有一份，业务侧调 store 即可（见 stores/toast.ts / confirm.ts） -->
     <ToastHost />
     <ConfirmHost />
+    <!-- 命令面板（⌘ / Ctrl + K）：全局浮层，与页面版式无关，靠 token 适配所有主题 -->
+    <CommandPalette />
   </ThemeRoot>
 </template>

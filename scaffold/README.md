@@ -174,6 +174,45 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 
 调试：`?debug=theme` 打开面板；`?th_color=black` 强制深色；`?device=mobile` 锁定手机版。
 
+## 命令面板（⌘ / Ctrl + K）
+
+`components/layout/CommandPalette.vue` + `composables/useCommandPalette.ts`。
+
+四组结果：
+
+| 分组 | 出现时机 | 数据来源 |
+| --- | --- | --- |
+| 最近访问 | 未输入时 | localStorage `mauth:recent`（路由变化记录，最多 5 条） |
+| 页面 | 始终 | `useNavGroups().pages` |
+| 用户 | 输入关键字且**有 `admin:user:read`** | `listUsers({ keyword })`，防抖 220ms |
+| 动作 | 始终 | 切明暗 / 外观与主题 / 个人设置 / 退出登录 |
+
+🔴 **页面清单与侧栏同源**（`composables/useNavGroups.ts`）。过滤规则（下架 / 未注册 / 无权限 /
+空目录消失）只写一次 —— 两份实现必然出现"侧栏藏了、面板搜得到"的错位。
+
+🔴 **打开状态是模块级 ref**，不是 composable 内部的：`App.vue` 绑全局快捷键、面板组件读状态，
+两边各调一次 composable 会拿到两个独立 ref，按了没反应（最容易写错的一处）。
+
+键盘：`↑ ↓` 移动、`Enter` 执行、`Esc` 关闭。回车用户结果会跳到 `/system/user?keyword=<账号>`。
+
+### 这些浮层组件怎么适配多主题
+
+以命令面板为例，三层分开看：
+
+| 层次 | 怎么做 | 换主题时 |
+| --- | --- | --- |
+| 颜色 / 圆角 / 描边 / 阴影 | 全用 `--mauth-*` | **自动跟随**，零代码 |
+| 结构（桌面卡片 / 手机全屏） | 一个 DOM + CSS 断点（≤820px 变全屏） | 不变 |
+| 交互本身 | 一套（搜索 + 键盘 + 动作） | 不变 |
+
+所以「支持多主题」在这里的含义是**换皮不换骨**：同一个组件换配色、换明暗、甚至用户自定义了
+任何一项 token，面板都跟着变，不需要按包写分支。
+
+只有当一个包需要**完全不同的交互**（例如掌上版改成语音输入）时，才值得把它下沉成
+`themes/<包>/<设备>/palette/index.vue` 的版式 —— 那是新维度，现在不值得为它付代价。
+
+同样的判断适用于 `ToastHost` / `ConfirmHost`。
+
 ## 操作反馈：提示 / 确认 / 焦点
 
 三件事各有唯一入口，**不要在业务组件里再造一套**。

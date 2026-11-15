@@ -7,6 +7,31 @@
 
 ## 未发布（Unreleased）
 
+### 修复
+
+- **换主色后徽标与侧栏选中底仍是旧色**：主色组不止 `--mauth-primary*` ——
+  `--mauth-nav-active-bg`（侧栏选中行底）与 `--mauth-tag-info-bg/ink`（信息徽标）本质也是主色，
+  只是名字里没有 primary。此前运行期只覆写 5 个带 primary 的变量 ⇒ 选琥珀后按钮变了、
+  侧栏选中与徽标还是配色表里的蓝。现在派生关系集中在 `theme/accent-tokens.ts`：
+  谁改主色谁就整组写（9 个键），改主色一律调 `writeAccentVars()`，不再逐个 `setProperty`。
+- 新增关卡 `scripts/check-accent-tokens.mjs`（并入 `npm run typecheck`）：校验 38 份配色的
+  主色组与派生规则一致（138 项）。
+
+### 新增
+
+- **命令面板（⌘ / Ctrl + K）**：四组结果 —— 最近访问（`mauth:recent`，最多 5 条）、页面、
+  用户（需 `admin:user:read`，防抖 220ms）、动作（切明暗 / 外观与主题 / 个人设置 / 退出登录）。
+  键盘 `↑↓` / `Enter` / `Esc`；回车用户结果直接跳到 `/system/user?keyword=<账号>`。
+  桌面是居中卡片，≤820px 自动变全屏（同一个 DOM，CSS 断点）。
+- **`composables/useNavGroups.ts`**：导航分组抽成唯一来源，侧栏与命令面板共用
+  （过滤规则：下架 / 未注册 / 无权限 / 空目录消失）。此前这段逻辑只长在 `AppShell.vue` 里。
+- `icon-registry` 新增 `Search` / `Sun` / `Moon` / `Palette` / `LogOut` / `User` 与 `hasIcon()`。
+
+### 修复
+
+- 命令面板对**未注册图标名**兜底成名称首字（菜单的 icon 是库里自由文本，没登记的很常见），
+  此前会渲染成一排空心圆，看着像坏了。
+
 ## 2.43.0 — 2026-11-15
 
 ### 新增

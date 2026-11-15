@@ -25,6 +25,12 @@ import {
   LayoutDashboard,
   ListTree,
   LogIn,
+  LogOut,
+  Moon,
+  Palette,
+  Search,
+  Sun,
+  User,
   Maximize,
   Minus,
   Network,
@@ -57,6 +63,12 @@ const ICONS: Record<string, Component> = {
   SlidersHorizontal,
   ScrollText,
   LogIn,
+  LogOut,
+  Moon,
+  Palette,
+  Search,
+  Sun,
+  User,
   Wrench,
   Wand2,
   RefreshCw,
@@ -93,7 +105,13 @@ const ALIAS: Record<string, string> = {
   plus: 'Plus',
   minus: 'Minus',
   fit: 'Maximize',
-  edit: 'Pencil'
+  edit: 'Pencil',
+  search: 'Search',
+  sun: 'Sun',
+  moon: 'Moon',
+  palette: 'Palette',
+  logout: 'LogOut',
+  user: 'User'
 };
 
 /** 可选的图标名（菜单表单下拉用；顺序 = 注册顺序） */
@@ -117,4 +135,24 @@ function resolveIcon(name?: string | null): Component {
   return ICONS[pascal] || Circle;
 }
 
-export { ALIAS, ICONS, ICON_NAMES, resolveIcon };
+/**
+ * 这个名字**有没有**登记过
+ *
+ * 与 `resolveIcon` 的区别：后者未知时会退回 `Circle`（保证永远有东西可画），
+ * 但调用方有时需要知道"这是真图标还是兜底圆"—— 例如命令面板里宁可显示名称首字，
+ * 也不要一排空心圆（菜单数据里的图标名是库里的自由文本，没登记的相当常见）。
+ *
+ * @param name 原始名
+ * @returns 命中返回 true
+ */
+function hasIcon(name?: string | null): boolean {
+  if (!name) return false;
+  if (ICONS[name]) return true;
+  if (ALIAS[name.toLowerCase()]) return true;
+  const pascal = name
+    .replace(/[-_\s]+(.)?/g, (_, c: string) => (c ? c.toUpperCase() : ''))
+    .replace(/^./, s => s.toUpperCase());
+  return Boolean(ICONS[pascal]);
+}
+
+export { ALIAS, ICONS, ICON_NAMES, hasIcon, resolveIcon };

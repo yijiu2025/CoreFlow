@@ -19,6 +19,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router';
 import { ThemeView } from 'skinsuite/vue';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
+import { useNavGroups } from '@/composables/useNavGroups';
 import { useResponsiveTables } from '@/composables/useResponsiveTables';
 import { useThemeStore } from '@/stores/theme';
 import type { MenuNode } from '@/api/types';
@@ -74,89 +75,11 @@ function goBack(): void {
   router.push({ name: fallback });
 }
 
-/**
- * 这条路径当前账号进不进得去
- *
- * 🔴 判据取**路由 meta.permission** —— 那是守卫真正比对的那一份。不拿菜单自己的
- *    `permission` 字段判：它是库里可改的自由文本，改了菜单而路由没改时，侧栏会
- *    藏掉一个其实进得去的页面；反过来则是露出一条点进去被踢到 `/no-access` 的死链
- *    （观察者就踩过这个：菜单全量授权、policy 只有几个 read 码）。
- *    路由没声明权限（如个人设置）或路径没注册 → 注册了才放行，不替守卫做决定。
- *
- * @param path 目标路径
- * @returns 是否可进入
+/*
+ * 导航分组（侧栏用）：与命令面板共用同一份计算，见 `composables/useNavGroups.ts`。
+ * 分组规则（去下架 / 去未注册 / 去无权限 / 空目录消失）只在那里写一次。
  */
-function can(path: string): boolean {
-  const resolved = router.resolve(path);
-  // 指向一个没注册的页面：点进去只有 404。路由表是静态声明、菜单是库里数据，
-  // 两者漂移时宁可让这条入口消失 —— 要修的是菜单管理里的那条数据，不是导航。
-  if (resolved.name === 'not-found') return false;
-  const code = (resolved.meta?.permission as string | undefined) ?? '';
-  return !code || auth.hasPermission(code);
-}
-
-/**
- * 菜单项是否可进入（导航条目都带 path，空 path 的目录节点交给上层筛）
- *
- * @param node 菜单节点
- * @returns 是否可进入
- */
-function canEnter(node: MenuNode): boolean {
-  return !node.path || can(node.path);
-}
-
-/**
- * 导航结构：顶层 `dir` 作为分组标题，`menu` 作为链接
- *
- * @returns 分组列表（无目录归属的菜单放在「导航」组）
- */
-const groups = computed<ConsoleNavGroup[]>(() => {
-  const out: ConsoleNavGroup[] = [];
-  const loose: MenuNode[] = [];
-  /*
-   * 已下架（visible=0）的节点不进导航。
-   *
-   * 后端 `/session/routes` 已经滤过一遍，这里再滤一次：这个字段是"强制下架"，
-   * 宁可重复也不要因为某条老数据漏滤而在侧栏里露出来。
-   *
-   * 第二刀按**权限码**：菜单只决定"想不想给人看"，能不能进由守卫决定 ——
-   * 把进不去的入口留在导航里，就是让每一次点击都换一个 `/no-access`。
-   * 目录在子项被筛空后整组消失：只剩标题的空分组比死链更让人摸不着头脑。
-   */
-  const shown = (nodes: MenuNode[]): MenuNode[] =>
-    nodes
-      .filter(node => node.visible !== 0)
-      .map(node => ({ ...node, children: shown(node.children || []) }))
-      .filter(node => (node.type === 'dir' ? (node.children || []).length > 0 : canEnter(node)));
-  for (const node of shown(auth.menus)) {
-    if (node.type === 'dir') {
-      out.push({
-        key: `dir-${node.id}`,
-        title: node.name,
-        items: (node.children || [])
-          .filter(child => !!child.path)
-          .map(child => ({
-            id: child.id,
-            name: child.name,
-            path: child.path as string,
-            icon: child.icon || ''
-          }))
-      });
-    } else if (node.type === 'menu') {
-      loose.push(node);
-    }
-  }
-  if (loose.length > 0) {
-    out.unshift({
-      key: 'root',
-      title: '导航',
-      items: loose
-        .filter(node => !!node.path)
-        .map(node => ({ id: node.id, name: node.name, path: node.path as string, icon: node.icon || '' }))
-    });
-  }
-  return out;
-});
+const { groups, can } = useNavGroups();
 
 /**
  * 页面内容（内部一个 `<RouterView />`）
