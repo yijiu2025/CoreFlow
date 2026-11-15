@@ -54,7 +54,9 @@
 
         <div class="tok__ctl">
           <template v-if="meta.kind === 'color'">
-            <label class="tok__swatch" :style="{ backgroundColor: valueOf(meta.key) }" :title="valueOf(meta.key)">
+            <label class="tok__swatch" :title="valueOf(meta.key)">
+              <!-- 颜色层单独一层：半透明的值能透出下面的棋盘格（否则 rgba 全显示成灰块） -->
+              <span class="tok__swatch-fill" :style="{ backgroundColor: valueOf(meta.key) }"></span>
               <input
                 type="color"
                 :value="pickerHex(meta.key)"
@@ -68,16 +70,22 @@
           </template>
 
           <template v-else>
+            <!--
+              长度一律用滑块：圆角/字号这类值是"连续调到手感对"的，数字输入要反复试
+              才知道 12 和 14 差多少。滑块给的是即时预览，拖到合适就停。
+            -->
             <input
-              class="tok__num"
-              type="number"
-              min="0"
-              step="1"
+              class="tok__range"
+              type="range"
+              :min="rangeOf(meta.key).min"
+              :max="rangeOf(meta.key).max"
+              :step="rangeOf(meta.key).step"
               :value="lengthOf(meta.key)"
+              :style="{ '--fill': fillOf(meta.key) }"
               :aria-label="meta.label"
-              @change="onLength(meta.key, $event)"
+              @input="onLength(meta.key, $event)"
             />
-            <span class="tok__unit">{{ unitOf(meta.key) }}</span>
+            <span class="tok__unit">{{ lengthOf(meta.key) }}{{ unitOf(meta.key) }}</span>
           </template>
 
           <button
@@ -95,6 +103,15 @@
 
     <div class="tok__foot">
       <span class="tok__count">已改 {{ overrides.count }} 项 · 只影响当前账号</span>
+      <span style="flex: 1"></span>
+      <button
+        v-if="tierCounts.all > tierCounts.common"
+        type="button"
+        class="tok__more"
+        @click="showAll = !showAll"
+      >
+        {{ showAll ? `只看常用 ${tierCounts.common} 项` : `显示全部 ${tierCounts.all} 项` }}
+      </button>
       <button type="button" class="tok__reset-all" :disabled="!overrides.active" @click="overrides.resetAll()">
         全部还原
       </button>
@@ -116,9 +133,22 @@ const theme = useThemeStore();
 /** 当前材质 tab */
 const tab = ref(MATERIALS[0].id);
 
-/** 各材质的令牌数（tab 角标） */
+/**
+ * 是否显示全部令牌
+ *
+ * 默认只给 `tier: 1` 的常用项（十几个）—— 69 个一次摊开，用户第一眼不知道该动哪个。
+ * 想改分类色、徽标、开关这些细节的，自己展开。
+ */
+const showAll = ref(false);
+
+/** 各材质的令牌数（tab 角标；跟随"显示全部"切换） */
 const counts = computed<Record<string, number>>(() =>
-  Object.fromEntries(MATERIALS.map(item => [item.id, tokensOfMaterial(item.id).length]))
+  Object.fromEntries(
+    MATERIALS.map(item => {
+      const all = tokensOfMaterial(item.id);
+      return [item.id, showAll.value ? all.length : all.filter(meta => meta.tier === 1).length];
+    })
+  )
 );
 
 /** 当前材质 */
@@ -126,10 +156,17 @@ const currentMaterial = computed(() => MATERIALS.find(item => item.id === tab.va
 
 /** 当前材质下的令牌，按既有分组顺序展开（空组不出现） */
 const groups = computed<Array<{ group: string; items: TokenMeta[] }>>(() => {
-  const items = tokensOfMaterial(tab.value);
+  const all = tokensOfMaterial(tab.value);
+  const items = showAll.value ? all : all.filter(meta => meta.tier === 1);
   return TOKEN_GROUPS.map(group => ({ group, items: items.filter(meta => meta.group === group) })).filter(
     section => section.items.length > 0
   );
+});
+
+/** 当前材质下常用项 / 全部项的数量（决定底部按钮要不要出现、写什么） */
+const tierCounts = computed(() => {
+  const all = tokensOfMaterial(tab.value);
+  return { common: all.filter(meta => meta.tier === 1).length, all: all.length };
 });
 
 /** 当前配色记录（覆盖没设时用它显示"现在长什么样"） */
@@ -223,6 +260,38 @@ function onLength(key: string, ev: Event): void {
   const n = Number((ev.target as HTMLInputElement).value);
   if (!Number.isFinite(n) || n < 0) return;
   overrides.set(key, `${n}${unitOf(key)}`);
+}
+
+/**
+ * 滑块"已走过"的比例（0~100%），用来把轨道左侧染成主色
+ *
+ * 只给 CSS 一个百分比即可 —— 用 `linear-gradient` 画，不必额外套一层元素。
+ *
+ * @param key 令牌名
+ * @returns 百分比字符串
+ */
+function fillOf(key: string): string {
+  const { min, max } = rangeOf(key);
+  if (max <= min) return '0%';
+  const pct = ((lengthOf(key) - min) / (max - min)) * 100;
+  return `${Math.max(0, Math.min(100, Math.round(pct)))}%`;
+}
+
+/**
+ * 某个长度令牌的滑块区间
+ *
+ * 按单位推：px 走 0~48（覆盖圆角与字号），em 走 0~0.4（字距），rem 走 0~3。
+ * 不按令牌名逐个配 —— 新加一个长度令牌时不该还要记得来这里补一行。
+ *
+ * @param key 令牌名
+ * @returns 滑块参数
+ */
+function rangeOf(key: string): { min: number; max: number; step: number } {
+  const unit = unitOf(key);
+  if (unit === 'em') return { min: 0, max: 0.4, step: 0.01 };
+  if (unit === 'rem') return { min: 0, max: 3, step: 0.05 };
+  if (unit === '%') return { min: 0, max: 100, step: 1 };
+  return { min: 0, max: 48, step: 1 };
 }
 
 /*
@@ -360,20 +429,28 @@ function onLength(key: string, ev: Event): void {
 
 .tok__swatch {
   position: relative;
+  flex: none;
   width: 26px;
   height: 26px;
   border-radius: 7px;
   /*
-   * 棋盘格底衬：`#f6f8f7` 这种浅色在白卡上几乎看不见边界，半透明的值更是"一块空气"。
-   * 垫一层棋盘格后，浅色与透明都能看出实际覆盖范围。
+   * 棋盘格画在**容器**上、颜色画在**内层**：顺序反了（棋盘格在上）浅色与半透明就全被盖住，
+   * 看起来是一块灰格子。现在半透明的 rgba 会自然透出格子，浅色也能看出边界。
    */
-  background-image: linear-gradient(45deg, var(--mauth-border) 25%, transparent 25% 75%, var(--mauth-border) 75%),
-    linear-gradient(45deg, var(--mauth-border) 25%, transparent 25% 75%, var(--mauth-border) 75%);
+  background-color: #fff;
+  background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.07) 25%, transparent 25% 75%, rgba(0, 0, 0, 0.07) 75%),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.07) 25%, transparent 25% 75%, rgba(0, 0, 0, 0.07) 75%);
   background-size: 8px 8px;
   background-position: 0 0, 4px 4px;
   box-shadow: inset 0 0 0 1px var(--mauth-border-strong);
   cursor: pointer;
   overflow: hidden;
+}
+
+.tok__swatch-fill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .tok__swatch input {
@@ -397,21 +474,53 @@ function onLength(key: string, ev: Event): void {
   opacity: 0.8;
 }
 
-.tok__num {
-  width: 64px;
-  height: 28px;
-  padding: 0 8px;
+.tok__range {
+  width: 116px;
+  height: 4px;
+  appearance: none;
+  border-radius: 999px;
+  /* 左侧主色 = 已走过的部分，右侧灰 = 剩余，一眼看出当前值落在哪 */
+  background: linear-gradient(
+    to right,
+    var(--mauth-primary) 0 var(--fill, 0%),
+    var(--mauth-surface-2) var(--fill, 0%) 100%
+  );
+  cursor: pointer;
+}
+
+.tok__range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--mauth-primary);
+  box-shadow: inset 0 0 0 1px var(--mauth-border-strong);
+}
+
+.tok__range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
   border: 0;
-  border-radius: var(--mauth-radius-sm);
-  background: var(--mauth-input-bg, var(--mauth-surface));
-  box-shadow: inset 0 0 0 1px var(--mauth-border);
-  color: var(--mauth-text);
+  border-radius: 50%;
+  background: var(--mauth-primary);
+}
+
+.tok__more {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-mid);
   font-size: 12px;
+  cursor: pointer;
 }
 
 .tok__unit {
+  min-width: 34px;
   color: var(--mauth-text-faint);
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .tok__undo {

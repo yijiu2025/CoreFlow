@@ -79,15 +79,18 @@ const customInfo = computed(() => {
  */
 const chipStyle = computed(() => {
   const info = customInfo.value;
-  if (!info) return { background: accent.presets[0].primary };
+  /* 没选过自定义色时给一圈彩虹 —— 这是"任意色"的通用约定，也区别于某个具体预设 */
+  if (!info) {
+    return {
+      background:
+        'conic-gradient(from 210deg, #ff5a50, #d98324, #82dd2d, #0d9b8a, #236de9, #6d5ce7, #ff5a50)'
+    };
+  }
   return { background: `linear-gradient(135deg, ${info.tint} 0 48%, ${info.primary} 48% 100%)` };
 });
 
 /** 取色器的 value 必须是 hex：没有自定义色时给默认色 */
 const customHex = computed(() => customInfo.value?.tint ?? accent.presets[0].primary);
-
-/** hex 输入框草稿（回车 / 失焦才提交，避免每敲一个字符就换一次主题） */
-const hexDraft = ref('');
 
 /**
  * 原生取色器选色
@@ -97,13 +100,6 @@ const hexDraft = ref('');
 function onCustomPick(ev: Event): void {
   const value = (ev.target as HTMLInputElement).value;
   if (normalizeHex(value)) accent.pick(value);
-}
-
-/** 提交手输的 hex（非法值直接丢弃，输入框清空） */
-function onHexCommit(): void {
-  const hex = normalizeHex(hexDraft.value);
-  if (hex) accent.pick(hex);
-  hexDraft.value = '';
 }
 
 /** 展开的档位（同时只开一个，避免三块长列表堆在一起） */
@@ -262,30 +258,27 @@ const availPackages = computed(() =>
             </span>
             <span class="swatch__name">{{ item.name }}</span>
           </button>
-        </div>
-        <div class="custom-color">
-          <label class="custom-color__pick" :class="{ 'is-on': accent.isCustom }" title="自定义任意颜色">
+
+          <!--
+            自定义色卡：与其它预设同一排、同一尺寸，点开的是原生取色器
+            （取色器里自带 hex 输入，所以不再单独摆一个输入框 —— 少一行是一个）。
+          -->
+          <label
+            :class="['swatch', 'swatch--custom', { 'is-on': accent.isCustom }]"
+            :title="accent.isCustom ? `自定义 ${customHex}` : '选任意颜色'"
+          >
             <input
               type="color"
-              class="custom-color__input"
+              class="swatch__color"
               :value="customHex"
               aria-label="自定义主题色"
               @input="onCustomPick"
             />
-            <span class="custom-color__chip" :style="chipStyle"></span>
-            <span class="custom-color__name">自定义</span>
+            <span class="swatch__dot" :style="chipStyle">
+              <Check v-if="accent.isCustom" :size="12" />
+            </span>
+            <span class="swatch__name">自定义</span>
           </label>
-          <input
-            v-model="hexDraft"
-            class="custom-color__hex"
-            type="text"
-            maxlength="7"
-            spellcheck="false"
-            placeholder="#2C8500"
-            aria-label="主题色十六进制值"
-            @change="onHexCommit"
-            @keyup.enter="onHexCommit"
-          />
         </div>
         <p class="hint">
           <template v-if="customInfo && customInfo.adjusted">
@@ -400,9 +393,8 @@ const availPackages = computed(() =>
 
       <div v-if="open === 'custom'" class="lrow__body">
         <p class="hint">
-          按「材质」分组，只列当前配色里真实存在的令牌。改动只影响你自己的账号，
-          会压过配色与主题色（三层顺序：配色 → 主题色 → 自定义）。
-          侧栏 / 面板的<b>半透明会被保留</b> —— 改色相不会把玻璃质感弄丢。
+          按「材质」分组，只列常用项（点底部「显示全部」看全部）。改动只影响你的账号，
+          优先级高于配色与主题色；改色时<b>半透明会被保留</b>。
         </p>
         <TokenEditor />
       </div>
@@ -545,6 +537,8 @@ const availPackages = computed(() =>
 }
 
 .swatch {
+  /* 自定义色卡里的原生取色器要绝对定位铺满这一格 */
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -574,68 +568,18 @@ const availPackages = computed(() =>
     var(--mauth-surface-2);
 }
 
-.custom-color {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.custom-color__pick {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 12px 0 6px;
-  border-radius: 999px;
-  background: var(--mauth-surface);
-  box-shadow: inset 0 0 0 1px var(--mauth-border);
-  cursor: pointer;
-}
-
-.custom-color__pick.is-on {
-  box-shadow: inset 0 0 0 1.5px var(--mauth-primary);
-}
-
-.custom-color__input {
+/* 自定义色卡：把原生取色器铺满整个圆点，点哪都能唤出取色器 */
+.swatch__color {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
   opacity: 0;
   cursor: pointer;
 }
 
-/* 色块本身：一半原色、一半主色，能同时看出"你选的"和"实际生效的" */
-.custom-color__chip {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  box-shadow: inset 0 0 0 1px var(--mauth-border-strong);
-}
-
-.custom-color__name {
-  font-size: 13px;
-  color: var(--mauth-text-mid);
-}
-
-.custom-color__hex {
-  width: 108px;
-  height: 34px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: var(--mauth-radius-sm);
-  background: var(--mauth-input-bg, var(--mauth-surface));
-  box-shadow: inset 0 0 0 1px var(--mauth-border);
-  color: var(--mauth-text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.custom-color__hex:focus {
-  outline: none;
-  box-shadow: inset 0 0 0 1.5px var(--mauth-focus, var(--mauth-primary));
+.swatch--custom .swatch__dot {
+  position: relative;
 }
 
 .swatch.is-on .swatch__dot {

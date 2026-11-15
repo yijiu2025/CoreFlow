@@ -36,6 +36,14 @@ export interface TokenMeta {
   scope: TokenScope;
   /** 一句话说明：改了会影响什么（用户最需要这句） */
   hint?: string;
+  /**
+   * 层级：`1` = 常用（面板默认只显示这些），`2` 或缺省 = 高级（收在"显示全部"后面）
+   *
+   * 为什么要分：69 个令牌一次摊开，用户第一眼不知道该动哪个（"要设置的太多了"就是这个观感）。
+   * 常用的其实只有十几个 —— 底、卡片、文字、主色、语义色、圆角；其余（分类色、徽标、
+   * 开关、细节描边）都是"知道自己要找什么才会来找"的项。
+   */
+  tier?: 1 | 2;
 }
 
 /** 分组（顺序 = 编辑器里的顺序，从"大面"到"细部"） */
@@ -61,7 +69,7 @@ export type TokenGroup = (typeof TOKEN_GROUPS)[number];
  */
 export const TOKEN_MANIFEST: TokenMeta[] = [
   /* ── 面与底 ─────────────────────────────────────────────── */
-  { key: '--mauth-bg', label: '页面底色', group: '面与底', kind: 'color', scope: 'global', hint: '内容区最底层，壁纸就浮在它上面' },
+  { key: '--mauth-bg', label: '页面底色', group: '面与底', kind: 'color', scope: 'global', hint: '内容区最底层，壁纸就浮在它上面' , tier: 1 },
   { key: '--mauth-surface', label: '表面', group: '面与底', kind: 'color', scope: 'global', hint: '卡片、弹窗、输入框的通用底色' },
   { key: '--mauth-surface-2', label: '次级表面', group: '面与底', kind: 'color', scope: 'global', hint: '表头、分段控件底这类"比白再深半档"' },
   { key: '--mauth-hover', label: '悬停底', group: '面与底', kind: 'color', scope: 'global', hint: '鼠标移上去的浅底（行、按钮、导航）' },
@@ -71,13 +79,13 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   { key: '--mauth-plate-ink', label: '铭牌文字', group: '面与底', kind: 'color', scope: 'global' },
 
   /* ── 文字 ───────────────────────────────────────────────── */
-  { key: '--mauth-text', label: '正文', group: '文字', kind: 'color', scope: 'global' },
-  { key: '--mauth-text-mid', label: '次级文字', group: '文字', kind: 'color', scope: 'global' },
+  { key: '--mauth-text', label: '正文', group: '文字', kind: 'color', scope: 'global' , tier: 1 },
+  { key: '--mauth-text-mid', label: '次级文字', group: '文字', kind: 'color', scope: 'global' , tier: 1 },
   { key: '--mauth-text-soft', label: '标签文字', group: '文字', kind: 'color', scope: 'global', hint: '字段名、副标题' },
   { key: '--mauth-text-faint', label: '元信息文字', group: '文字', kind: 'color', scope: 'global', hint: '时间、占位符、提示' },
 
   /* ── 语义色 ─────────────────────────────────────────────── */
-  { key: '--mauth-primary', label: '主色', group: '语义色', kind: 'color', scope: 'global', hint: '按钮、链接、选中态；会被「主题色」覆盖' },
+  { key: '--mauth-primary', label: '主色', group: '语义色', kind: 'color', scope: 'global', hint: '按钮、链接、选中态；会被「主题色」覆盖' , tier: 1 },
   { key: '--mauth-primary-hover', label: '主色（悬停）', group: '语义色', kind: 'color', scope: 'global' },
   { key: '--mauth-primary-soft', label: '主色（浅底）', group: '语义色', kind: 'color', scope: 'global', hint: '选中行、图标底' },
   { key: '--mauth-tint', label: '主色（大面积）', group: '语义色', kind: 'color', scope: 'global', hint: '卡面渐变、光斑用的饱和版' },
@@ -89,9 +97,9 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
     scope: 'global',
     hint: '实心按钮/徽标的字色：亮主色配深字，深主色配白字（自定义色会自动算）'
   },
-  { key: '--mauth-success', label: '成功', group: '语义色', kind: 'color', scope: 'global', hint: '开关打开、正常标签' },
+  { key: '--mauth-success', label: '成功', group: '语义色', kind: 'color', scope: 'global', hint: '开关打开、正常标签' , tier: 1 },
   { key: '--mauth-success-soft', label: '成功（浅底）', group: '语义色', kind: 'color', scope: 'global' },
-  { key: '--mauth-danger', label: '危险', group: '语义色', kind: 'color', scope: 'global', hint: '删除、停用、错误' },
+  { key: '--mauth-danger', label: '危险', group: '语义色', kind: 'color', scope: 'global', hint: '删除、停用、错误' , tier: 1 },
   { key: '--mauth-danger-soft', label: '危险（浅底）', group: '语义色', kind: 'color', scope: 'global' },
   {
     key: '--mauth-warning',
@@ -99,7 +107,8 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
     group: '语义色',
     kind: 'color',
     scope: 'global',
-    hint: '需要注意但不致命：风险提示、待确认、即将过期'
+    hint: '需要注意但不致命：风险提示、待确认、即将过期',
+    tier: 1
   },
   {
     key: '--mauth-warning-soft',
@@ -118,8 +127,8 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   /* ── 形状与排版 ─────────────────────────────────────────── */
   { key: '--mauth-radius-xs', label: '圆角 XS', group: '形状与排版', kind: 'length', scope: 'global' },
   { key: '--mauth-radius-sm', label: '圆角 SM', group: '形状与排版', kind: 'length', scope: 'global', hint: '按钮、输入框' },
-  { key: '--mauth-radius-md', label: '圆角 MD', group: '形状与排版', kind: 'length', scope: 'global', hint: '卡片、面板' },
-  { key: '--mauth-radius-lg', label: '圆角 LG', group: '形状与排版', kind: 'length', scope: 'global', hint: '弹窗' },
+  { key: '--mauth-radius-md', label: '圆角 MD', group: '形状与排版', kind: 'length', scope: 'global', hint: '卡片、面板' , tier: 1 },
+  { key: '--mauth-radius-lg', label: '圆角 LG', group: '形状与排版', kind: 'length', scope: 'global', hint: '弹窗' , tier: 1 },
   { key: '--mauth-radius-xl', label: '圆角 XL', group: '形状与排版', kind: 'length', scope: 'global' },
   { key: '--mauth-fs-display-m', label: '读数大字号', group: '形状与排版', kind: 'length', scope: 'global' },
   { key: '--mauth-track-eyebrow', label: '眉标字距', group: '形状与排版', kind: 'length', scope: 'global' },
@@ -137,13 +146,13 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   { key: '--mauth-cat-5-ink', label: '分类 5 字', group: '分类色', kind: 'color', scope: 'global' },
 
   /* ── 侧栏与顶栏 ─────────────────────────────────────────── */
-  { key: '--mauth-nav-bg', label: '侧栏底', group: '侧栏与顶栏', kind: 'color', scope: 'component', hint: '只影响左侧导航' },
+  { key: '--mauth-nav-bg', label: '侧栏底', group: '侧栏与顶栏', kind: 'color', scope: 'component', hint: '只影响左侧导航' , tier: 1 },
   { key: '--mauth-nav-ink', label: '侧栏未选中文字', group: '侧栏与顶栏', kind: 'color', scope: 'component' },
   { key: '--mauth-nav-active-bg', label: '侧栏选中底', group: '侧栏与顶栏', kind: 'color', scope: 'component' },
-  { key: '--mauth-topbar-bg', label: '顶栏底', group: '侧栏与顶栏', kind: 'color', scope: 'component', hint: '默认半透明，叠在内容上' },
+  { key: '--mauth-topbar-bg', label: '顶栏底', group: '侧栏与顶栏', kind: 'color', scope: 'component', hint: '默认半透明，叠在内容上' , tier: 1 },
 
   /* ── 卡片与表格 ─────────────────────────────────────────── */
-  { key: '--mauth-panel-bg', label: '卡片底', group: '卡片与表格', kind: 'color', scope: 'component', hint: '面板、卡片' },
+  { key: '--mauth-panel-bg', label: '卡片底', group: '卡片与表格', kind: 'color', scope: 'component', hint: '面板、卡片' , tier: 1 },
   { key: '--mauth-table-head-bg', label: '表头底', group: '卡片与表格', kind: 'color', scope: 'component' },
   { key: '--mauth-table-row-hover', label: '表格行悬停', group: '卡片与表格', kind: 'color', scope: 'component' },
   {
@@ -172,8 +181,8 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   },
 
   /* ── 控件 ───────────────────────────────────────────────── */
-  { key: '--mauth-btn-bg', label: '按钮底', group: '控件', kind: 'color', scope: 'component', hint: '次要按钮；主按钮跟随主色' },
-  { key: '--mauth-input-bg', label: '输入框底', group: '控件', kind: 'color', scope: 'component' },
+  { key: '--mauth-btn-bg', label: '按钮底', group: '控件', kind: 'color', scope: 'component', hint: '次要按钮；主按钮跟随主色' , tier: 1 },
+  { key: '--mauth-input-bg', label: '输入框底', group: '控件', kind: 'color', scope: 'component' , tier: 1 },
   { key: '--mauth-modal-bg', label: '弹窗底', group: '控件', kind: 'color', scope: 'component' },
   { key: '--mauth-tabbar-bg', label: '分段控件底', group: '控件', kind: 'color', scope: 'component' },
   { key: '--mauth-tab-active-bg', label: '分段选中底', group: '控件', kind: 'color', scope: 'component' },
