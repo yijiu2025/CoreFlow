@@ -146,6 +146,30 @@ export const TOKEN_MANIFEST: TokenMeta[] = [
   { key: '--mauth-panel-bg', label: '卡片底', group: '卡片与表格', kind: 'color', scope: 'component', hint: '面板、卡片' },
   { key: '--mauth-table-head-bg', label: '表头底', group: '卡片与表格', kind: 'color', scope: 'component' },
   { key: '--mauth-table-row-hover', label: '表格行悬停', group: '卡片与表格', kind: 'color', scope: 'component' },
+  {
+    key: '--mauth-pulse-glow',
+    label: '登录脉搏暖光',
+    group: '卡片与表格',
+    kind: 'color',
+    scope: 'component',
+    hint: '登录脉搏卡左上角的那团主色光；嫌太艳就把它调淡或换成透明'
+  },
+  {
+    key: '--mauth-pulse-bg',
+    label: '登录脉搏底色',
+    group: '卡片与表格',
+    kind: 'color',
+    scope: 'component',
+    hint: '登录脉搏卡的主底色（渐变起点）；改成与「卡片底」一致就完全素了'
+  },
+  {
+    key: '--mauth-pulse-bg-2',
+    label: '登录脉搏底色（末端）',
+    group: '卡片与表格',
+    kind: 'color',
+    scope: 'component',
+    hint: '渐变到右下角的收尾色'
+  },
 
   /* ── 控件 ───────────────────────────────────────────────── */
   { key: '--mauth-btn-bg', label: '按钮底', group: '控件', kind: 'color', scope: 'component', hint: '次要按钮；主按钮跟随主色' },

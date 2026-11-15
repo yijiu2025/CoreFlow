@@ -62,7 +62,9 @@
                 @input="onColor(meta.key, $event)"
               />
             </label>
-            <code class="tok__val">{{ shortValue(meta.key) }}</code>
+            <code :class="['tok__val', { 'tok__val--inherit': !valueOf(meta.key) }]">
+              {{ shortValue(meta.key) || '跟随主色' }}
+            </code>
           </template>
 
           <template v-else>
@@ -386,6 +388,13 @@ function onLength(key: string, ev: Event): void {
   color: var(--mauth-text-faint);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+/* 没有静态值 = 默认由表达式现算（如登录脉搏卡跟着主色走） */
+.tok__val--inherit {
+  font-family: var(--font-sans);
+  font-style: italic;
+  opacity: 0.8;
 }
 
 .tok__num {

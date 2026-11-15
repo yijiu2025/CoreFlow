@@ -276,13 +276,26 @@ loadPulse();
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--mauth-primary) 22%, var(--mauth-border-strong));
   border-radius: var(--mauth-radius-xl);
+  /*
+   * 三层叠出来的"暖光卡"：左上主色光 + 右下表面返光 + 斜向基底渐变。
+   *
+   * 🔴 三个颜色都走**组件级令牌**（`--mauth-pulse-*`），不再现算 `color-mix(tint, surface)`——
+   *    现算的结果在「自定义」面板里没有对应项，用户想调这张卡只能改主色（会连带影响
+   *    卡面渐变、图表、光斑一大片）。拆成令牌后，改「卡片 → 登录脉搏」三项即可，
+   *    其它地方一点都不动。
+   *    `var(--x, 兜底)` 里保留原来的 color-mix：老配色缺这三项时仍按旧规则渲染。
+   */
   background:
-    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--mauth-tint) 31%, transparent), transparent 58%),
+    radial-gradient(
+      120% 90% at 0% 0%,
+      var(--mauth-pulse-glow, color-mix(in srgb, var(--mauth-tint) 31%, transparent)),
+      transparent 58%
+    ),
     radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--mauth-surface) 92%, transparent), transparent 60%),
     linear-gradient(
       150deg,
-      color-mix(in srgb, var(--mauth-tint) 12%, var(--mauth-surface)),
-      color-mix(in srgb, var(--mauth-tint) 4%, var(--mauth-surface)) 55%,
+      var(--mauth-pulse-bg, color-mix(in srgb, var(--mauth-tint) 12%, var(--mauth-surface))),
+      var(--mauth-pulse-bg-2, color-mix(in srgb, var(--mauth-tint) 4%, var(--mauth-surface))) 55%,
       var(--mauth-surface)
     );
   box-shadow:
@@ -290,11 +303,20 @@ loadPulse();
     var(--e2);
 }
 
+/* 深色：同一组令牌（深色配色里 glow 是 18%、底色是 7% 混合），只是少一层返光 */
 .dark .pulse {
   border-color: color-mix(in srgb, var(--mauth-primary) 16%, var(--mauth-border-strong));
   background:
-    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--mauth-tint) 18%, transparent), transparent 58%),
-    linear-gradient(150deg, color-mix(in srgb, var(--mauth-tint) 7%, var(--mauth-surface)), var(--mauth-surface) 62%);
+    radial-gradient(
+      120% 90% at 0% 0%,
+      var(--mauth-pulse-glow, color-mix(in srgb, var(--mauth-tint) 18%, transparent)),
+      transparent 58%
+    ),
+    linear-gradient(
+      150deg,
+      var(--mauth-pulse-bg, color-mix(in srgb, var(--mauth-tint) 7%, var(--mauth-surface))),
+      var(--mauth-surface) 62%
+    );
 }
 
 /* 指针光：一道柔光照亮材质（`screen` 混合；深色下 `screen` 会发灰，换普通混合） */

@@ -45,7 +45,25 @@ for (const file of [MANIFEST, BASELINE]) {
 const manifest = keysOf(MANIFEST);
 const baseline = keysOf(BASELINE);
 
-const missingInColors = [...manifest].filter(k => !baseline.has(k));
+/*
+ * 「仅覆盖型」令牌：清单里有、配色表里**故意不写**
+ *
+ * 典型是 `--mauth-pulse-*`（登录脉搏卡的三层背景）。它们的**默认值是一个表达式**
+ * （`color-mix(tint, surface)`），写不成配色表里的单值；而 CSS 侧是
+ * `var(--mauth-pulse-bg, color-mix(…))` —— 没有覆盖时走 color-mix，于是**跟着主色变**，
+ * 与改造前完全一致；用户在「自定义」里改了才走覆盖。
+ *
+ * 如果把它们写进配色表，默认值就被钉死成静态色，换主色时卡片不跟着变（视觉回归）。
+ *
+ * 这条口子只对"默认值必须是表达式"的令牌开 —— 新增一项要写理由。
+ */
+const OVERRIDE_ONLY = new Set([
+  '--mauth-pulse-glow',
+  '--mauth-pulse-bg',
+  '--mauth-pulse-bg-2'
+]);
+
+const missingInColors = [...manifest].filter(k => !baseline.has(k) && !OVERRIDE_ONLY.has(k));
 const missingInManifest = [...baseline].filter(k => !manifest.has(k));
 
 if (missingInColors.length === 0 && missingInManifest.length === 0) {

@@ -23,6 +23,19 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { ACCENT_TOKEN_KEYS, accentVarsOf } from '../src/theme/accent-tokens.ts';
 
+/*
+ * 允许"值恰好等于主色浅底、但不进主色组"的令牌
+ *
+ * `--mauth-pulse-glow`（登录脉搏卡的左上暖光）派生自 **`--mauth-tint`（主色鲜档）**，
+ * 不是 primary：leaf 的 tint 是 `#82dd2d`、primary 是 `#2c8500`，两者光色差很远。
+ * 但 `star` 配色的 tint 与 primary 恰好同值，0.18 混出来正好撞上 primary-soft 的 RGB ——
+ * 那是**巧合**，不是漏登记。若把它并进主色组，换主色时会用 primary 算光（发闷），
+ * 反而破坏"暖光取鲜档"的设计。
+ *
+ * 这个口子只对**派生自 tint 的令牌**开，且必须写明理由。
+ */
+const OUTSIDE_ACCENT = new Set(['--mauth-pulse-glow']);
+
 const ROOT = resolve(import.meta.dirname, '..');
 const THEMES = join(ROOT, 'src/theme/themes');
 
@@ -120,6 +133,7 @@ for (const file of shells) {
     /* soft 自己也是基准值，比它没意义 */
     const derivedFromSoft = soft && key !== '--mauth-primary-soft' && value === soft;
     if (!derivedFromPrimary && !derivedFromSoft) continue;
+    if (OUTSIDE_ACCENT.has(key)) continue;
     check(
       ACCENT_TOKEN_KEYS.includes(key),
       `${label} 的 ${key} = ${value}（就是主色${derivedFromPrimary ? '' : '浅底'}），但不在主色组里 ⇒ 换主色时它不会跟着变`

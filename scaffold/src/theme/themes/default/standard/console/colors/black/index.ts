@@ -96,6 +96,6 @@ export default {
     /* 开关：轨道 / 开态 / 滑块分开，便于单独调（此前开态写死成成功色，不跟主题） */
     '--mauth-switch-track': 'rgba(238, 242, 241, 0.16)',
     '--mauth-switch-on': '#8fd45a',
-    '--mauth-switch-knob': '#161a1d',
+    '--mauth-switch-knob': '#161a1d'
   }
 } satisfies MauthThemeColor;

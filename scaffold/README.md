@@ -341,6 +341,26 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 只有三类字面量是允许的：遮罩（`mask-image` 的 `#000`）、光效高光（`#fff 55% inset`）、
 内容图标色板（口袋版入口的彩色图标）。
 
+### 「仅覆盖型」令牌（默认值必须是表达式）
+
+有些令牌的默认值写不成配色表里的单值 —— 它是 `color-mix()` 现算的。典型是**登录脉搏卡**的三层背景：
+
+```css
+background:
+  radial-gradient(120% 90% at 0% 0%, var(--mauth-pulse-glow, color-mix(in srgb, var(--mauth-tint) 31%, transparent)), transparent 58%),
+  ...,
+  linear-gradient(150deg,
+    var(--mauth-pulse-bg, color-mix(in srgb, var(--mauth-tint) 12%, var(--mauth-surface))),
+    var(--mauth-pulse-bg-2, color-mix(in srgb, var(--mauth-tint) 4%, var(--mauth-surface))) 55%, ...);
+```
+
+- **没有覆盖时** → 走 `color-mix` → 卡片跟着主色变（改主色，暖光与底色一起变）
+- **在「自定义 → 卡片」里改了三项** → 走覆盖值 → 从此固定，不再跟主色
+- **点「还原」** → 回到 `color-mix`
+
+所以这三项**故意不写进配色表**（写进去就钉死成静态色，换主色时卡片不跟着变，是视觉回归）。
+关卡里用 `OVERRIDE_ONLY` 白名单放行，注释写明了理由；面板上它们的值显示为「跟随主色」。
+
 🔴 `npm run typecheck` 会跑 `scripts/check-token-manifest.mjs` **双向**比对清单 vs 配色表：
 清单有、配色表没有（编辑器写出空变量）；配色表有、清单没有（用户看不到这一项）。
 加 token 的顺序固定为：**先写进 38 份配色表 → 再登记清单**。
