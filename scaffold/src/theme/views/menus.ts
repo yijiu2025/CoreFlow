@@ -77,7 +77,6 @@ export interface MenusViewContext {
   trees: Ref<MenuNode[]>;
   loading: Ref<boolean>;
   errorMessage: Ref<string>;
-  toast: Ref<string>;
   dialogOpen: Ref<boolean>;
   editingId: Ref<number | null>;
   form: MenuForm;

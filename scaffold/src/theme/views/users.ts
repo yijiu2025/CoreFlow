@@ -47,7 +47,6 @@ export interface UsersViewContext {
   total: Ref<number>;
   loading: Ref<boolean>;
   errorMessage: Ref<string>;
-  toast: Ref<string>;
   query: UsersQuery;
   /** 部门 / 角色 / 岗位候选 */
   options: Ref<UserOptions>;

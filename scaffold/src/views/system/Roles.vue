@@ -52,6 +52,8 @@ import { useAuthStore } from '@/stores/auth';
 import { ThemeView } from 'skinsuite/vue';
 import type { RolesViewContext } from '@/theme/views/roles';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
+import { useToastStore } from '@/stores/toast';
+import { useConfirmStore } from '@/stores/confirm';
 
 const auth = useAuthStore();
 
@@ -335,7 +337,9 @@ const rows = ref<RoleRow[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref('');
-const toast = ref('');
+/* 全局轻提示：样式 / 时长 / 悬停暂停都在 stores/toast.ts 一处 */
+const toastStore = useToastStore();
+const confirmStore = useConfirmStore();
 const keyword = ref('');
 
 /*
@@ -654,8 +658,7 @@ const builtinGroups = computed(() => {
  * @param message 文案
  */
 function notify(message: string): void {
-  toast.value = message;
-  window.setTimeout(() => (toast.value = ''), 2600);
+  toastStore.push(message);
 }
 
 /** 加载角色列表 */
@@ -952,7 +955,13 @@ async function submitMenus(): Promise<void> {
  * @param row 角色行
  */
 async function remove(row: RoleRow): Promise<void> {
-  if (!window.confirm(`确认删除角色「${row.name}」？`)) return;
+  const ok = await confirmStore.ask({
+    title: '删除角色',
+    message: `确认删除角色「${row.name}」？已授权给该角色的用户会失去对应权限。`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return;
   try {
     await removeRole(row.id);
     notify('已删除');
@@ -989,7 +998,6 @@ const ctx: RolesViewContext = {
   total,
   loading,
   errorMessage,
-  toast,
   keyword,
   appFilter,
   matrixKeyword,

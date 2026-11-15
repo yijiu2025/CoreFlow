@@ -27,7 +27,6 @@ const {
   trees,
   loading,
   errorMessage,
-  toast,
   collapsed,
   altView,
   selectedId,
@@ -534,7 +533,6 @@ const {
       @close="historyTarget = null"
     />
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 

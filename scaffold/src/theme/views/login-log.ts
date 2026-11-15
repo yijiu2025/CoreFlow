@@ -52,7 +52,6 @@ export interface LoginLogViewContext {
   /** 读数区档位：热力 / 趋势 */
   view: Ref<'heat' | 'trend'>;
   heatHidden: Ref<boolean>;
-  toast: Ref<string>;
   /** 查询条件（筛选维度的唯一来源） */
   query: LoginLogQuery;
   /** 已生效的筛选（列表 / 导出 / 清除共用同一份） */

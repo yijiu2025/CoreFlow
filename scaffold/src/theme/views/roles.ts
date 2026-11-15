@@ -90,7 +90,6 @@ export interface RolesViewContext {
   total: Ref<number>;
   loading: Ref<boolean>;
   errorMessage: Ref<string>;
-  toast: Ref<string>;
   /** 列表筛选 */
   keyword: Ref<string>;
   appFilter: Ref<string>;

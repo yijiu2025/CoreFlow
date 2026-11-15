@@ -22,6 +22,7 @@ import RelationGraph, { type GraphLink, type GraphNode } from '@/components/char
 import { postUsers } from '@/api/system';
 import type { PostMember } from '@/api/types';
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
 
 /** 阶梯的输入：岗位行（含在岗人数） */
 export interface LadderPost {
@@ -42,7 +43,7 @@ const size = ref({ w: 0, h: 0 });
 const activeId = ref<number | null>(null);
 const members = ref<PostMember[]>([]);
 const membersLoading = ref(false);
-const toast = ref('');
+const toastStore = useToastStore();
 
 /** 有权限才拉成员明细（否则只显示人数） */
 const canListUsers = computed(() => auth.hasPermission('admin:user:read'));
@@ -112,8 +113,7 @@ async function loadMembers(id: number): Promise<void> {
     members.value = await postUsers(id);
   } catch (err) {
     members.value = [];
-    toast.value = err instanceof Error ? err.message : '在岗人员加载失败';
-    window.setTimeout(() => (toast.value = ''), 2600);
+    toastStore.pushError(err, '在岗人员加载失败');
   } finally {
     membersLoading.value = false;
   }
@@ -332,6 +332,5 @@ function onSelect(node: GraphNode): void {
     </RelationGraph>
 
     <div v-if="!loading && !steps.length" class="empty">还没有岗位</div>
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>

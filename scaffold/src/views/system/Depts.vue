@@ -31,6 +31,8 @@ import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 import { ThemeView } from 'skinsuite/vue';
 import type { DeptsViewContext } from '@/theme/views/depts';
+import { useToastStore } from '@/stores/toast';
+import { useConfirmStore } from '@/stores/confirm';
 
 const auth = useAuthStore();
 
@@ -46,7 +48,9 @@ const device = useRenderDevice();
 const trees = ref<DeptNode[]>([]);
 const loading = ref(false);
 const errorMessage = ref('');
-const toast = ref('');
+/* 全局轻提示：样式 / 时长 / 悬停暂停都在 stores/toast.ts 一处 */
+const toastStore = useToastStore();
+const confirmStore = useConfirmStore();
 
 /** 折叠状态：存「已收起」的 id，默认全展开（新部门自动展开） */
 const collapsed = ref<Set<number>>(new Set());
@@ -81,8 +85,7 @@ const errors = reactive<Record<string, string>>({});
  * @param message 文案
  */
 function notify(message: string): void {
-  toast.value = message;
-  window.setTimeout(() => (toast.value = ''), 2600);
+  toastStore.push(message);
 }
 
 /** 加载部门树 */
@@ -444,7 +447,13 @@ async function remove(node: DeptNode): Promise<void> {
     notify(`「${node.name}」下还有 ${node.children.length} 个下级部门，请先调整或删除下级`);
     return;
   }
-  if (!window.confirm(`确认删除部门「${node.name}」？`)) return;
+  const ok = await confirmStore.ask({
+    title: '删除部门',
+    message: `确认删除部门「${node.name}」？子部门与关联成员需要先处理。`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return;
   try {
     await removeDept(node.id);
     notify('已删除');
@@ -471,7 +480,6 @@ const ctx: DeptsViewContext = {
   trees,
   loading,
   errorMessage,
-  toast,
   collapsed,
   altView,
   selectedId,

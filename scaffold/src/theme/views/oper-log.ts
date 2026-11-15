@@ -53,7 +53,6 @@ export interface OperLogViewContext {
   yearLoading: Ref<boolean>;
   view: Ref<'heat' | 'trend'>;
   heatHidden: Ref<boolean>;
-  toast: Ref<string>;
   query: OperLogQuery;
   /** 时间窗（同时约束列表与统计） */
   timeWindow: Ref<OperTimeWindow>;

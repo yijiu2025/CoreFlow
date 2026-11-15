@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { ThemeView } from 'skinsuite/vue';
 import type { UsersViewContext } from '@/theme/views/users';
+import { useToastStore } from '@/stores/toast';
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -37,7 +38,8 @@ const rows = ref<UserRow[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const errorMessage = ref('');
-const toast = ref('');
+/* 全局轻提示：样式 / 时长 / 悬停暂停都在 stores/toast.ts 一处 */
+const toastStore = useToastStore();
 
 const query = reactive({
   pageNum: 1,
@@ -276,8 +278,7 @@ const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageS
  * @param message 提示文案
  */
 function notify(message: string): void {
-  toast.value = message;
-  window.setTimeout(() => (toast.value = ''), 2600);
+  toastStore.push(message);
 }
 
 /**
@@ -636,7 +637,7 @@ onMounted(async () => {
  * 版式只读它们，不再自己判权限、不再自己取数。
  */
 const ctx: UsersViewContext = {
-  device, rows, total, loading, errorMessage, toast, query, options, filterMode, collapsedDept,
+  device, rows, total, loading, errorMessage, query, options, filterMode, collapsedDept,
   profileId, deptFlat, currentDeptName, selected, allSelected, someSelected, selectedUsers,
   grantTarget, dangerTarget, batchOpen, importOpen, editingTarget, dialogOpen, pageCount,
   grantAdjustable,

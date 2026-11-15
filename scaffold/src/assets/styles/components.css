@@ -700,32 +700,6 @@
   }
 }
 
-/* ── 提示条 ───────────────────────────────────────────────── */
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 28px;
-  z-index: 80;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: var(--mauth-plate-bg);
-  color: var(--mauth-plate-ink);
-  font-size: 13px;
-  box-shadow: var(--e3);
-  animation: toast-in 0.22s var(--ease-out) both;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 10px);
-  }
-}
-
 /* ── 分段控件（页面内切档：列表 / 矩阵 / 星图）──────────────────────
    全站只有这一种形态：**外圈有边框的容器 + 内层选中胶囊**。
    曾经用户管理用 `.mode`（有边框、选中是白块+文字色），角色管理等用 `.tabbar`

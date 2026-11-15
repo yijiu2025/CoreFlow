@@ -36,6 +36,8 @@ import GrantHistoryDialog from '@/components/business/GrantHistoryDialog.vue';
 import UserDangerDialog from '@/components/business/UserDangerDialog.vue';
 import { canManageUser, indexRoles } from '@/utils/scope';
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
+import { useConfirmStore } from '@/stores/confirm';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -147,7 +149,13 @@ async function kickSession(row: UserSessionRow): Promise<void> {
   const tip = row.is_current
     ? '这是你当前正在使用的设备，下线后本次登录会立即退出。\n\n确定继续？'
     : `确认让设备「${row.device_id}」下线？\n\n只会踢掉这一台，该账号的其他设备不受影响。`;
-  if (!window.confirm(tip)) {
+  const ok = await confirmStore.ask({
+    title: row.is_current ? '下线当前设备' : '下线设备',
+    message: tip.replace(/\n\n确定继续？$/, ''),
+    confirmText: '下线',
+    danger: true
+  });
+  if (!ok) {
     return;
   }
   kicking.value = row.device_id;
@@ -403,8 +411,8 @@ const grantOpen = ref(false);
 const dangerOpen = ref(false);
 /** 「更多」底部面板开关 */
 const sheetOpen = ref(false);
-/** 一次性提示（操作成功后 2.6 秒消失） */
-const toast = ref('');
+const toastStore = useToastStore();
+const confirmStore = useConfirmStore();
 
 /**
  * 提示
@@ -412,8 +420,7 @@ const toast = ref('');
  * @param message 文案
  */
 function notify(message: string): void {
-  toast.value = message;
-  window.setTimeout(() => (toast.value = ''), 2600);
+  toastStore.push(message);
 }
 
 /** 刷新详情（保持当前页签） */
@@ -832,7 +839,6 @@ watch(
       @changed="refreshAfterDanger"
     />
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 

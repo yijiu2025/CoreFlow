@@ -14,6 +14,8 @@ import { useAccentStore } from '@/stores/accent';
 import { useOverridesStore } from '@/stores/overrides';
 import { alignAccentToPackage } from '@/composables/useThemePackage';
 import { installAppearanceSync } from '@/composables/useAppearance';
+import ToastHost from '@/components/ui/ToastHost.vue';
+import ConfirmHost from '@/components/ui/ConfirmHost.vue';
 
 /** <ThemeRoot> 的 props 类型（库未导出 ThemeStoreLike，从其 props 反推最稳妥） */
 type ThemeRootProps = InstanceType<typeof ThemeRoot>['$props'];
@@ -72,5 +74,8 @@ watch(
 <template>
   <ThemeRoot :theme-store="themeStore">
     <router-view />
+    <!-- 全局反馈宿主：提示与确认框各只有一份，业务侧调 store 即可（见 stores/toast.ts / confirm.ts） -->
+    <ToastHost />
+    <ConfirmHost />
   </ThemeRoot>
 </template>

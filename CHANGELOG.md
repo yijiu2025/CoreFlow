@@ -7,6 +7,24 @@
 
 ## 未发布（Unreleased）
 
+### 新增
+
+- **统一操作反馈**：`stores/toast.ts` + `ToastHost`（底部胶囊，悬停暂停，最多 4 条）、
+  `stores/confirm.ts` + `ConfirmHost`（`await confirm(...)` 返回布尔）、
+  `composables/useFocusTrap.ts`（弹窗接管 Tab、关闭还焦点、多层用栈）。
+  宿主挂在 `App.vue`，全站各一份。
+
+### 修复
+
+- **8 处 `window.confirm` 全部替换**：删除岗位 / 部门 / 菜单 / 角色、下线设备、退出其他设备、
+  清理已下线记录、踢用户会话。系统 confirm 在深色主题下是白框、阻塞渲染线程、无法表达危险语义；
+  现在统一是自绘确认框，危险操作按钮变红、默认焦点留在「取消」。
+- **6 个页面的局部 toast 收口**：`Posts` / `Roles` / `Depts` / `Menus` / `OperLog` / `LoginLog`
+  各自写 `const toast = ref('')` + `setTimeout(2600)`，位置与时长都不一致；连带契约里的
+  `toast: Ref<string>` 字段与版式里的 `<div class="toast">` 一并删除（契约少一个字段）。
+  `PostLadder` / `UserProfileDrawer` 的组件内 toast 同样收口。
+- 删除 `components.css` 里已无消费者的 `.toast` 与 `@keyframes toast-in`。
+
 ## 2.42.2 — 2026-11-15
 
 ### 修复

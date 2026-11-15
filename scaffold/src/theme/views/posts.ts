@@ -85,7 +85,6 @@ export interface PostsViewContext {
   /** 弹窗表单 */
   form: PostForm;
   /** 轻提示文案（空串 = 不显示） */
-  toast: Ref<string>;
   openCreate: () => void;
   openEdit: (row: PostRow) => void;
   /** 阶梯节点 → 打开编辑（容器按 id 找回原始行） */

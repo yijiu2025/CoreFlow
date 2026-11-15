@@ -33,7 +33,6 @@ const {
   trees,
   loading,
   errorMessage,
-  toast,
   dialogOpen,
   editingId,
   form,
@@ -455,7 +454,6 @@ const {
       </div>
     </div>
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 

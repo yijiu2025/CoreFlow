@@ -20,6 +20,7 @@ import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 import { ThemeView } from 'skinsuite/vue';
 import type { OperLogViewContext } from '@/theme/views/oper-log';
+import { useToastStore } from '@/stores/toast';
 
 const auth = useAuthStore();
 
@@ -75,7 +76,8 @@ const yearLoading = ref(false);
 const view = ref<'heat' | 'trend'>('trend');
 /** 是否收起热力面板（与登录日志页一致） */
 const heatHidden = ref(false);
-const toast = ref('');
+/* 全局轻提示：样式 / 时长 / 悬停暂停都在 stores/toast.ts 一处 */
+const toastStore = useToastStore();
 const query = reactive({
   pageNum: 1,
   pageSize: 20,
@@ -137,8 +139,7 @@ const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageS
  * @param message 文案
  */
 function notify(message: string): void {
-  toast.value = message;
-  window.setTimeout(() => (toast.value = ''), 2600);
+  toastStore.push(message);
 }
 
 /** 加载统计与列表 */
@@ -422,7 +423,6 @@ const ctx: OperLogViewContext = {
   yearLoading,
   view,
   heatHidden,
-  toast,
   query,
   timeWindow,
   advancedOpen,

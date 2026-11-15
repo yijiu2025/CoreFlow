@@ -35,7 +35,6 @@ const {
   dialogOpen,
   editingId,
   form,
-  toast,
   openCreate,
   openEdit,
   editFromLadder,
@@ -281,7 +280,6 @@ const {
       </div>
     </div>
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 

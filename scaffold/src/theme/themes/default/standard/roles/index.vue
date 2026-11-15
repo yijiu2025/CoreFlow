@@ -27,7 +27,6 @@ const {
   total,
   loading,
   errorMessage,
-  toast,
   keyword,
   appFilter,
   matrixKeyword,
@@ -689,7 +688,6 @@ const {
       </div>
     </div>
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 

@@ -17,6 +17,8 @@ import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 import { ThemeView } from 'skinsuite/vue';
 import type { MenusViewContext } from '@/theme/views/menus';
+import { useToastStore } from '@/stores/toast';
+import { useConfirmStore } from '@/stores/confirm';
 
 const auth = useAuthStore();
 
@@ -80,7 +82,9 @@ const altView = ref<'table' | 'star'>('table');
 const trees = ref<MenuNode[]>([]);
 const loading = ref(false);
 const errorMessage = ref('');
-const toast = ref('');
+/* 全局轻提示：样式 / 时长 / 悬停暂停都在 stores/toast.ts 一处 */
+const toastStore = useToastStore();
+const confirmStore = useConfirmStore();
 
 const dialogOpen = ref(false);
 const editingId = ref<number | null>(null);
@@ -208,8 +212,7 @@ function findNode(id: number): MenuNode | null {
  * @param message 文案
  */
 function notify(message: string): void {
-  toast.value = message;
-  window.setTimeout(() => (toast.value = ''), 2600);
+  toastStore.push(message);
 }
 
 /** 首次加载是否已按默认规则折叠过（后续刷新不覆盖用户的手动展开） */
@@ -436,7 +439,13 @@ async function submit(): Promise<void> {
  * @param node 菜单节点
  */
 async function remove(node: MenuNode): Promise<void> {
-  if (!window.confirm(`确认删除菜单「${node.name}」？`)) return;
+  const ok = await confirmStore.ask({
+    title: '删除菜单',
+    message: `确认删除菜单「${node.name}」？子菜单会一并移除。`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return;
   try {
     await removeMenu(node.id);
     notify('已删除');
@@ -564,7 +573,6 @@ const ctx: MenusViewContext = {
   trees,
   loading,
   errorMessage,
-  toast,
   dialogOpen,
   editingId,
   form,

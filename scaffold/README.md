@@ -174,6 +174,26 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 
 调试：`?debug=theme` 打开面板；`?th_color=black` 强制深色；`?device=mobile` 锁定手机版。
 
+## 操作反馈：提示 / 确认 / 焦点
+
+三件事各有唯一入口，**不要在业务组件里再造一套**。
+
+| 能力 | 入口 | 说明 |
+| --- | --- | --- |
+| 轻提示 | `useToastStore().push(msg, tone?)` / `.pushError(err, fallback)` | 底部居中胶囊，2.6s（失败 4.2s）；**悬停暂停**，最多 4 条 |
+| 确认框 | `await useConfirmStore().ask({ title, message, confirmText?, danger? })` | 返回 `Promise<boolean>`；危险操作按钮变红 |
+| 焦点陷阱 | `createFocusTrap()`（`composables/useFocusTrap.ts`） | 弹窗打开接管 Tab、关闭还焦点；**多层用栈** |
+
+宿主 `ToastHost` / `ConfirmHost` 挂在 `App.vue`，全站只有一份。
+
+🔴 **不要用 `window.confirm`**：它阻塞渲染线程、样式不可控（深色主题下是白框）、无法表达危险语义。
+全仓 8 处已全部替换（删除岗位/部门/菜单/角色、下线设备、退出其他设备、清理记录、踢会话）。
+
+🔴 **提示不要写死时长与位置**。此前 6 个页面各写 `const toast = ref('')` + `setTimeout(2600)`，
+位置、时长、失败文案三样都不一致；现在 `notify()` 里只剩一行 `toastStore.push(message)`。
+
+🔴 **危险操作的默认焦点留在「取消」**（不是确认）：删除类操作不该让手快的用户连按两下 Enter 就删掉数据。
+
 ## 外观：四档
 
 `/settings/theme`（`views/settings/Theme.vue`）把外观拆成**互相正交**的四档，各自落盘：

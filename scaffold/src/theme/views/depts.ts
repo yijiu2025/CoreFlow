@@ -63,7 +63,6 @@ export interface DeptsViewContext {
   trees: Ref<DeptNode[]>;
   loading: Ref<boolean>;
   errorMessage: Ref<string>;
-  toast: Ref<string>;
   collapsed: Ref<Set<number>>;
   altView: Ref<'table' | 'canvas'>;
   /** 画布里选中的部门 id */

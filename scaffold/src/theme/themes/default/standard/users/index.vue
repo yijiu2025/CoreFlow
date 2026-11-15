@@ -26,7 +26,7 @@ const props = defineProps<{ ctx: UsersViewContext }>();
  * 解构出来的是**同一个 Ref**（不是快照），响应性与 `.value` 写法都不变。
  */
 const {
-  device, rows, total, loading, errorMessage, toast, query, options, filterMode, collapsedDept,
+  device, rows, total, loading, errorMessage, query, options, filterMode, collapsedDept,
   profileId, deptFlat, currentDeptName, selected, allSelected, someSelected, selectedUsers,
   grantTarget, dangerTarget, batchOpen, importOpen, editingTarget, dialogOpen, pageCount,
   grantAdjustable, canCreate, canUpdate, canExport, canImport, canGrants, canRead,
@@ -427,7 +427,6 @@ const {
       @done="onBatchDone"
     />
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 

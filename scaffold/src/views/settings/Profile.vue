@@ -29,6 +29,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { ThemeView } from 'skinsuite/vue';
 import type { ProfileViewContext } from '@/theme/views/profile';
+import { useConfirmStore } from '@/stores/confirm';
 
 const accentStore = useAccentStore();
 
@@ -270,7 +271,13 @@ async function kickDevice(row: MyDeviceRow): Promise<void> {
   const tip = row.isCurrent
     ? '这是你当前正在使用的设备，确认后本次登录会立即退出。\n\n确定继续？'
     : `确认让设备「${row.deviceId}」下线？\n\n该设备上的登录会话会立即失效。`;
-  if (!window.confirm(tip)) return;
+  const ok = await confirmStore.ask({
+    title: row.isCurrent ? '下线当前设备' : '下线设备',
+    message: tip.replace(/\n\n确定继续？$/, ''),
+    confirmText: '下线',
+    danger: true
+  });
+  if (!ok) return;
 
   kicking.value = row.id;
   deviceNotice.value = '';
@@ -306,7 +313,13 @@ async function kickDevice(row: MyDeviceRow): Promise<void> {
  */
 async function kickOthers(): Promise<void> {
   if (kickingAll.value) return;
-  if (!window.confirm('确认退出其他所有设备？\n\n当前设备会保持登录，其它设备的会话立即失效。')) return;
+  const ok = await confirmStore.ask({
+    title: '退出其他所有设备',
+    message: '当前设备会保持登录，其它设备的会话立即失效。',
+    confirmText: '全部退出',
+    danger: true
+  });
+  if (!ok) return;
   kickingAll.value = true;
   deviceNotice.value = '';
   devicesError.value = '';
@@ -332,7 +345,13 @@ async function kickOthers(): Promise<void> {
 async function pruneRevoked(): Promise<void> {
   if (pruning.value || revokedDevices.value.length === 0) return;
   const count = revokedDevices.value.length;
-  if (!window.confirm(`清理 ${count} 条已下线记录？\n\n只影响这份历史列表，不会退出任何正在登录的设备。`)) {
+  const ok = await confirmStore.ask({
+    title: '清理已下线记录',
+    message: `将清理 ${count} 条记录。只影响这份历史列表，不会退出任何正在登录的设备。`,
+    confirmText: '清理',
+    danger: true
+  });
+  if (!ok) {
     return;
   }
   pruning.value = true;
@@ -354,6 +373,7 @@ async function pruneRevoked(): Promise<void> {
 onMounted(loadDevices);
 /** 当前渲染设备：本页只靠 CSS 断点适配，但要告知主题（版式目录按设备查） */
 const device = useRenderDevice();
+const confirmStore = useConfirmStore();
 
 
 /**

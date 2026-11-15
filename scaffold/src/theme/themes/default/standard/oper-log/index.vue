@@ -40,7 +40,6 @@ const {
   yearLoading,
   view,
   heatHidden,
-  toast,
   query,
   timeWindow,
   advancedOpen,
@@ -494,7 +493,6 @@ const {
       @done="onPurged"
     />
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
   </div>
 </template>
 

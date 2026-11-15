@@ -15,6 +15,8 @@ import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { useAuthStore } from '@/stores/auth';
 import { ThemeView } from 'skinsuite/vue';
 import type { PostRow, PostsViewContext } from '@/theme/views/posts';
+import { useToastStore } from '@/stores/toast';
+import { useConfirmStore } from '@/stores/confirm';
 
 const auth = useAuthStore();
 
@@ -54,7 +56,9 @@ const ladderPosts = computed(() =>
 const dialogOpen = ref(false);
 const editingId = ref<number | null>(null);
 const form = reactive({ postCode: '', postName: '', sort: 0, status: 1, remark: '' });
-const toast = ref('');
+/* 全局轻提示：样式 / 时长 / 悬停暂停都在 stores/toast.ts 一处 */
+const toastStore = useToastStore();
+const confirmStore = useConfirmStore();
 
 /**
  * 提示条
@@ -62,8 +66,7 @@ const toast = ref('');
  * @param message 文案
  */
 function notify(message: string): void {
-  toast.value = message;
-  window.setTimeout(() => (toast.value = ''), 2600);
+  toastStore.push(message);
 }
 
 /** 打开新建 */
@@ -127,7 +130,13 @@ async function submit(): Promise<void> {
  * @param row 岗位行
  */
 async function remove(row: PostRow): Promise<void> {
-  if (!window.confirm(`确认删除岗位「${row.post_name}」？`)) return;
+  const ok = await confirmStore.ask({
+    title: '删除岗位',
+    message: `确认删除岗位「${row.post_name}」？有在岗成员时后端会拒绝。`,
+    confirmText: '删除',
+    danger: true
+  });
+  if (!ok) return;
   try {
     await removePost(row.id);
     notify('已删除');
@@ -157,7 +166,6 @@ const ctx: PostsViewContext = {
   dialogOpen,
   editingId,
   form,
-  toast,
   openCreate,
   openEdit,
   editFromLadder,
