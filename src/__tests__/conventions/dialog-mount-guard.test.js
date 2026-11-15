@@ -13,6 +13,10 @@
  *
  * 只读源码文本做静态断言，不 import 被测组件（与 app-isolation 同类结构守卫）。
  *
+ * 🔴 **挂载点不只在 `views/` 里**：页面版式下沉到主题包之后（`theme/themes/<包>/<设备>/<页>/`），
+ *    弹窗是被版式文件挂载的。只扫 `views/` 会让"搬到主题包里"的弹窗谎报成"没有挂载点"
+ *    —— 2026-11-15 BatchGrantDialog 就是这样红的（它其实有挂载点，且有 v-if）。
+ *
  * @author yijiu2025
  * @since 2026-11-11
  */
@@ -24,6 +28,8 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '../../../scaffold/src');
 const COMPONENTS_DIR = path.join(SRC, 'components');
 const VIEWS_DIR = path.join(SRC, 'views');
+/** 主题包里的版式文件同样是"挂载点"：页面版式下沉后，弹窗多半挂在这里 */
+const THEME_DIR = path.join(SRC, 'theme');
 
 /**
  * 不设打开条件的弹窗（必须写清理由）
@@ -95,7 +101,7 @@ function dialogUsages(src) {
 
 describe('弹窗挂载守卫', () => {
   const componentFiles = walk(COMPONENTS_DIR);
-  const viewFiles = walk(VIEWS_DIR);
+  const viewFiles = [...walk(VIEWS_DIR), ...walk(THEME_DIR)];
 
   /** 组件名 → 文件（按文件名，本仓约定一致） */
   const byName = new Map();
