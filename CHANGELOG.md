@@ -7,6 +7,22 @@
 
 ## 未发布（Unreleased）
 
+### 新增
+
+- **色值表按「包 × 明暗」各一份**：`scaffold/src/theme/palettes/{pearl,spotlight,wechat}-{white,black}.ts`
+  六份独立完整的表，配色入口只声明 `meta` / `tone` 并展开自己那份 —— 改极光的侧栏不会牵动珍珠。
+  此前三套包共用一份表（极光与珍珠完全同值）。
+- **组件级 token（20 项）**：`--mauth-nav-*`（侧栏）、`--mauth-topbar-bg`、`--mauth-panel-bg`、
+  `--mauth-table-head-bg`、`--mauth-table-row-hover`、`--mauth-btn-bg`、`--mauth-input-bg`、
+  `--mauth-modal-bg`、`--mauth-tabbar-bg`、`--mauth-tab-active-bg`、`--mauth-tag-*`（四类徽标）。
+  CSS 改成 `var(--mauth-xxx, 兜底值)`：想只调一个组件就改配色表里那一行。
+- 设备尺度（手机端圆角）独立成 `palettes/device.ts`，与颜色解耦。
+
+### 修复
+
+- `.rail` 的 `--rail-bg` 与 `.tag--ok` 的 `--leaf-soft` **从未定义** ⇒ 侧栏底色一直是透明的、
+  成功标签没有底色（只剩描边）。现由 `--mauth-nav-bg` / `--mauth-tag-ok-bg` 接管。
+
 ## 2.35.1 — 2026-11-15
 
 ### 重构（管理后台前端分层）
