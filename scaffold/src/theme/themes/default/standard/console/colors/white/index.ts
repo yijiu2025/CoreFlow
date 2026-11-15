@@ -1,17 +1,17 @@
 /**
  * 珍珠玻璃 · 珍珠白（white） —— 桌面端 / 后台壳（侧栏 / 顶栏 / 内容区）
  *
- * 路径 `themes/default/standard/console/colors/white/` 是**配色**：
- * 只换颜色 / 圆角，不动 DOM。tokens 是扁平值、不分明暗档 ——
- * 深浅就是 white / black 两个具名配色，各写各的。
+ * 路径 `themes/default/standard/console/colors/white/` 是**配色**：只换颜色 / 圆角，不动 DOM。
  *
- * 🔴 色值单一来源在 `@/theme/palette.ts`（8 个壳文件只声明 meta/tone 并展开它）。
+ * 🔴 色值表在 `@/theme/palettes/pearl-white.ts` —— **每个包 × 每个明暗各一份**，
+ *    改那份只影响这一种配色；组件级 token（侧栏 / 面板 / 标签…）就在同一份表里。
+ *    设备尺度（手机端圆角）另在 `@/theme/palettes/device.ts`，与颜色无关。
  *
  * @author yijiu2025
  * @since 2026-11-09
  */
 import type { MauthThemeColor } from 'skinsuite';
-import { LIGHT_TOKENS } from '@/theme/palette';
+import PEARL_WHITE_TOKENS from '@/theme/palettes/pearl-white';
 
 export default {
   meta: {
@@ -21,5 +21,5 @@ export default {
     author: 'console'
   },
   tone: 'light',
-  tokens: { ...LIGHT_TOKENS }
+  tokens: { ...PEARL_WHITE_TOKENS }
 } satisfies MauthThemeColor;

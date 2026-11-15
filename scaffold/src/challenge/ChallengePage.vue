@@ -55,7 +55,7 @@ const { phase, progress, reason, retries, maxAutoRetry, difficulty, passTtlSec, 
 <style>
 /*
  * 本页没有主题注入，卡片消费的 6 个变量在这里给具体值。
- * 数值来自 `src/theme/palette.ts`（LIGHT_TOKENS / DARK_TOKENS），
+ * 数值来自 `src/theme/palettes/pearl-light.ts` / `pearl-dark.ts`，
  * 改配色时请一并同步 —— 这是唯一一处"手抄"色值的地方，已在文件头说明原因。
  */
 .challenge-page {

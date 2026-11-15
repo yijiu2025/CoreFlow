@@ -1,11 +1,17 @@
 /**
- * 微信 · 夜间（black） —— 桌面端 / 后台壳
+ * 微信 · 微信夜间（black） —— 桌面端 / 后台壳（侧栏 / 顶栏 / 内容区）
+ *
+ * 路径 `themes/wechat/standard/console/colors/black/` 是**配色**：只换颜色 / 圆角，不动 DOM。
+ *
+ * 🔴 色值表在 `@/theme/palettes/wechat-black.ts` —— **每个包 × 每个明暗各一份**，
+ *    改那份只影响这一种配色；组件级 token（侧栏 / 面板 / 标签…）就在同一份表里。
+ *    设备尺度（手机端圆角）另在 `@/theme/palettes/device.ts`，与颜色无关。
  *
  * @author yijiu2025
- * @since 2026-11-14
+ * @since 2026-11-09
  */
 import type { MauthThemeColor } from 'skinsuite';
-import { WECHAT_DARK_TOKENS } from '@/theme/palette-wechat';
+import WECHAT_BLACK_TOKENS from '@/theme/palettes/wechat-black';
 
 export default {
   meta: {
@@ -15,5 +21,5 @@ export default {
     author: 'console'
   },
   tone: 'dark',
-  tokens: { ...WECHAT_DARK_TOKENS }
+  tokens: { ...WECHAT_BLACK_TOKENS }
 } satisfies MauthThemeColor;

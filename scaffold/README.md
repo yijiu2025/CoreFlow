@@ -65,7 +65,8 @@ src/
 ```
 src/theme/
   theme.config.ts                        主题域清单（调试面板档位 ?debug=theme）
-  palette.ts                             色值单一来源（8 个壳文件只声明 meta/tone 并展开它）
+  palettes/<包>-<配色>.ts                **每个包 × 每个明暗一份色值表**（可整份单独调）
+  palettes/device.ts                     设备尺度（手机端圆角），不含颜色
   themes/default/                        主题包（目录名 default = 库内置兜底包名）
     index.ts                             包定义（设计名放 meta.name：珍珠玻璃）
     <设备>/<页面>/index.vue              **页面 DOM 都在这里**（设备身份 = 目录位置）
@@ -99,6 +100,21 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 
 - 明暗 = 配色系别：`white`（浅）/ `black`（深）；`mode` 仍是用户偏好（system/light/dark），
   由 `createThemeState` 维护、持久化在 `mauth:mode` / `mauth:theme`。
+- **色值表分两份、两层**：`theme/palettes/{pearl,spotlight,wechat}-{white,black}.ts` 各是
+  一份**独立完整**的表（改极光的侧栏不会牵动珍珠），表内再分
+  **基础层**（底色 / 文字四档 / 语义色 / 描边）与**组件层**（下面这一组）。
+  配色入口 `colors/<配色>/index.ts` 只声明 `meta` / `tone` 并展开对应那份表。
+
+| 组件层 token | 管什么 |
+| --- | --- |
+| `--mauth-nav-bg` / `--mauth-nav-ink` / `--mauth-nav-active-bg` | 侧栏底 / 未选中文字 / 选中项底色 |
+| `--mauth-topbar-bg` | 顶栏底（默认半透明，叠在内容上） |
+| `--mauth-panel-bg` / `--mauth-table-head-bg` / `--mauth-table-row-hover` | 卡片、表头、行悬停 |
+| `--mauth-btn-bg` / `--mauth-input-bg` / `--mauth-modal-bg` / `--mauth-tabbar-bg` / `--mauth-tab-active-bg` | 按钮 / 输入框 / 弹窗 / 分段控件底 / 选中项 |
+| `--mauth-tag-bg`·`-ink`、`--mauth-tag-ok-*`、`--mauth-tag-off-*`、`--mauth-tag-info-*` | 四类徽标（中性 / 成功 / 停用 / 信息） |
+
+  想只改一处视觉（比如让侧栏比内容区更浅、让成功标签更淡），改对应表里的**那一行**即可；
+  CSS 侧写的是 `var(--mauth-xxx, 兜底值)`，新配色漏写某一项也不会退化成透明。
 - 壳层本身也是版式（`themes/<包>/<设备>/console/index.vue`）：`AppShell` 只准备
   `ConsoleViewContext`（导航分组 / 标题 / 返回 / 明暗），微信包的手机端因此能换成一整套
   导航栏 + 底部 TabBar，而 `AppShell` 里一行 `if (pkg === …)` 都没有。

@@ -21,7 +21,9 @@
   width: var(--rail-w);
   height: 100vh;
   padding: 18px 12px 12px;
-  background: var(--rail-bg);
+  /* 侧栏底色走组件级 token：想单独调侧栏（比如比内容区更浅/更透）改配色表里的
+     `--mauth-nav-bg` 即可，不牵动面板与按钮。兜底 `--mauth-surface` 防止老配色缺这一项 */
+  background: var(--mauth-nav-bg, var(--mauth-surface));
   border-right: 1px solid var(--mauth-border);
   backdrop-filter: blur(12px);
   transition: width 0.22s ease;
@@ -89,6 +91,10 @@
     color 0.16s ease;
 }
 
+.rail__link {
+  color: var(--mauth-nav-ink, var(--mauth-text-mid));
+}
+
 .rail__link:hover {
   background: var(--mauth-hover);
   color: var(--mauth-text);
@@ -112,7 +118,7 @@
 }
 
 .rail__link[aria-current='page'] {
-  background: var(--mauth-primary-soft);
+  background: var(--mauth-nav-active-bg, var(--mauth-primary-soft));
   color: var(--mauth-primary);
   font-weight: 600;
 }
@@ -146,7 +152,8 @@
   gap: 12px;
   height: var(--topbar-h);
   padding: 0 20px;
-  background: color-mix(in srgb, var(--mauth-bg) 88%, transparent);
+  /* 顶栏同样是组件级 token（默认值 = 上面那条 88% 底的等价色） */
+  background: var(--mauth-topbar-bg, color-mix(in srgb, var(--mauth-bg) 88%, transparent));
   border-bottom: 1px solid var(--mauth-border);
   backdrop-filter: blur(14px);
 }

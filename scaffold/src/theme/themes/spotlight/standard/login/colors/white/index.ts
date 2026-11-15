@@ -1,22 +1,25 @@
 /**
- * 聚光 · 珍珠白 —— 桌面端 / 登录页（浅色）
+ * 极光 · 极光白（white） —— 桌面端 / 登录页
  *
- * 本包只换版式，色值仍取 `@/theme/palette.ts` 的单一来源：这样"换版式"与
- * "换配色"彼此正交，不会出现某个包偷偷改了主色。
+ * 路径 `themes/spotlight/standard/login/colors/white/` 是**配色**：只换颜色 / 圆角，不动 DOM。
+ *
+ * 🔴 色值表在 `@/theme/palettes/spotlight-white.ts` —— **每个包 × 每个明暗各一份**，
+ *    改那份只影响这一种配色；组件级 token（侧栏 / 面板 / 标签…）就在同一份表里。
+ *    设备尺度（手机端圆角）另在 `@/theme/palettes/device.ts`，与颜色无关。
  *
  * @author yijiu2025
- * @since 2026-11-10
+ * @since 2026-11-09
  */
 import type { MauthThemeColor } from 'skinsuite';
-import { LIGHT_TOKENS } from '@/theme/palette';
+import SPOTLIGHT_WHITE_TOKENS from '@/theme/palettes/spotlight-white';
 
 export default {
   meta: {
     id: 'white',
-    name: '珍珠白',
-    description: '浅色：柔和灰白底 + 白表面，蓝色作主操作',
+    name: '极光白',
+    description: '浅色：极光版式，沿用珍珠的底色起点（可单独调）',
     author: 'console'
   },
   tone: 'light',
-  tokens: { ...LIGHT_TOKENS }
+  tokens: { ...SPOTLIGHT_WHITE_TOKENS }
 } satisfies MauthThemeColor;

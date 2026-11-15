@@ -14,7 +14,7 @@
   padding: 0 14px;
   border: 1px solid var(--mauth-border-strong);
   border-radius: var(--mauth-radius-sm);
-  background: var(--mauth-surface);
+  background: var(--mauth-btn-bg, var(--mauth-surface));
   color: var(--mauth-text);
   font-size: 13px;
   cursor: pointer;
@@ -154,7 +154,7 @@
   padding: 0 10px;
   border: 1px solid var(--mauth-border-strong);
   border-radius: var(--mauth-radius-sm);
-  background: var(--mauth-surface);
+  background: var(--mauth-input-bg, var(--mauth-surface));
   color: var(--mauth-text);
   font: inherit;
   transition: border-color 0.16s ease;
@@ -197,7 +197,7 @@
 
 /* ── 面板 / 卡片 ──────────────────────────────────────────── */
 .panel {
-  background: var(--mauth-surface);
+  background: var(--mauth-panel-bg, var(--mauth-surface));
   border: 1px solid var(--mauth-border);
   border-radius: var(--mauth-radius-md);
   box-shadow: var(--e1);
@@ -547,7 +547,7 @@
   font-weight: 550;
   font-size: 11.5px;
   letter-spacing: 0.06em;
-  background: var(--mauth-surface-2);
+  background: var(--mauth-table-head-bg, var(--mauth-surface-2));
   border-bottom: 1px solid var(--mauth-border);
 }
 
@@ -556,7 +556,7 @@
 }
 
 .table tbody tr:hover {
-  background: var(--mauth-hover);
+  background: var(--mauth-table-row-hover, var(--mauth-hover));
 }
 
 .table tbody tr:last-child td {
@@ -581,25 +581,26 @@
   padding: 0 8px;
   border-radius: 999px;
   font-size: 12px;
-  background: var(--mauth-hover);
-  color: var(--mauth-text-mid);
+  background: var(--mauth-tag-bg, var(--mauth-hover));
+  color: var(--mauth-tag-ink, var(--mauth-text-mid));
   /* 内描边取自身前景色的淡化版：任何配色下都能描出边界，不用为每种 tag 写一遍 */
   box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent);
 }
 
 .tag--ok {
-  background: var(--leaf-soft);
-  color: var(--mauth-success);
+  /* 原先写的是 `--leaf-soft` —— 这个变量全仓从未定义过，底色一直是透的 */
+  background: var(--mauth-tag-ok-bg, var(--mauth-success-soft));
+  color: var(--mauth-tag-ok-ink, var(--mauth-success));
 }
 
 .tag--off {
-  background: var(--mauth-danger-soft);
-  color: var(--mauth-danger);
+  background: var(--mauth-tag-off-bg, var(--mauth-danger-soft));
+  color: var(--mauth-tag-off-ink, var(--mauth-danger));
 }
 
 .tag--info {
-  background: var(--mauth-primary-soft);
-  color: var(--mauth-primary);
+  background: var(--mauth-tag-info-bg, var(--mauth-primary-soft));
+  color: var(--mauth-tag-info-ink, var(--mauth-primary));
 }
 
 /* ── 浮层（弹窗 / 抽屉） ──────────────────────────────────── */
@@ -620,7 +621,7 @@
   max-height: 86vh;
   display: flex;
   flex-direction: column;
-  background: var(--mauth-surface);
+  background: var(--mauth-modal-bg, var(--mauth-surface));
   border-radius: var(--mauth-radius-lg);
   box-shadow: var(--e3);
   overflow: hidden;
@@ -738,7 +739,7 @@
   margin-bottom: 12px;
   border: 1px solid var(--mauth-border-strong);
   border-radius: 8px;
-  background: var(--mauth-surface-2);
+  background: var(--mauth-tabbar-bg, var(--mauth-surface-2));
 }
 
 .tab {
@@ -765,7 +766,7 @@
 }
 
 .tab.is-on {
-  background: var(--mauth-surface);
+  background: var(--mauth-tab-active-bg, var(--mauth-surface));
   /* 选中的 tab 跟随主题主色：换配色时所有页面的分段控件一起变，不留一处"中性白" */
   color: var(--mauth-primary);
   font-weight: 600;
