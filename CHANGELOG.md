@@ -7,6 +7,13 @@
 
 ## 未发布（Unreleased）
 
+### 修复
+
+- **聚光（spotlight）缺 console 版式组件**：它的 `console/` 目录只有 `colors/` 没有 `index.vue`，
+  dev 启动每次都刷一条 `扫描跳过 …缺少版式组件`。补两个转发壳（`standard` / `mobile`），
+  与包内其余 13 个页面保持一致；`?th=spotlight` 预览时外壳现在会带 `data-mauth-view="spotlight"`。
+  它**仍然不进版式选择器**（`coverage.pages` 仍是 `['login']`，转发壳不算"自己的版式"）。
+
 ## 2.42.1 — 2026-11-15
 
 ### 新增

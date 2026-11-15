@@ -70,10 +70,27 @@ src/theme/
     <设备>/<页面>/index.vue              **页面 DOM 都在这里**（设备身份 = 目录位置）
     <设备>/<页面>/colors/<配色>/index.ts  **配色 = 一套完整色值表**（自带全部 token）
     <设备>/<页面>/colors/<配色>/theme.scss 该配色专属的额外 CSS（背景图只能放这里）
-  themes/spotlight/                      极光（登录页是另一套布局，所以它是包）
+  themes/spotlight/                      聚光（只有登录页是自有版式，其余页面转发到 default）
   themes/pocket/                         口袋版（**只有手机端**，独立布局，后续打包 App）
   views/<页面>.ts                        页面域声明 + 版式契约（纯类型 ctx + defineThemePage）
 ```
+
+### 聚光的 `console/` 目录：两样东西，别一起删
+
+聚光**只有登录页是自己的版式**（`<设备>/login/`，独立视觉语言），其余 13 个页面都是
+`display:contents` 的转发壳。它的 `console/` 下有两类内容，删除风险完全不同：
+
+| 内容 | 能不能删 | 后果 |
+| --- | --- | --- |
+| `console/index.vue`（转发壳） | 能，但 dev 启动会刷一条 `扫描跳过 …缺少版式组件` | 无（版式本来就用内置包的） |
+| `console/colors/`（3 套配色 × 2 设备） | **不能** | `?th=spotlight` 预览时 `getThemeRecord(pkg='spotlight')` 查不到 ⇒ **token 清空、后台裸奔** |
+
+🔴 关键区别：**配色按 pkg 精确匹配**（`findRecord` 没有跨包回退），而**版式组件缺失只回退到
+内置包**。所以"删版式文件"安全、"删配色目录"不安全 —— 两者在同一个目录下，最容易顺手一起删。
+
+要彻底去掉聚光，只能删整个包（登录页那套版式会一起消失），不能只删 `console/`。
+
+它不进版式选择器：`coverage.pages` 是 `['login']`，转发壳不算"自己的版式"（选了也不会改变后台布局）。
 
 ### 包 = 版式，配色 = 搭配（与 oauth21 同一套判据）
 
