@@ -1,6 +1,6 @@
 {
   "name": "nodeservers",
-  "version": "2.38.0",
+  "version": "2.38.1",
   "description": "公众号：柒染靓月",
   "type": "module",
   "main": "index.js",
