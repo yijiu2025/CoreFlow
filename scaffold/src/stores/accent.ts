@@ -85,7 +85,7 @@ export const useAccentStore = defineStore('accent', () => {
    * 采用某个预设，但**不落库、不写本地**
    *
    * 只给「主题包联动」用：选了某个包、而用户从没表达过主色偏好时，先把主色切到
-   * 配套色（否则微信风格进来是蓝色）。用户一旦自己点过色卡，`pick()` 会写
+   * 配套色（否则口袋版进来是蓝色）。用户一旦自己点过色卡，`pick()` 会写
    * `mauth:accent`，此后联动不再覆盖（见 `useThemePackage.alignAccentToPackage`）。
    *
    * @param id 预设 ID

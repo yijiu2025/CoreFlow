@@ -7,7 +7,7 @@
  *      偏好写 localStorage，启动时由 `restoreThemePackage()` 恢复 ——
  *      放在启动期而不是组件挂载期，是为了首帧就是对的（否则会先闪一下珍珠壳）。
  *   3. **主色联动**：主题包的主色写在 token 里，而用户的主色偏好是更后写入的
- *      inline 变量（见 `stores/accent.ts` 文件头）—— 不联动的话，选了「微信」
+ *      inline 变量（见 `stores/accent.ts` 文件头）—— 不联动的话，选了「口袋版」
  *      进来还是蓝色。选包时顺手切到配套色，切回默认时再把临时换上的色换回去。
  *
  * 🔴 恢复必须让位给 URL：`?th=` / `?th_mobile=` / `?th_std=` 是"这次就要看这个"，
@@ -75,8 +75,8 @@ function hasExplicitAccent(): boolean {
 /**
  * 让主色跟上当前主题包（用户没表达过主色偏好时才动）
  *
- * 为什么不在 `pick()` 里做：`?th=wechat` 深链、或上次会话留在微信包时不会经过
- * `pick()`，但那时用户同样期待"微信就是绿的"。放在根组件的主题 watch 里，
+ * 为什么不在 `pick()` 里做：`?th=pocket` 深链、或上次会话留在口袋版时不会经过
+ * `pick()`，但那时用户同样期待"口袋版就是绿的"。放在根组件的主题 watch 里，
  * 换包 / 刷新 / URL 直进三条路都覆盖。
  */
 export function alignAccentToPackage(): void {

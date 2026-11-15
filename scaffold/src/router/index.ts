@@ -39,10 +39,10 @@ const routes: RouteRecordRaw[] = [
       },
       {
         /*
-         * 通讯录 / 发现 / 我 —— 手机端「微信」外壳的三个栏目根页
+         * 通讯录 / 发现 / 我 —— 手机端「口袋版」外壳的三个栏目根页
          *
-         * 它们**住在微信主题包里**（`theme/themes/wechat/mobile/console/pages/`），
-         * 不在 `views/`：这一屏是版式骨架的一部分，用的是微信的 cell 语言，
+         * 它们**住在口袋版主题包里**（`theme/themes/pocket/mobile/console/pages/`），
+         * 不在 `views/`：这一屏是版式骨架的一部分，用的是口袋版的 cell 语言，
          * 与"业务页面不知道自己长什么样"是相反的两类东西。路由仍然在这里静态声明 ——
          * 页面文件的位置可以跟着主题走，路由表不行（见文件头"不做动态 addRoute"）。
          *
@@ -51,27 +51,27 @@ const routes: RouteRecordRaw[] = [
          * 主题判断都没有。
          *
          * 它们**不在菜单表里**，所以桌面侧栏不会出现（菜单只决定"看得见什么"，
-         * 而这三页是版式骨架的一部分，由微信壳的 TabBar 带过来）。深链进来照样能开：
+         * 而这三页是版式骨架的一部分，由口袋版壳的 TabBar 带过来）。深链进来照样能开：
          * 页面内部自己按权限码过滤入口，进不去的条目不渲染。
          *
          * 不给 `meta.permission`：能否进入由页面里的入口决定，而不是"整页踢到 /no-access"。
          */
         path: 'org',
         name: 'org',
-        component: () => import('@/theme/themes/wechat/mobile/console/pages/org/index.vue'),
-        meta: { title: '通讯录', themePkg: 'wechat' }
+        component: () => import('@/theme/themes/pocket/mobile/console/pages/org/index.vue'),
+        meta: { title: '通讯录', themePkg: 'pocket' }
       },
       {
         path: 'discover',
         name: 'discover',
-        component: () => import('@/theme/themes/wechat/mobile/console/pages/discover/index.vue'),
-        meta: { title: '发现', themePkg: 'wechat' }
+        component: () => import('@/theme/themes/pocket/mobile/console/pages/discover/index.vue'),
+        meta: { title: '发现', themePkg: 'pocket' }
       },
       {
         path: 'me',
         name: 'me',
-        component: () => import('@/theme/themes/wechat/mobile/console/pages/me/index.vue'),
-        meta: { title: '我', themePkg: 'wechat' }
+        component: () => import('@/theme/themes/pocket/mobile/console/pages/me/index.vue'),
+        meta: { title: '我', themePkg: 'pocket' }
       },
       {
         path: 'system/user',
@@ -206,7 +206,7 @@ router.beforeEach(async to => {
    * 主题私有页面（`meta.themePkg`）：当前生效的版式不是它的归属包时，这条路径在本
    * 主题下**不存在** —— 送回工作台。
    *
-   * 为什么要有这一条：通讯录 / 发现 / 我住在微信主题包里，用的是微信的导航结构与
+   * 为什么要有这一条：通讯录 / 发现 / 我住在口袋版主题包里，用的是它的导航结构与
    * cell 语言。如果在珍珠玻璃下还能打开，用户会看到"一个不属于这个主题的页面"，
    * 而且它没有任何入口能到达（菜单表里没有），只能靠手输地址或旧收藏撞进来。
    *

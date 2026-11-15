@@ -1,0 +1,35 @@
+/**
+ * 星空壁纸（只属于 `star` 这套配色）
+ *
+ * 为什么写在 scss 而不是 token：skinsuite 的 token 白名单只收单值（hex / rgb / px…），
+ * `url()` 进不去。配色目录里允许一份 `theme.scss`，运行期随配色一起注入 —— 这正是
+ * 「一套配色 = 颜色 + 背景图」的落点（oauth21 的 `blue` / `cyan` 也这么做）。
+ *
+ * 挂在外壳根（`.shell`）与登录页根（`.login`）上，`background-attachment: fixed`
+ * 让壁纸不随内容滚动；面板 / 侧栏 / 顶栏的底色在这套配色的 token 里是半透明的，
+ * 于是星野能从内容后面透出来。
+ *
+ * 🔴 页头必须垫一层**渐变遮罩**：标题直接压在壁纸上，而壁纸中段是最亮的银河 ——
+ *    浅色字落在亮星区会糊成一片（实测对比度不足）。遮罩从上到下淡出，表格区仍有
+ *    壁纸透出，头部文字却始终可读。
+ *
+ * @author yijiu2025
+ * @since 2026-11-15
+ */
+.shell,
+.login {
+  background-image: url('@/assets/theme/starfield.jpeg');
+  background-size: cover;
+  background-position: center 28%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.page {
+  background: linear-gradient(
+    180deg,
+    rgba(8, 12, 24, 0.66) 0%,
+    rgba(8, 12, 24, 0.34) 38%,
+    rgba(8, 12, 24, 0) 100%
+  );
+}

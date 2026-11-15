@@ -65,15 +65,40 @@ src/
 ```
 src/theme/
   theme.config.ts                        主题域清单（调试面板档位 ?debug=theme）
-  palettes/<包>-<配色>.ts                **每个包 × 每个明暗一份色值表**（可整份单独调）
-  palettes/device.ts                     设备尺度（手机端圆角），不含颜色
-  themes/default/                        主题包（目录名 default = 库内置兜底包名）
+  themes/default/                        包 = **版式**（目录名 default = 库内置兜底包名）
     index.ts                             包定义（设计名放 meta.name：珍珠玻璃）
     <设备>/<页面>/index.vue              **页面 DOM 都在这里**（设备身份 = 目录位置）
-    <设备>/<页面>/colors/<配色>/index.ts  配色只换 CSS 变量，不动 DOM
-  themes/{spotlight,wechat}/             极光 / 微信两套包（没有自有版式的页面转发到 default）
+    <设备>/<页面>/colors/<配色>/index.ts  **配色 = 一套完整色值表**（自带全部 token）
+    <设备>/<页面>/colors/<配色>/theme.scss 该配色专属的额外 CSS（背景图只能放这里）
+  themes/spotlight/                      极光（登录页是另一套布局，所以它是包）
+  themes/pocket/                         口袋版（**只有手机端**，独立布局，后续打包 App）
   views/<页面>.ts                        页面域声明 + 版式契约（纯类型 ctx + defineThemePage）
 ```
+
+### 包 = 版式，配色 = 搭配（与 oauth21 同一套判据）
+
+| 想做的事 | 做法 | 反例 |
+| --- | --- | --- |
+| 换**布局**（结构、导航、交互） | **新建一个包** `themes/<新包>/` | 用配色目录装"另一套 DOM" |
+| 换**颜色 / 圆角 / 背景图** | 在现有包里加一个配色目录 `colors/<id>/` | 为一种颜色新建包 |
+
+所以：**桌面端的「灰白 + 绿」不是包**，是珍珠玻璃版式下的 `wechat` 配色
+（`themes/default/standard/<页面>/colors/wechat/`）；**手机端的「导航栏 + TabBar + cell 列表」
+才是包**（`themes/pocket/`，因为它换的是布局本身）。
+
+现有配色（跨包同名，语义一致）：
+
+| id | 名称 | 说明 |
+| --- | --- | --- |
+| `white` | 珍珠白 | 浅色，蓝主操作 |
+| `black` | 石墨夜 | 深色，蓝主操作 |
+| `wechat` | 微信绿 | 浅色，绿主操作（与珍珠同版式，只换色） |
+| `wechat-dark` | 微信夜间绿 | 深色 + 品牌绿 |
+| `star` | 星空 | 深蓝夜空 **+ 壁纸背景**，面板半透明浮在星野上 |
+
+配色 id 的作用域是「包 × 设备 × 页面」：跨包同名互不影响（口袋版的 `white` 是绿系，
+珍珠的 `white` 是蓝系）。每份 `index.ts` 都是**自包含**的完整表（基础层 + 组件层），
+不 import 任何共享色表 —— 改一份只影响那一种搭配。
 
 一页的四层：
 
@@ -100,10 +125,11 @@ src/view/useRenderDevice.ts              设备判定（?device= 优先，否则
 
 - 明暗 = 配色系别：`white`（浅）/ `black`（深）；`mode` 仍是用户偏好（system/light/dark），
   由 `createThemeState` 维护、持久化在 `mauth:mode` / `mauth:theme`。
-- **色值表分两份、两层**：`theme/palettes/{pearl,spotlight,wechat}-{white,black}.ts` 各是
-  一份**独立完整**的表（改极光的侧栏不会牵动珍珠），表内再分
-  **基础层**（底色 / 文字四档 / 语义色 / 描边）与**组件层**（下面这一组）。
-  配色入口 `colors/<配色>/index.ts` 只声明 `meta` / `tone` 并展开对应那份表。
+- **每份配色两层**：**基础层**（底色 / 文字四档 / 语义色 / 描边 / 圆角）与
+  **组件层**（下面这一组）。想只改侧栏、只改标签、只改弹窗底色，动组件层那一行，
+  别去动基础层 —— 基础层一动全站跟着变。
+- **背景图不进 token**（白名单只收单值），写在配色目录的 `theme.scss` 里；
+  `star` 就是范例：壁纸 + 页头渐变遮罩 + 半透明面板，全在这一个文件里。
 
 | 组件层 token | 管什么 |
 | --- | --- |

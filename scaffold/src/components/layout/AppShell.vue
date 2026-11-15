@@ -3,7 +3,7 @@
  * 应用外壳（**宿主**）
  *
  * 只做四件事：判设备 → 把菜单树过滤成导航数据 → 准备壳上下文 → 交给主题包的版式。
- * 长什么样已经不在这里决定了：珍珠玻璃与微信是两套版式，住在各自的主题包里
+ * 长什么样已经不在这里决定了：珍珠玻璃与口袋版是两套版式，住在各自的主题包里
  * （`themes/<包>/<设备>/console/index.vue`），本文件一行 `if (包名 === …)` 都没有。
  *
  * 依赖单例：
@@ -62,7 +62,7 @@ function goBack(): void {
     return;
   }
   const path = route.path;
-  // 回落按"这条详情属于哪个栏目"：微信壳里 /system/* 的父级是「通讯录」，
+  // 回落按"这条详情属于哪个栏目"：口袋版壳里 /system/* 的父级是「通讯录」，
   // /monitor/* 的父级是「发现」；其余回工作台。
   const fallback = path.startsWith('/system/user')
     ? 'system-user'
@@ -204,7 +204,7 @@ async function signOut(): Promise<void> {
 /**
  * 窄屏表格卡片化
  *
- * 装在宿主而不是版式里：两套版式（珍珠 / 微信）都需要，且它只依赖 DOM、与外观无关。
+ * 装在宿主而不是版式里：两套版式（珍珠 / 口袋版）都需要，且它只依赖 DOM、与外观无关。
  * 负责把 `<thead>` 的列名抄到单元格 `data-label` 上，由 CSS 在 ≤820px 时渲染成卡片。
  */
 let uninstallTables: (() => void) | null = null;
