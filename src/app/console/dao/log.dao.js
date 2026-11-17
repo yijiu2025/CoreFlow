@@ -52,6 +52,37 @@ const LOGIN_FAILED_SQL = `(l.event LIKE '%FAIL%' OR l.event LIKE '%FORBIDDEN%')`
  * 用来把 `details.method` 里的**真 HTTP 方法**和同名撞车的业务字段（二次验证方式等）
  * 分开，详见 `normalizeOperRow`。
  */
+/**
+ * 归档统计（清除日志前写入，见迁移 `20261118000001-create-log-stats.js`）
+ *
+ * 「清除日志」删的是**明细**，而工作台的脉搏 / 成功率 / 趋势都直接 COUNT 这两张日志表 ——
+ * 一清就归零。统计与明细是两类数据：明细服务于追溯，统计服务于走势。所以清除时先把
+ * 聚合落进 `log_stats_hourly` / `log_stats_users`，读的时候「明细 + 归档」相加。
+ */
+const ARCHIVE_FAILED_SQL = { login: LOGIN_FAILED_SQL, oper: OPER_FAILED_SQL };
+
+/**
+ * 合并「明细」与「归档」的同名时间桶
+ *
+ * 只做加法不做覆盖：同一个桶可能既有未删的明细、又有已归档的部分（同一天分两次清理）。
+ *
+ * @param {Array<{bucket: string, total: unknown, failed: unknown}>} raw 明细分桶
+ * @param {Array<{bucket: string, total: unknown, failed: unknown}>} archived 归档分桶
+ * @returns {Array<{bucket: string, total: number, failed: number}>} 按桶名升序
+ */
+function mergeBuckets(raw = [], archived = []) {
+  const map = new Map();
+  for (const row of [...raw, ...archived]) {
+    const key = String(row.bucket);
+    const cell = map.get(key) || { bucket: key, total: 0, failed: 0 };
+    cell.total += Number(row.total || 0);
+    cell.failed += Number(row.failed || 0);
+    map.set(key, cell);
+  }
+  /* 桶名是 `%m-%d` 或 `%m-%d %H:00`，字典序即时间序 */
+  return [...map.values()].sort((a, b) => (a.bucket < b.bucket ? -1 : a.bucket > b.bucket ? 1 : 0));
+}
+
 const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
 /**
@@ -534,20 +565,26 @@ class LogDao {
       { type: QueryTypes.SELECT }
     );
 
+    /* 已清理的那几段由归档表补上（同口径：都排除了登录类事件） */
+    const archived = await this.archivedStats('oper', spec);
+    const archTotal = archived.series.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const archFailed = archived.series.reduce((sum, r) => sum + Number(r.failed || 0), 0);
+
     const row = summary[0] || {};
-    const total = Number(row.total || 0);
-    const failed = Number(row.failed || 0);
+    const total = Number(row.total || 0) + archTotal;
+    const failed = Number(row.failed || 0) + archFailed;
     return {
       range,
       total,
       failed,
       successRate: total > 0 ? Number((((total - failed) / total) * 100).toFixed(2)) : 100,
-      prevTotal: Number(prev[0]?.total || 0),
-      prevFailed: Number(prev[0]?.failed || 0),
+      prevTotal: Number(prev[0]?.total || 0) + archived.prevTotal,
+      prevFailed: Number(prev[0]?.failed || 0) + archived.prevFailed,
       avgCost: Number(row.avg_cost || 0),
       p95Cost: 0,
       activeUsers: Number(row.active_users || 0),
-      series: fillSeries(series, ladder)
+      archivedTotal: archTotal,
+      series: fillSeries(mergeBuckets(series, archived.series), ladder)
     };
   }
 
@@ -700,19 +737,29 @@ class LogDao {
       { type: QueryTypes.SELECT }
     );
 
+    /*
+     * 已清理的那几段由归档表补上：统计与明细同口径相加，见 `archiveStats()`。
+     * users / ips 只统计未清理的部分 —— 精确去重需要 user_id 集合，登录侧另有
+     * `activeLoginUsers()` 负责「明细 ∪ 归档」的去重。
+     */
+    const archived = await this.archivedStats('login', spec);
+    const archTotal = archived.series.reduce((sum, r) => sum + Number(r.total || 0), 0);
+    const archFailed = archived.series.reduce((sum, r) => sum + Number(r.failed || 0), 0);
+
     const row = summary[0] || {};
-    const total = Number(row.total || 0);
-    const failed = Number(row.failed || 0);
+    const total = Number(row.total || 0) + archTotal;
+    const failed = Number(row.failed || 0) + archFailed;
     return {
       range,
       total,
       failed,
       successRate: total > 0 ? Number((((total - failed) / total) * 100).toFixed(2)) : 100,
-      prevTotal: Number(prev[0]?.total || 0),
-      prevFailed: Number(prev[0]?.failed || 0),
+      prevTotal: Number(prev[0]?.total || 0) + archived.prevTotal,
+      prevFailed: Number(prev[0]?.failed || 0) + archived.prevFailed,
       users: Number(row.users || 0),
       ips: Number(row.ips || 0),
-      series: fillSeries(series, ladder)
+      archivedTotal: archTotal,
+      series: fillSeries(mergeBuckets(series, archived.series), ladder)
     };
   }
 
@@ -992,6 +1039,124 @@ class LogDao {
    * @param {object} operator 操作者上下文
    * @returns {Promise<number>} 删除条数
    */
+  /**
+   * 把「即将删除的这一段明细」按小时桶汇总进归档表
+   *
+   * 🔴 必须与 DELETE 在**同一事务**里：分开做会出现"删了但没归档"（统计永久少一段）
+   *    或"归档了但没删"（下次再清会把同一段重复累加）。
+   *
+   * 口径与明细查询一致：操作日志带 `OPER_ONLY_SQL`（排除登录类事件），失败判定复用
+   * `OPER_FAILED_SQL` / `LOGIN_FAILED_SQL` —— 两处若各写一套，归档与明细的失败数会对不上。
+   *
+   * @param {'oper'|'login'} scope 日志类型
+   * @param {{whereSql: string, replacements: object}} built 条件（与 DELETE 同一份）
+   * @param {object} transaction 事务
+   * @returns {Promise<void>}
+   */
+  async archiveStats(scope, built, transaction) {
+    const { sequelize } = getModel(scope === 'login' ? 'SessionLog' : 'AuditLog');
+    const failedSql = ARCHIVE_FAILED_SQL[scope];
+    const isLogin = scope === 'login';
+    /*
+     * 🔴 操作侧必须带上 `LEFT JOIN user_user`：筛选条件里的"账号"与 keyword 都引用 `u.username`
+     *    （DELETE 语句同样是 join 形态）。少了这个 join，带账号条件的清除会在归档阶段报
+     *    `Unknown column 'u.username'` —— 而删除根本没执行，看起来像"点了没反应"。
+     */
+    const from = isLogin
+      ? `session_logs l ${LOGIN_JOIN_SQL} ${built.whereSql}`
+      : `audit_logs a LEFT JOIN user_user u ON u.id = a.user_id ${built.whereSql} AND ${OPER_ONLY_SQL}`;
+
+    // ① 分钟级明细 → 小时桶计数（同一小时被清多次则累加）
+    /*
+     * 🔴 scope 直接内联（只可能是 'login' / 'oper' 两个白名单值）：`built.whereSql` 用的是
+     *    Sequelize 的**命名**占位符（`:startTime` 之类），与位置占位符 `?` 不能混在同一个
+     *    replacements 里 —— 混用会把 `:startTime` 原样发到 SQL 里（实测直接语法错）。
+     */
+    const scopeLiteral = isLogin ? 'login' : 'oper';
+    await sequelize.query(
+      `INSERT INTO log_stats_hourly (scope, bucket_start, total, failed)
+       SELECT '${scopeLiteral}', DATE_FORMAT(${isLogin ? 'l' : 'a'}.created_at, '%Y-%m-%d %H:00:00'),
+              COUNT(*), SUM(${failedSql})
+         FROM ${from}
+        GROUP BY 2
+        ON DUPLICATE KEY UPDATE total = total + VALUES(total), failed = failed + VALUES(failed)`,
+      { replacements: built.replacements, transaction }
+    );
+
+    // ② 登录账号存在性：只为"成功登录"，供活跃账号数在「明细 ∪ 归档」上重新去重
+    if (isLogin) {
+      await sequelize.query(
+        `INSERT IGNORE INTO log_stats_users (bucket_start, user_id)
+         SELECT DATE_FORMAT(l.created_at, '%Y-%m-%d %H:00:00'), l.user_id
+           FROM session_logs l ${LOGIN_JOIN_SQL} ${built.whereSql}
+            AND l.event = 'LOGIN' AND l.user_id IS NOT NULL
+          GROUP BY 1, 2`,
+        { replacements: built.replacements, transaction }
+      );
+    }
+  }
+
+  /**
+   * 归档部分在指定窗口内的读数
+   *
+   * 把 `resolveRange()` 给出的桶表达式与窗口条件里的 `a.created_at` 换成 `bucket_start`，
+   * 就能让归档与明细产出**同名同序**的桶 —— 合并时只做加法，不需要第二套时间口径。
+   *
+   * @param {'oper'|'login'} scope 日志类型
+   * @param {object} spec `resolveRange()` 的结果
+   * @returns {Promise<{series: Array, prevTotal: number, prevFailed: number}>} 归档读数
+   */
+  async archivedStats(scope, spec) {
+    const { sequelize } = getModel(scope === 'login' ? 'SessionLog' : 'AuditLog');
+    const toArchive = sql => String(sql).replace(/a\.created_at/g, 'bucket_start');
+    const bucketExpr = toArchive(spec.bucketExpr);
+    const whereSql = toArchive(spec.whereSql);
+    const prevWhereSql = toArchive(spec.prevWhereSql);
+
+    const series = await sequelize.query(
+      `SELECT ${bucketExpr} AS bucket, SUM(total) AS total, SUM(failed) AS failed
+         FROM log_stats_hourly WHERE scope = ? AND ${whereSql}
+        GROUP BY bucket ORDER BY bucket ASC`,
+      { type: QueryTypes.SELECT, replacements: [scope] }
+    );
+    const prev = await sequelize.query(
+      `SELECT SUM(total) AS total, SUM(failed) AS failed
+         FROM log_stats_hourly WHERE scope = ? AND ${prevWhereSql}`,
+      { type: QueryTypes.SELECT, replacements: [scope] }
+    );
+    return {
+      series,
+      prevTotal: Number(prev[0]?.total || 0),
+      prevFailed: Number(prev[0]?.failed || 0)
+    };
+  }
+
+  /**
+   * 近 N 小时内**成功登录过**的账号数（明细 ∪ 归档，精确去重）
+   *
+   * 不能把两边的人数相加：同一账号可能昨天被清掉、今天又登录，相加会把他算成两个人。
+   * 所以归档表存的是 user_id 而非计数，这里用 UNION 后统一 COUNT(DISTINCT)。
+   *
+   * @param {number} [hours=24] 回溯小时数（取 1~168，防注入）
+   * @returns {Promise<number>} 账号数
+   */
+  async activeLoginUsers(hours = 24) {
+    const span = Math.min(Math.max(Number(hours) || 24, 1), 24 * 7);
+    const { sequelize } = getModel('SessionLog');
+    const rows = await sequelize.query(
+      `SELECT COUNT(DISTINCT uid) AS c FROM (
+         SELECT l.user_id AS uid FROM session_logs l
+          WHERE l.created_at >= NOW() - INTERVAL ${span} HOUR
+            AND l.event = 'LOGIN' AND l.user_id IS NOT NULL
+         UNION
+         SELECT u.user_id AS uid FROM log_stats_users u
+          WHERE u.bucket_start >= NOW() - INTERVAL ${span} HOUR
+       ) t`,
+      { type: QueryTypes.SELECT }
+    );
+    return Number(rows[0]?.c || 0);
+  }
+
   async purgeOper(filters = {}, operator = {}) {
     return this.purge('oper', filters, operator);
   }
@@ -1076,6 +1241,9 @@ class LogDao {
        *    按数组解构会得到 `undefined` 再 `Number(undefined)` → NaN，留痕里就会写入
        *    `removed: null`，看着像"删了但没删"。
        */
+      // 先归档聚合、再删明细：两者同一事务，统计与明细同时成立
+      await this.archiveStats(scope, built, transaction);
+
       const affected = await sequelize.query(deleteSql, {
         type: QueryTypes.BULKDELETE,
         replacements: built.replacements,
@@ -1153,6 +1321,6 @@ function normalizeOperRow(row) {
 const logDao = new LogDao();
 
 // 导出收拢在文件末尾（仓规：定义处不写 export）
-export { OPER_ONLY_SQL };
+export { OPER_ONLY_SQL, mergeBuckets };
 
 export default logDao;

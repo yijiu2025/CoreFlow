@@ -5,6 +5,10 @@
  * 这是后台里**唯一不可逆**的批量操作：删掉的审计记录找不回来，而审计本身是
  * 追查"谁做了什么"的最后依据。所以它固定走三步，每一步都不能省：
  *
+ * 🔴 但**统计不属于不可逆的部分**：删除前后端会把这段按小时桶归档（见
+ *    `log.dao.js` 的 archiveStats），工作台的脉搏 / 成功率 / 趋势仍能看到总数与走势。
+ *    所以文案要写"只删明细"，而不是笼统的"数据将永久消失"。
+ *
  * 1. **说清范围**：把筛选条件翻成人话 + 明确告诉操作者命中多少条；
  * 2. **二次验证**：邮箱验证码或登录密码（复用 `StepUpField`）；
  * 3. **留痕**：由后端在同一事务里写 `LOG_PURGE` 审计（删除与留痕要么都成、要么都不成）。
@@ -157,6 +161,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
           <p class="purge__count">
             命中 <strong>{{ matched }}</strong> 条{{ scopeLabel }}
             <span v-if="nothingToDelete" class="purge__count-hint">当前条件下没有记录，无需清除</span>
+          </p>
+          <!-- 说明"统计不跟着死"：用户清完发现脉搏还在，才不会是"删了一半"的错觉 -->
+          <p class="purge__hint">
+            <ShieldAlert :size="13" />
+            只删明细：工作台的登录脉搏、成功率与趋势会把这段计入归档统计，数字与走势仍保留。
           </p>
         </section>
 

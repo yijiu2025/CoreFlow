@@ -128,6 +128,18 @@ const delta = computed(() => {
 
 const isEmpty = computed(() => !loading.value && !!stats.value && total.value === 0);
 
+/**
+ * 归档说明（清除过日志时才有）
+ *
+ * 清除日志删的是**明细**，脉搏的读数改由「明细 + 归档」相加得到。所以总数可能大于
+ * 「查看登录日志」里能翻到的条数 —— 这不是 bug，但必须说明，否则会被当成数据错乱。
+ */
+const archiveNote = computed(() => {
+  const archived = Number(stats.value?.archivedTotal ?? 0);
+  if (!archived) return '';
+  return `其中 ${archived} 次来自已清理日志的归档统计（明细已不可查看）`;
+});
+
 /* ── 分段器滑块：按活动项实测宽度对位（选项文字长度不同，等分会对不齐） ── */
 
 const rangeRoot = ref<HTMLElement | null>(null);
@@ -239,6 +251,7 @@ loadPulse();
       <div class="pulse__chart">
         <TrendChart :values="values" :labels="labels" primary-label="登录" :height="212" unit=" 次" tone="ink" />
         <p v-if="isEmpty" class="pulse__empty">该时间范围内没有登录记录</p>
+        <p v-else-if="archiveNote" class="pulse__archive">{{ archiveNote }}</p>
         <p v-if="errorMessage" class="pulse__error" role="alert">{{ errorMessage }}</p>
       </div>
     </div>
@@ -557,6 +570,22 @@ loadPulse();
   margin: 0;
   color: var(--mauth-danger);
   font-size: 11px;
+}
+
+/* 归档说明：沿着折线底边居中，压低存在感 —— 它是注解，不是读数 */
+.pulse__archive {
+  position: absolute;
+  left: 50%;
+  bottom: -4px;
+  margin: 0;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mauth-surface) 86%, transparent);
+  color: var(--mauth-text-faint);
+  font-size: 11px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 /* ── 卡底：深色胶囊是这一屏唯一的"实心"按钮 ────────────────────────── */

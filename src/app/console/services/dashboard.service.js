@@ -73,11 +73,21 @@ class DashboardService {
          (SELECT COUNT(*) FROM iam_role WHERE deleted_at IS NULL) AS roles,
          (SELECT COUNT(*) FROM sys_menu) AS menus,
          (SELECT COUNT(*) FROM sys_dept) AS depts,
-         (SELECT COUNT(*) FROM session_logs WHERE DATE(created_at) = CURDATE()) AS today_logins,
-         (SELECT COUNT(*) FROM session_logs WHERE DATE(created_at) = CURDATE()
-            AND (event LIKE '%FAIL%' OR event LIKE '%FORBIDDEN%')) AS failed_logins,
-         (SELECT COUNT(*) FROM audit_logs a WHERE DATE(a.created_at) = CURDATE()
-            AND ${OPER_ONLY_SQL}) AS today_ops,
+         /*
+          * 明细 + 归档：清过日志的那几段由 log_stats_hourly 补上，
+          * 否则「清日志」会把看板上的今日登录一起清零（2026-11-17 反馈）。
+          */
+         ((SELECT COUNT(*) FROM session_logs WHERE DATE(created_at) = CURDATE())
+           + (SELECT COALESCE(SUM(total), 0) FROM log_stats_hourly
+               WHERE scope = 'login' AND DATE(bucket_start) = CURDATE())) AS today_logins,
+         ((SELECT COUNT(*) FROM session_logs WHERE DATE(created_at) = CURDATE()
+             AND (event LIKE '%FAIL%' OR event LIKE '%FORBIDDEN%'))
+           + (SELECT COALESCE(SUM(failed), 0) FROM log_stats_hourly
+               WHERE scope = 'login' AND DATE(bucket_start) = CURDATE())) AS failed_logins,
+         ((SELECT COUNT(*) FROM audit_logs a WHERE DATE(a.created_at) = CURDATE()
+             AND ${OPER_ONLY_SQL})
+           + (SELECT COALESCE(SUM(total), 0) FROM log_stats_hourly
+               WHERE scope = 'oper' AND DATE(bucket_start) = CURDATE())) AS today_ops,
          /*
           * 活跃用户 = 近 24 小时**成功登录**过的不同账号。
           *
@@ -85,23 +95,30 @@ class DashboardService {
           *    SESSION_REFRESH、LOGIN_FAIL —— 之前不筛事件，等于把"被踢下线"也算成
           *    "活跃"：一次踢出就多一个"在线用户"，数字只会虚高（实测 4 个全是 KICK 行）。
           */
-         (SELECT COUNT(DISTINCT user_id) FROM session_logs
-           WHERE created_at >= NOW() - INTERVAL 1 DAY
-             AND user_id IS NOT NULL
-             AND event = 'LOGIN') AS active_users`,
+         (SELECT COUNT(*) FROM session_logs WHERE 1 = 0) AS active_users`,
       { type: QueryTypes.SELECT }
     );
 
     const todayOps = Number(counts.today_ops || 0);
+    /*
+     * 失败操作数同样要含归档：`log_stats_hourly.failed` 就是按同一套失败判定累加的
+     * （见 `log.dao.js` 的 `archiveStats`），所以这里直接相加不会出现口径漂移。
+     */
     const todayFailed = await sequelize.query(
-      `SELECT COUNT(*) AS c FROM audit_logs a
-        WHERE DATE(a.created_at) = CURDATE() AND ${OPER_ONLY_SQL}
-          AND (event LIKE '%FAIL%' OR event LIKE '%DENIED%' OR event LIKE '%FORBIDDEN%')`,
+      `SELECT (SELECT COUNT(*) FROM audit_logs a
+                WHERE DATE(a.created_at) = CURDATE() AND ${OPER_ONLY_SQL}
+                  AND (event LIKE '%FAIL%' OR event LIKE '%DENIED%' OR event LIKE '%FORBIDDEN%'))
+            + (SELECT COALESCE(SUM(failed), 0) FROM log_stats_hourly
+                WHERE scope = 'oper' AND DATE(bucket_start) = CURDATE()) AS c`,
       { type: QueryTypes.SELECT }
     );
     const failedOps = Number(todayFailed[0]?.c || 0);
 
     const trend = await logDao.operStats('7d');
+    /*
+     * 最近登录是**明细**（含 IP / UA / 时间），清过就是清过了 —— 归档只保留计数与
+     * 账号存在性，补不出"谁在几点从哪登录"。这是清除日志的应有之义，不再伪造。
+     */
     const recentLogins = await logDao.recentLogins(5);
 
     return {
@@ -113,7 +130,11 @@ class DashboardService {
       failedLogins: Number(counts.failed_logins || 0),
       todayOps,
       successRate: todayOps > 0 ? Number((((todayOps - failedOps) / todayOps) * 100).toFixed(2)) : 100,
-      activeUsers: Number(counts.active_users || 0),
+      /*
+       * 活跃账号数必须走 dao：它是「明细 ∪ 归档」的精确去重，
+       * 把两边人数相加会把同一账号算成两个人。
+       */
+      activeUsers: await logDao.activeLoginUsers(24),
       /** 当前在线（有有效会话）；Redis 不可用时为 null，前端回落到 activeUsers */
       onlineUsers: await countOnlineUsers(),
       trend: trend.series,
