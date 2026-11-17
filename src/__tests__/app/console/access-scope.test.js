@@ -14,6 +14,8 @@
 import {
   assertCanManageUser,
   assertCanManageRole,
+  assertRankBelowActor,
+  assertRankChangeAllowed,
   planRoleChangeWithRoles,
   assertGrantableRoles,
   canWriteApp,
@@ -248,5 +250,47 @@ describe('assertCanManageRole / canWriteApp —— 角色本身的维护边界',
   test('只有超管能改超管角色', () => {
     expect(() => assertCanManageRole(persona([adminAdmin]), superRole)).toThrow(/超级管理员/);
     expect(() => assertCanManageRole(persona([superRole]), superRole)).not.toThrow();
+  });
+});
+
+describe('assertRankBelowActor / assertRankChangeAllowed —— 新职级必须严格低于自己', () => {
+  /** 职级 50 的操作者 */
+  const actor50 = persona([adminOperator]);
+
+  test('严格低于自己：放行', () => {
+    expect(() => assertRankBelowActor(49, actor50)).not.toThrow();
+    expect(() => assertRankBelowActor(0, actor50)).not.toThrow();
+  });
+
+  test('等于自己：拒 —— 否则会造出一个谁也管不到的角色', () => {
+    // 同级角色在列表里 manageable=false、授予侧也被拒，写接口再放行就自相矛盾
+    expect(() => assertRankBelowActor(50, actor50)).toThrow(/必须低于你自己的最高职级 50/);
+  });
+
+  test('高于自己：拒（报错里带上自己的职级，用户才知道该填多少）', () => {
+    expect(() => assertRankBelowActor(99, actor50)).toThrow(/最高职级 50/);
+  });
+
+  test('超管也不例外：99 只能来自代码声明（superadmin / poseadmin）', () => {
+    const superActor = persona([superRole]);
+    expect(() => assertRankBelowActor(99, superActor)).toThrow(/必须低于/);
+    expect(() => assertRankBelowActor(98, superActor)).not.toThrow();
+  });
+
+  test('一个角色都没有的人（maxRank 0）建不出任何职级', () => {
+    expect(() => assertRankBelowActor(0, persona([]))).toThrow(/必须低于/);
+  });
+
+  test('编辑：值没变 / 没提交就放行（否则连改个名字都做不到）', () => {
+    expect(() => assertRankChangeAllowed(50, 50, actor50)).not.toThrow();
+    expect(() => assertRankChangeAllowed(undefined, 50, actor50)).not.toThrow();
+    expect(() => assertRankChangeAllowed(null, 50, actor50)).not.toThrow();
+  });
+
+  test('编辑：改成与自己相等、或更高，都要拒', () => {
+    expect(() => assertRankChangeAllowed(50, 10, actor50)).toThrow(/必须低于/);
+    expect(() => assertRankChangeAllowed(60, 10, actor50)).toThrow(/必须低于/);
+    // 比当前高但仍低于自己：合法（只是"提升"，没到同级）
+    expect(() => assertRankChangeAllowed(40, 10, actor50)).not.toThrow();
   });
 });

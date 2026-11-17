@@ -480,16 +480,22 @@ const {
             />
           </label>
           <label class="field">
+            <!--
+              职级必须**严格低于**自己（同级也不行）：同级角色在列表里是 manageable=false，
+              后端写接口同样拒（`assertRankBelowActor`）。这里写清楚，别让人填完才吃 403。
+              上限是 98 而不是 99 —— 99 只属于代码声明的角色（superadmin / poseadmin）。
+            -->
             <span class="field__label">
-              职级（0–99，不能高于你自己的最高职级）{{ rankLocked ? '（超管固定，不可修改）' : '' }}
+              职级（0–99，必须低于你自己的最高职级）{{ rankLocked ? '（超管固定，不可修改）' : '' }}
             </span>
             <input
               v-model.number="form.rankLevel"
               class="input"
               type="number"
               min="0"
-              max="99"
+              max="98"
               :disabled="rankLocked"
+              title="职级比你高的角色你不能管，所以新职级必须严格低于你自己的最高职级"
             />
           </label>
 

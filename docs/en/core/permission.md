@@ -127,6 +127,17 @@ fail-fast, the application never boots. `src/__tests__/permission/role-rank-leve
 guards this using the model's own boundaries (derived, not hard-coded 0/99).
 :::
 
+::: tip A new rank must be **strictly below** your own
+Both create-role and change-rank go through `assertRankBelowActor`: `new rank < my highest rank`,
+**equal is rejected too**. Rank is the gate for "who may manage whom" — same-rank roles are
+`manageable: false` in the list and rejected on the grant side (`rank >= maxRank`). Allowing
+"equal to myself" at write time therefore mints a role nobody can manage. That is why 99 only
+comes from code declarations (`superadmin`, poseadmin); the UI caps at 98.
+
+On edit the check only fires when the value actually changes — the dialog re-submits untouched
+fields, and echoing the same rank is not "adjusting a rank".
+:::
+
 ### Policy format
 
 **Statement form (recommended):**

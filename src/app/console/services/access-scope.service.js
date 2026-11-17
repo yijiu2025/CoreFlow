@@ -329,6 +329,52 @@ function assertCanManageRole(actor, role, action = '编辑') {
 }
 
 /**
+ * 校验「新职级能不能这么填」——必须**严格低于**操作者自己的最高职级
+ *
+ * 与 `assertCanManageRole` 是同一根线：职级是"能不能动谁"的闸。原来的写接口只判
+ * `> 自己`，于是可以把一个角色设成**与自己同级**；而同级的角色在列表里是
+ * `manageable: false`（不许我编辑）、在授予侧也是 `rank >= maxRank` 直接拒 ——
+ * 唯独"填表时"漏成 `>`，结果是能造出一个**谁也管不到**的角色，只能超管来收拾。
+ *
+ * 超管不豁免：99 是**代码声明角色的位置**（`superadmin`、posecraft 的 poseadmin 都在 99），
+ * 它们随应用启动由 `defineRoles` 落库，不经过这条接口。若允许超管从界面再立一个 99，
+ * 等于凭空多出一个和它们平级的角色，而这类角色没人管得动 —— 只能连数据库收拾。
+ *
+ * 非数值入参直接放过：形状由路由 schema 管，这里不重复校验，免得两处报错不一致。
+ *
+ * @param {number|string} nextRank 待写入的职级
+ * @param {object} actor 操作者画像（用 `maxRank`）
+ * @param {string} [action='设置'] 动作名（"设置"/"调整"）
+ * @throws {Error} `FORBIDDEN:xxx`
+ */
+function assertRankBelowActor(nextRank, actor, action = '设置') {
+  const next = Number(nextRank);
+  if (!Number.isFinite(next)) return;
+  const mine = Number(actor?.maxRank ?? 0);
+  if (next < mine) return;
+  throw new Error(`FORBIDDEN:不能把职级${action}为 ${next} —— 必须低于你自己的最高职级 ${mine}`);
+}
+
+/**
+ * 编辑角色时的职级校验：只在**值真的变了**的时候判
+ *
+ * 为什么不让路由自己写 `if (next !== current)`：这条豁免很容易被"顺手简化"掉 ——
+ * 一旦每次保存都判 `>=`，编辑弹窗（会连未改字段一起回传）连"改个名字"都会被拒，
+ * 表现为"点保存没反应，只弹一句职级不够"。把判定收在这里，路由只剩一行调用，
+ * 想改也只能改这一处，且下面有测试钉着。
+ *
+ * @param {number|undefined} nextRank 提交的职级（未提交 = undefined）
+ * @param {number} currentRank 角色当前职级
+ * @param {object} actor 操作者画像
+ * @throws {Error} `FORBIDDEN:xxx`
+ */
+function assertRankChangeAllowed(nextRank, currentRank, actor) {
+  if (nextRank === undefined || nextRank === null) return;
+  if (Number(nextRank) === Number(currentRank)) return;
+  assertRankBelowActor(nextRank, actor, '调整');
+}
+
+/**
  * 操作者是否**覆盖**某个权限码（自己持有，且没被自己的 deny 压住）
  *
  * 与接口鉴权同一套判据（`allows` 命中 + `denies` 优先），并复用共享的通配匹配
@@ -417,5 +463,7 @@ export {
   assertGrantable,
   assertGrantableRoles,
   assertCanManageRole,
+  assertRankBelowActor,
+  assertRankChangeAllowed,
   assertCanGrantCodes
 };

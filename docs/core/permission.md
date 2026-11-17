@@ -100,6 +100,7 @@ default_role: 'fw_viewer',
 `__tests__/permission/role-rank-levels.test.js` 用真实 config 跑一遍，写错测试就红。
 
 ::: warning 写角色定义时必须一起把默认角色写对
+
 - **注册期直接抛错**（import 期 = 启动失败）：缺 `app_id` / `rank_level` / `policy.Statement`，
   同一应用声明两个 `is_default`，或默认角色的 `rank_level` 超过普通档上限（20）。
 - **启动期日志提示**（`auditDefaultRoles`）：`config.default_role` 拼错、两处声明不一致、
@@ -118,6 +119,16 @@ default_role: 'fw_viewer',
 `SequelizeValidationError: Validation max on rank_level failed`，而 appsLoader 是 fail-fast 的
 —— 应用直接起不来。`src/__tests__/permission/role-rank-levels.test.js` 用模型自身的边界
 守卫这条约束（边界从模型派生，不手抄 0/99）。
+:::
+
+::: tip 新职级必须**严格低于**自己
+写接口（建角色 / 改职级）统一走 `assertRankBelowActor`：`新职级 < 我自己的最高职级`，
+**等于也不行**。理由是职级就是"能管谁"的闸 —— 同级的角色在列表里是
+`manageable: false`、在授予侧也被 `rank >= maxRank` 拒掉；如果填表时允许"等于自己"，
+就能造出一个谁也管不到的角色（只能超管收拾）。所以 99 只能来自代码声明
+（`superadmin`、poseadmin），界面最高只能填到 98。
+
+编辑时只判「值真的变了」：表单会连未改字段一起回传，回传原值不算调整职级。
 :::
 
 ### 策略格式

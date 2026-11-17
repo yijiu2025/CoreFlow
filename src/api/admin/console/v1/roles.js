@@ -31,7 +31,6 @@ import roleDao, {
   extractPermissions
 } from '../../../../app/console/dao/role.dao.js';
 import menuDao from '../../../../app/console/dao/menu.dao.js';
-import { getModel } from '../../../../framework/persistence/db/index.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 import { hasPermissionLike } from '../../../../app/console/utils/permissions.js';
@@ -40,6 +39,9 @@ import {
   appLabel,
   canWriteApp,
   getActorScope,
+  assertCanManageRole,
+  assertRankBelowActor,
+  assertRankChangeAllowed,
   assertCanGrantCodes
 } from '../../../../app/console/services/access-scope.service.js';
 import { invalidateButtonGrants } from '../../../../app/console/services/button-grant.service.js';
@@ -49,28 +51,6 @@ import { invalidateButtonGrants } from '../../../../app/console/services/button-
  * 这里曾经自己拼过一份 `BUILTIN_CODES`，而列表返回的 `builtin` 用的是另一份 ——
  * 两套判据对不上，前端就把超管当成了可删/可改权限码的普通角色。
  */
-
-/**
- * 查询当前操作者的最高职级
- *
- * @param {number} userId 用户内部 ID
- * @returns {Promise<number>} 最高职级（无角色为 0）
- */
-async function maxRankOf(userId) {
-  if (!userId) return 0;
-  // 两步模型查询（关联表 → 角色），不 JOIN：模型层已经处理好软删除与字段映射，
-  // 而且 iam_user_role / iam_role 之间没有挂 association（跨域不做耦合）
-  const links = await getModel('UserRole').findAll({
-    where: { user_id: userId, delete_version: 0 },
-    attributes: ['role_id'],
-    raw: true
-  });
-  if (links.length === 0) return 0;
-  const roleIds = Array.from(new Set(links.map(l => Number(l.role_id))));
-  // Role 是 paranoid 模型，已删除的角色自动排除（等价于原 SQL 的 deleted_at IS NULL）
-  const max = await getModel('Role').max('rank_level', { where: { id: roleIds } });
-  return Number(max || 0);
-}
 
 /**
  * 写一条角色审计
@@ -127,7 +107,8 @@ async function registerRoleRoutes(fastify) {
       const { rows, total } = await roleDao.page({ pageNum, pageSize, keyword, appId });
       /*
        * 逐行标 `manageable`：前端据此把编辑/删除按钮置灰，而不是让人填完表单再吃 403。
-       * 判据与写接口完全一致（同一份 `canWriteApp` + 职级闸），不另写一套。
+       * 判据与写接口完全一致：`canWriteApp` + **严格低于**（`rank < maxRank`），
+       * 与 `assertCanManageRole` 同一条线 —— 界面上灰掉的按钮，接口也确实调不通。
        */
       const actor = await getActorScope(request.state.user?.userId);
       const marked = rows.map(role => ({
@@ -172,10 +153,17 @@ async function registerRoleRoutes(fastify) {
     },
     handler: withFail(async (request, reply) => {
       const { menuIds = [], ...payload } = request.body;
-      const myRank = await maxRankOf(request.state.user?.userId);
-      if (Number(payload.rankLevel || 1) > myRank) throw new Error('FORBIDDEN:不能创建高于自己职级的角色');
-      // 只能在自己管辖的应用下建角色：否则防火墙管理员可以造一个 admin 角色的同名副本
       const actor = await getActorScope(request.state.user?.userId);
+      /*
+       * 新职级必须**严格低于**自己。
+       *
+       * 判据就一句话：同级角色在列表里是 `manageable: false`、在授予侧也被
+       * `rank >= maxRank` 拒掉 —— 如果建角色时允许"等于自己"，就能造出一个
+       * 自己管不到、别人也管不到的角色，只有超管能收拾。判据集中在
+       * `assertRankBelowActor`，路由里不再手写比较。
+       */
+      assertRankBelowActor(payload.rankLevel ?? 1, actor, '设置');
+      // 只能在自己管辖的应用下建角色：否则防火墙管理员可以造一个 admin 角色的同名副本
       if (!canWriteApp(actor, payload.appId || 'GLOBAL')) {
         throw new Error(`FORBIDDEN:不能创建${appLabel(payload.appId)}应用的角色`);
       }
@@ -195,6 +183,16 @@ async function registerRoleRoutes(fastify) {
         await menuDao.setRoleMenus(role.id, menuIds);
         invalidateButtonGrants();
       }
+      await audit(request, 'ROLE_CREATE', {
+        targetId: role.id,
+        targetName: payload.name,
+        roleCode: payload.code,
+        appId: payload.appId || 'GLOBAL',
+        rankLevel: payload.rankLevel ?? 1,
+        dataScope: payload.dataScope ?? 5,
+        permissionCount: (payload.permissions || []).length,
+        menuCount: menuIds.length
+      });
       return reply.result.success('创建成功', { id: role.id });
     })
   });
@@ -255,16 +253,25 @@ async function registerRoleRoutes(fastify) {
         throw new Error('BUILTIN_PROTECTED:超级管理员的职级不可修改');
       }
 
-      const myRank = await maxRankOf(request.state.user?.userId);
-      if (Number(role.rank_level) > myRank) throw new Error('FORBIDDEN:不能编辑职级高于自己的角色');
-      // 应用域：非跨应用管理员只能维护自己应用的角色（改别人的角色 = 改别人的授权效果）
+      /*
+       * 三个前置判据合成一处（应用域 + 职级 + 超管角色），与列表里的 `manageable` 同源。
+       *
+       * 🔴 职级判据是**严格低于**（`rank >= maxRank` 就拒）：同级角色不该互相编辑。
+       *    原来这里手写 `> myRank`，比列表的 `manageable`（`<`）松一档 ——
+       *    界面已经置灰的按钮，接口其实还能调通。
+       */
       const actor = await getActorScope(request.state.user?.userId);
-      if (!canWriteApp(actor, role.app_id)) {
-        throw new Error(`FORBIDDEN:不能编辑${appLabel(role.app_id)}应用的角色`);
-      }
-      if (request.body.rankLevel !== undefined && Number(request.body.rankLevel) > myRank) {
-        throw new Error('FORBIDDEN:不能把角色提升到高于自己的职级');
-      }
+      assertCanManageRole(
+        actor,
+        { isSuper: isRankLockedRole(role.code), appId: role.app_id, rank: Number(role.rank_level) },
+        '编辑'
+      );
+      /*
+       * 新职级同样必须严格低于自己。只判「值真的变了」—— 编辑弹窗会连未改字段一起回传，
+       * 回传原值不该被拒（否则连改个名字都做不到）。豁免逻辑在 `assertRankChangeAllowed` 里，
+       * 路由只调用、不自己写比较。
+       */
+      assertRankChangeAllowed(request.body.rankLevel, role.rank_level, actor);
 
       const { menuIds, ...payload } = request.body;
       // 档位限制同样作用于编辑：管理员可以把一个普通角色的范围改成全部，这里必须拦住
@@ -305,6 +312,28 @@ async function registerRoleRoutes(fastify) {
           removed: removedCodes
         });
       }
+      /*
+       * 资料变更留痕
+       *
+       * 权限码变化有 PERMISSION_CHANGE 兜着，但「改名」「调职级」原来一条不记 ——
+       * 而职级决定这个人能管谁，本身就是授权效果的一部分。
+       */
+      const roleChanges = [];
+      if (payload.name !== undefined && String(payload.name) !== String(role.name)) {
+        roleChanges.push({ field: 'name', from: role.name, to: payload.name });
+      }
+      if (payload.rankLevel !== undefined && Number(payload.rankLevel) !== Number(role.rank_level)) {
+        roleChanges.push({ field: 'rankLevel', from: role.rank_level, to: payload.rankLevel });
+      }
+      if (roleChanges.length > 0) {
+        await audit(request, 'ROLE_UPDATE', {
+          targetId: role.id,
+          targetName: role.name,
+          roleCode: role.code,
+          appId: role.app_id,
+          changes: roleChanges
+        });
+      }
       return reply.result.success('保存成功', null);
     })
   });
@@ -324,14 +353,28 @@ async function registerRoleRoutes(fastify) {
       if (!role) throw new Error('NOT_FOUND:角色不存在');
       if (isProtectedRoleCode(role.code)) throw new Error('BUILTIN_PROTECTED:内置角色不可删除');
 
-      const myRank = await maxRankOf(request.state.user?.userId);
-      if (Number(role.rank_level) > myRank) throw new Error('FORBIDDEN:不能删除职级高于自己的角色');
+      // 与编辑同一套判据（应用域 + 职级严格低于自己 + 超管角色只有超管能动）
       const actor = await getActorScope(request.state.user?.userId);
-      if (!canWriteApp(actor, role.app_id)) {
-        throw new Error(`FORBIDDEN:不能删除${appLabel(role.app_id)}应用的角色`);
-      }
+      assertCanManageRole(
+        actor,
+        { isSuper: isRankLockedRole(role.code), appId: role.app_id, rank: Number(role.rank_level) },
+        '删除'
+      );
 
       await roleDao.remove(role.id);
+      /*
+       * 删除角色留痕
+       *
+       * 角色一删，它授出去的所有权限同时消失 —— 受影响的人是谁、原本有哪些码，
+       * 事后只能从这条日志里重建。原来这里什么都没记。
+       */
+      await audit(request, 'ROLE_DELETE', {
+        targetId: role.id,
+        targetName: role.name,
+        roleCode: role.code,
+        appId: role.app_id,
+        rankLevel: role.rank_level
+      });
       // 角色没了，它授出去的按钮也一并失效 —— 缓存里可能还留着"该角色曾授权"快照
       invalidateButtonGrants();
       return reply.result.success('删除成功', null);
