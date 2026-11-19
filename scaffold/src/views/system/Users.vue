@@ -215,6 +215,18 @@ const verdicts = computed(() => {
  * @returns 判定结果（缺省视为可管理，交给后端裁决）
  */
 function verdictOf(row: UserRow): { ok: boolean; reason: string } {
+  /*
+   * 🔴 后端的 `manageable` 是**一票否决**：它由「操作者职级 > 目标职级」算出
+   *    （超管恒为 true）。本地那套 `canManageUser` 是拿列表里的角色信息粗算的，
+   *    只用来补文案 —— 两套判据取交集才安全，"后端说不能动"不能被前端覆盖。
+   *
+   * 列表本身不再按职级过滤（2026-11-19），所以这里必须有这一层：
+   * 看得见但点不动，好过"搜不到人"。
+   */
+  if (row.manageable === false) {
+    const local = verdicts.value.get(row.id);
+    return { ok: false, reason: local?.reason || '你的职级不高于该账号，无法操作' };
+  }
   return verdicts.value.get(row.id) ?? { ok: true, reason: '' };
 }
 
@@ -517,6 +529,7 @@ function targetOf(row: UserRow): UserEditTarget {
     email: row.email || '',
     deptId: row.dept_id,
     status: row.status,
+    rankLevel: row.rank_level ?? 0,
     roleIds: parseIds(row.role_ids),
     postIds: parseIds(row.post_ids)
   };

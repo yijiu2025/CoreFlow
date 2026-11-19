@@ -190,6 +190,8 @@ export interface UserProfile {
     avatar: string;
     status: number;
     deptId: number | null;
+    /** 人员职级（0-99）：编辑弹窗的初值 */
+    rankLevel: number;
     deptName: string;
     postNames: string[];
     /** 岗位 ID（编辑回填用；岗位名会重名 / 可改名，反查必错） */
@@ -338,6 +340,20 @@ export interface UserRow {
   /** 岗位 ID 逗号串（同上） */
   post_ids: string | null;
   created_at: string;
+  /**
+   * 人员职级（0-99）
+   *
+   * 🔴 是**人**的层级（能管多高的人），不是角色权重。授予高角色时后端会顺带抬上来，
+   *    但收回角色**不会**自动降级（那是人事决定，得在编辑弹窗里显式改）。
+   */
+  rank_level?: number;
+  /**
+   * 当前操作者能不能动这一行
+   *
+   * 由「操作者职级 > 目标职级」算出（超管恒为 true）。**列表本身不再按职级过滤** ——
+   * 看得见但动不了是管理台的常态，"搜不到人"比"看得到点不动"更让人困惑。
+   */
+  manageable?: boolean;
   /** 待执行的注销申请（null = 没有）；列表里据此显示"还有几天到期" */
   deletion?: UserDeletionBrief | null;
 }
@@ -402,6 +418,8 @@ export interface UserEditTarget {
   email: string;
   deptId: number | null;
   status: number;
+  /** 人员职级（0-99）：能管多高的人。授予高角色时后端会自动抬，收回不自动降 */
+  rankLevel: number;
   roleIds: number[];
   postIds: number[];
 }

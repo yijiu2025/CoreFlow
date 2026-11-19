@@ -230,7 +230,7 @@ const {
                 <tr
                   v-for="row in rows"
                   :key="row.id"
-                  :class="{ 'is-picked': selected.has(row.id) }"
+                  :class="{ 'is-picked': selected.has(row.id), 'is-locked': row.manageable === false }"
                   class="row-clickable"
                   @click="openProfile(row)"
                 >
@@ -583,6 +583,16 @@ const {
 }
 
 .row-clickable:hover td {
+
+/* 职级不高于自己的账号：能看见、能点开详情，但按钮全部禁用（见 Users.vue 的 verdictOf） */
+.is-locked > td {
+  opacity: 0.6;
+}
+
+.is-locked > td.col-actions {
+  opacity: 1;
+}
+
   background: var(--mauth-surface-2);
 }
 

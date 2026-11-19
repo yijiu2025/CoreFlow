@@ -55,6 +55,8 @@ const form = reactive({
   password: '',
   deptId: null as number | null,
   status: 1,
+  /** 人员职级（0-99） */
+  rankLevel: 0,
   roleIds: [] as number[],
   postIds: [] as number[]
 });
@@ -261,6 +263,7 @@ function resetForm(): void {
     password: '',
     deptId: target?.deptId ?? null,
     status: target?.status ?? 1,
+    rankLevel: target?.rankLevel ?? 0,
     roleIds: target ? [...target.roleIds] : [],
     postIds: target ? [...target.postIds] : []
   });
@@ -309,6 +312,7 @@ async function submit(): Promise<void> {
         email: form.email,
         deptId: form.deptId,
         status: form.status,
+        rankLevel: form.rankLevel,
         roleIds: submittableRoleIds.value,
         postIds: form.postIds
       });
@@ -334,6 +338,7 @@ async function submit(): Promise<void> {
         password: form.password,
         deptId: form.deptId,
         status: form.status,
+        rankLevel: form.rankLevel,
         roleIds: submittableRoleIds.value,
         postIds: form.postIds
       });
@@ -385,6 +390,17 @@ async function submit(): Promise<void> {
                   <option :value="null">未分配</option>
                   <option v-for="dept in options.depts" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
                 </select>
+              </label>
+              <!--
+                职级只在编辑态出现：新建时先定角色，职级由「授角色自动抬职级」推出来
+                （后端 `syncRankFromRoles`），不需要人多填一次。
+              -->
+              <label v-if="isEdit" class="field">
+                <span class="field__label">职级（0-99）</span>
+                <input v-model.number="form.rankLevel" class="input" type="number" min="0" max="99" />
+                <span class="field__hint">
+                  决定能管理多高的人。授予高职级角色时会自动抬高，收回角色**不会**自动降
+                </span>
               </label>
               <label class="field">
                 <span class="field__label">状态</span>

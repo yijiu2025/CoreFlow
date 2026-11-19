@@ -400,6 +400,7 @@ const editTarget = computed<UserEditTarget | null>(() => {
     email: u.email,
     deptId: u.deptId,
     status: u.status,
+    rankLevel: u.rankLevel ?? 0,
     roleIds: u.roleIds ?? [],
     postIds: u.postIds ?? []
   };
