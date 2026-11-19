@@ -22,6 +22,7 @@ import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { Briefcase, ChevronRight, ListTree, Network, ShieldCheck, Users } from 'lucide-vue-next';
 import { useAuthStore } from '@/stores/auth';
+import { filterByRoutePermission } from '@/utils/permission';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -64,12 +65,7 @@ const GROUPS: Array<{ title: string; items: Entry[] }> = [
 const groups = computed(() =>
   GROUPS.map(group => ({
     title: group.title,
-    items: group.items.filter(item => {
-      const resolved = router.resolve(item.path);
-      if (resolved.name === 'not-found') return false;
-      const code = (resolved.meta?.permission as string | undefined) ?? '';
-      return !code || auth.hasPermission(code);
-    })
+    items: filterByRoutePermission(group.items, router, auth.hasPermission)
   })).filter(group => group.items.length > 0)
 );
 </script>

@@ -1,3 +1,5 @@
+import type { Router } from 'vue-router';
+
 /**
  * 权限码通配匹配（前端单一来源）
  *
@@ -17,4 +19,38 @@ function matchPermission(patterns: string[], code: string): boolean {
   });
 }
 
-export { matchPermission };
+/**
+ * 按「路由声明的权限码」过滤入口列表
+ *
+ * 为什么以路由为准而不是在入口清单里各写一遍权限码：
+ *   · 单一来源 —— 路由改了码，入口自动跟着变，不会出现"入口还在、点进去 403"；
+ *   · 与守卫同源 —— 守卫判的就是 `meta.permission`，同一个码同时决定"能不能进"
+ *     和"要不要显示"，两边不可能分叉。
+ *
+ * 两条边界：
+ *   · **路由没注册**（主题包切换、页面被裁掉）→ 藏。否则点进去是 404。
+ *   · **未声明权限码** → 显示。与守卫 `if (permission && !has)` 的判据一致；
+ *     这里若改成 fail-closed，就会出现"入口不显示、手动输 URL 却能进"的矛盾。
+ *
+ * 三处调用方（工作台常用入口、口袋版「通讯录」「发现」）原先各自手写这 8 行，
+ * 其中工作台那份干脆没写 —— 于是卡片上写着"按权限可见"，实际全量显示。
+ *
+ * @param items 入口列表（每项需带 `path`）
+ * @param router 路由实例（用 `resolve` 取 meta）
+ * @param hasPermission 权限判定（通常是 `auth.hasPermission`）
+ * @returns 过滤后的列表（保持原顺序）
+ */
+function filterByRoutePermission<T extends { path: string }>(
+  items: T[],
+  router: Router,
+  hasPermission: (code: string) => boolean
+): T[] {
+  return items.filter(item => {
+    const resolved = router.resolve(item.path);
+    if (resolved.name === 'not-found') return false;
+    const code = (resolved.meta?.permission as string | undefined) ?? '';
+    return !code || hasPermission(code);
+  });
+}
+
+export { matchPermission, filterByRoutePermission };

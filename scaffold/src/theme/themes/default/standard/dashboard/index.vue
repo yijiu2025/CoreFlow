@@ -219,8 +219,8 @@ const {
           <span class="bento__title">常用入口</span>
           <span class="bento__meta">按权限可见的页面</span>
         </header>
-        <div class="quick">
-          <router-link v-for="item in shortcuts" :key="item.to" :to="item.to" class="quick__link">
+        <div v-if="shortcuts.length > 0" class="quick">
+          <router-link v-for="item in shortcuts" :key="item.path" :to="item.path" class="quick__link">
             <span class="quick__ico"><component :is="item.icon" :size="17" /></span>
             <span class="quick__text">
               <span class="quick__title">{{ item.label }}</span>
@@ -229,6 +229,8 @@ const {
             <ArrowRight :size="15" class="quick__go" />
           </router-link>
         </div>
+        <!-- 一个入口都没有时别留空框：让人以为页面加载失败 -->
+        <div v-else class="empty">当前账号没有可进入的管理页面，请联系管理员授权</div>
       </section>
     </div>
   </div>

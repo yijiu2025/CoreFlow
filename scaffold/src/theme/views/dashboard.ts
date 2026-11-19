@@ -45,7 +45,8 @@ export interface ResourceItem {
 /** 常用入口瓦片 */
 export interface ShortcutItem {
   label: string;
-  to: string;
+  /** 目标路由路径（容器按它的 `meta.permission` 过滤） */
+  path: string;
   sub: string;
   icon: Component;
 }
@@ -74,7 +75,13 @@ export interface DashboardViewContext {
   /** 刻度环末端收口点（0 点亮时为 null） */
   ringCap: ComputedRef<{ x: number; y: number } | null>;
   resources: ComputedRef<ResourceItem[]>;
-  shortcuts: ShortcutItem[];
+  /**
+   * 常用入口瓦片
+   *
+   * 🔴 **已按权限过滤**（容器用路由 `meta.permission` 判，与路由守卫同源），
+   * 版式不再自己判 —— 两处各判一次必然分叉成"入口看得见、点进去没权限"。
+   */
+  shortcuts: ComputedRef<ShortcutItem[]>;
   load: () => Promise<void>;
   /** 相对时间（"3 分钟前"） */
   ago: (iso: string) => string;

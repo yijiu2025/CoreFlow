@@ -18,15 +18,19 @@
  * @since 2026-11-09
  */
 import { computed, onMounted, ref, type Component } from 'vue';
+import { useRouter } from 'vue-router';
 import { Building2, LogIn, ScrollText, ShieldCheck, Users } from 'lucide-vue-next';
 import { dashboardSummary } from '@/api/monitor';
 import { useAuthStore } from '@/stores/auth';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 import type { DashboardSummary } from '@/api/types';
 import { ThemeView } from 'skinsuite/vue';
+import { filterByRoutePermission } from '@/utils/permission';
 import type { DashboardViewContext } from '@/theme/views/dashboard';
 
 const auth = useAuthStore();
+/** 解析入口所需权限码用（`router.resolve(to).meta.permission`） */
+const router = useRouter();
 
 /** 当前渲染设备：本页版式只靠 CSS 断点适配，但要告知主题（版式目录按设备查） */
 const device = useRenderDevice();
@@ -158,14 +162,38 @@ const resources = computed(() => [
   { label: '菜单项', value: data.value?.menus ?? 0 }
 ]);
 
-/** 常用入口：图标瓦片 + 分组副标 */
-const shortcuts: Array<{ label: string; to: string; sub: string; icon: Component }> = [
-  { label: '用户管理', to: '/system/user', sub: '系统', icon: Users },
-  { label: '角色管理', to: '/system/role', sub: '系统', icon: ShieldCheck },
-  { label: '部门管理', to: '/system/dept', sub: '系统', icon: Building2 },
-  { label: '操作日志', to: '/monitor/oper-log', sub: '监控', icon: ScrollText },
-  { label: '登录日志', to: '/monitor/login-log', sub: '监控', icon: LogIn }
+/**
+ * 常用入口清单（产品精选的五个，不是"全部页面"）
+ *
+ * 这里只写**去哪**和怎么显示，不写权限码 —— 权限从路由的 `meta.permission` 解析。
+ * 两条理由：
+ *   1. 单一来源：路由改了权限码，入口自动跟着变，不会出现"入口还在、点进去 403"；
+ *   2. 与守卫同源：守卫的判据正是 `meta.permission`，同一个码决定"能不能进"和
+ *      "要不要显示"，两边不可能分叉。
+ *
+ * 之前这里是一份写死的数组，而卡片标题旁写着"按权限可见的页面" ——
+ * 于是没权限的人照样看到五个入口，点进去被弹回无权限页。
+ */
+const SHORTCUTS: Array<{ label: string; path: string; sub: string; icon: Component }> = [
+  { label: '用户管理', path: '/system/user', sub: '系统', icon: Users },
+  { label: '角色管理', path: '/system/role', sub: '系统', icon: ShieldCheck },
+  { label: '部门管理', path: '/system/dept', sub: '系统', icon: Building2 },
+  { label: '操作日志', path: '/monitor/oper-log', sub: '监控', icon: ScrollText },
+  { label: '登录日志', path: '/monitor/login-log', sub: '监控', icon: LogIn }
 ];
+
+/**
+ * 按权限过滤后的入口
+ *
+ * 🔴 必须是 `computed`：`auth.me` 是异步拉取的（`/session/me`），
+ *    在 setup 阶段直接过滤会把五个入口全滤掉（那时 permissions 还是空的），
+ *    表现为"刷新工作台后入口区一片空白"。
+ *
+ * 未声明 `permission` 的路由**保持可见**——与路由守卫的判据一致
+ * （守卫也是 `if (permission && !has)` 才拦）。这一条很重要：如果这里 fail-closed，
+ * 就会出现"工作台不显示入口、手动输 URL 却能进"的矛盾。
+ */
+const shortcuts = computed(() => filterByRoutePermission(SHORTCUTS, router, auth.hasPermission));
 
 /**
  * 相对时间：日志里"3 分钟前"比一串日期更容易判断新鲜度
