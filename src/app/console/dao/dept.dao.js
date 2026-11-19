@@ -71,6 +71,25 @@ class DeptDao {
   }
 
   /**
+   * 部门轻量列表（id / name），按排序字段
+   *
+   * 与 `listAll` 的区别：**不做成员数统计**。导入、下拉映射这类"只要名字"的场景
+   * 不该为了一列计数多跑一次全表聚合。
+   *
+   * @returns {Promise<Array<{id: number, name: string}>>} 部门参照表
+   */
+  async listBrief() {
+    return getModel('console.SysDept').findAll({
+      attributes: ['id', 'name'],
+      order: [
+        ['sort', 'ASC'],
+        ['id', 'ASC']
+      ],
+      raw: true
+    });
+  }
+
+  /**
    * 部门树
    *
    * @returns {Promise<Array<object>>} 树形部门

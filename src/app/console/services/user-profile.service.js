@@ -14,12 +14,14 @@
  * @author yijiu2025
  * @since 2026-11-12
  */
-import { getModel } from '../../../framework/persistence/db/index.js';
+import { getModel, sequelize } from '../../../framework/persistence/db/index.js';
 import { QueryTypes } from 'sequelize';
 import { logAuditEvent } from '../../../framework/security/auth/index.js';
 import { describeCurrentAccess } from './user-access.service.js';
 import userDangerService from './user-danger.service.js';
 import { getActorScope, getTargetScope, appLabel, activeRoleIds } from './access-scope.service.js';
+import userDao from '../dao/user.dao.js';
+import deptDao from '../dao/dept.dao.js';
 
 /** 记录区展示条数（够看出"最近在忙什么"即可，完整流水在日志页） */
 const RECENT_LIMIT = 10;
@@ -97,12 +99,25 @@ class UserProfileService {
     const id = Number(targetId);
     await assertCanView(actorId, id);
 
-    const User = getModel('User');
-    const user = await User.findByPk(id, { raw: true });
+    /*
+     * 字段显式列出（原来 `findByPk(id, { raw: true })` 取整行）：
+     * 详情只用到这 9 列，写清楚之后"某个字段被悄悄加进响应"这种事不会再发生。
+     */
+    const user = await userDao.findBrief(id, [
+      'id',
+      'uid',
+      'username',
+      'email',
+      'avatar',
+      'status',
+      'dept_id',
+      'created_at',
+      'delete_version'
+    ]);
     if (!user) throw new Error('NOT_FOUND:用户不存在');
 
     const [dept, postRefs, roleIds, access, apps, ops, logins, inlineRows] = await Promise.all([
-      user.dept_id ? getModel('SysDept').findByPk(user.dept_id, { raw: true }) : null,
+      user.dept_id ? deptDao.findById(user.dept_id) : null,
       this.postsOf(id),
       // 完整角色 ID（不经 `describeCurrentAccess` 的可见性裁剪）：这是**回填表单**用的，
       // 只回填看得见的那几条，保存时会把其余角色当成"用户主动摘掉"整片删掉。
@@ -181,7 +196,6 @@ class UserProfileService {
    * @returns {Promise<Array<object>>} 最近若干条
    */
   async recentOps(userId) {
-    const { sequelize } = getModel('AuditLog');
     const rows = await sequelize.query(
       `SELECT a.event, a.app_id, a.ip, a.created_at,
               JSON_UNQUOTE(JSON_EXTRACT(a.details, '$.costMs')) AS cost_ms
@@ -207,7 +221,6 @@ class UserProfileService {
    * @returns {Promise<Array<object>>} 最近若干条
    */
   async recentLogins(userId) {
-    const { sequelize } = getModel('SessionLog');
     const rows = await sequelize.query(
       `SELECT l.event, l.app_id, l.ip, l.location, l.user_agent, l.created_at
          FROM session_logs l
@@ -302,7 +315,7 @@ class UserProfileService {
 
     // 权限变了必须留痕：谁能单独改别人的权限，是最需要可追溯的动作之一。
     // 带上 targetUsername：日志列表只显示 `#26` 时，事后根本认不出是谁。
-    const targetUser = await getModel('User').findByPk(id, { attributes: ['username'] });
+    const targetUser = await userDao.findBrief(id, ['username']);
     await logAuditEvent({
       type: 'USER_PERMISSION_INLINE',
       userId: actorId,

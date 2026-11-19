@@ -7,7 +7,7 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { getModel } from '../../../framework/persistence/db/index.js';
+import { sequelize } from '../../../framework/persistence/db/index.js';
 import { QueryTypes } from 'sequelize';
 import logDao, { OPER_ONLY_SQL } from '../dao/log.dao.js';
 import { getStore } from '../../../framework/persistence/redis/index.js';
@@ -65,8 +65,10 @@ class DashboardService {
    * @returns {Promise<object>} 概览数据
    */
   async summary() {
-    const { sequelize } = getModel('User');
-
+    /*
+     * 直接取连接，不借某个模型的 `.sequelize`：那是"顺手拿到的句柄"，
+     * 会让读者以为这段在读 User 表，实际只跑聚合 SQL。
+     */
     const [counts] = await sequelize.query(
       `SELECT
          (SELECT COUNT(*) FROM user_user WHERE deleted_at IS NULL) AS users,

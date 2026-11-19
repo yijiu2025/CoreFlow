@@ -47,6 +47,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import userDao from '../../../../app/console/dao/user.dao.js';
 import roleDao from '../../../../app/console/dao/role.dao.js';
+import deptDao from '../../../../app/console/dao/dept.dao.js';
 import grantDao from '../../../../app/console/dao/grant.dao.js';
 import {
   appLabel,
@@ -69,7 +70,6 @@ import {
 import userDangerService from '../../../../app/console/services/user-danger.service.js';
 import stepUpService from '../../../../app/console/services/stepup.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
-import { getModel } from '../../../../framework/persistence/db/index.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 import {
   USER_EVENTS,
@@ -724,10 +724,7 @@ async function registerUserRoutes(fastify) {
        * 部门按名称匹配、角色按"编码或名称"匹配 —— 前端 CSV 里人写的是名字，
        * 不是 id；要求填 id 等于让用户先去查库。
        */
-      const [depts, roles] = await Promise.all([
-        getModel('console.SysDept').findAll({ attributes: ['id', 'name'], raw: true }),
-        roleDao.listBrief()
-      ]);
+      const [depts, roles] = await Promise.all([deptDao.listBrief(), roleDao.listBrief()]);
       const deptMap = new Map(depts.map(d => [String(d.name).trim(), Number(d.id)]));
       // 重名（三个应用的"普通用户"）会让按名称匹配变得不确定，交给 lookup 报出来
       const roleLookup = buildRoleLookup(roles);

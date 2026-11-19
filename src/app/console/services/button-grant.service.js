@@ -27,6 +27,7 @@ import { actionMetaRegistry } from '../../../framework/security/pbac/index.js';
 import { isWildcardMatch } from '../../../framework/security/auth/permission/wildcard-match.js';
 import { hasPermissionLike, toPermissionList } from '../utils/permissions.js';
 import menuDao from '../dao/menu.dao.js';
+import roleDao from '../dao/role.dao.js';
 
 /** 全站按钮码快照的 TTL */
 const CODES_TTL_MS = 60_000;
@@ -157,14 +158,11 @@ async function resolveButtonGate(user) {
   if (isSuperViewer(user)) {
     menuPerms = [...new Set(snap.active.map(item => item.permission))];
   } else {
-    const Role = getModel('Role');
-    const roleRows = await Role.findAll({
-      where: { code: rolesKey ? rolesKey.split(',') : ['__none__'] },
-      attributes: ['id']
-    });
     const grantedMenuIds = new Set();
-    for (const role of roleRows) {
-      for (const menuId of await menuDao.getRoleMenuIds(role.id)) grantedMenuIds.add(Number(menuId));
+    // 角色编码 → ID 的映射与 /session/routes 同源（`findIdsByCodes` 空集合返回 []，
+    // 不会退化成"查全部"——那会让没有角色的会话拿到整棵菜单）
+    for (const roleId of await roleDao.findIdsByCodes(rolesKey ? rolesKey.split(',') : [])) {
+      for (const menuId of await menuDao.getRoleMenuIds(roleId)) grantedMenuIds.add(Number(menuId));
     }
     menuPerms = [...new Set(snap.active.filter(item => grantedMenuIds.has(item.id)).map(item => item.permission))];
     pageGrants = new Set(

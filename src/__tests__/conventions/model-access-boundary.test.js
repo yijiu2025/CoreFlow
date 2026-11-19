@@ -26,29 +26,73 @@ import { fileURLToPath } from 'node:url';
 const SRC = fileURLToPath(new URL('../../', import.meta.url));
 
 /**
- * 存量基线：路径（相对 src/）→ 允许的直接 getModel 次数
+ * 存量基线：路径（相对 src/）→ { max 允许次数, why 为什么允许保留 }
  *
- * 收敛完的文件从这里删掉，不要留着 0。
+ * 🔴 **只减不增**，且**每条都必须写清理由**。
+ *    没有理由的条目等于黑名单：下一个看到的人不知道该不该动它，只能继续往上堆数字。
+ *    收敛完之后整条删掉，不要留下 `max: 0`。
  */
 const BASELINE = {
-  'api/admin/console/v1/session.js': 10,
-  'api/admin/console/v1/users.js': 1,
-  'api/admin/user/v1/sessions.js': 2,
-  'api/user/v1/sessions.js': 4,
-  'app/admin/services/device-account.service.js': 2,
-  'app/console/services/access-scope.service.js': 3,
-  'app/console/services/button-grant.service.js': 2,
-  'app/console/services/dashboard.service.js': 1,
-  'app/console/services/data-scope.service.js': 6,
-  'app/console/services/stepup.service.js': 2,
-  'app/console/services/user-danger.service.js': 3,
-  'app/console/services/user-profile.service.js': 10,
-  'app/guard/services/stepup.service.js': 2,
-  'app/posecraft/services/profile.service.js': 4,
-  'app/posecraft/utils/preview.js': 1,
-  'app/retroweb/services/quota.service.js': 1,
-  'app/user/permission/seeder.js': 1,
-  'app/user/services/deactivation.service.js': 20
+  'api/admin/user/v1/sessions.js': {
+    max: 2,
+    why: 'SessionToken 属 session 域，admin 域没有对应 DAO；另一处是踢人前的目标账号快照（要 id+username），User 的归属 DAO 现在有两份（app/user 与 app/console），先统一归属再收'
+  },
+  'api/user/v1/sessions.js': {
+    max: 4,
+    why: '会话表（SessionToken）的直接读写：session 域没有 DAO，四段逻辑各自要事务'
+  },
+  'app/admin/services/device-account.service.js': {
+    max: 2,
+    why: 'SessionToken + include User 的关联查询：DAO 化需要先给两张表挂 association，属于模型层的改动，不在收敛范围'
+  },
+  'app/console/services/access-scope.service.js': {
+    max: 3,
+    why: '**权限判据本身**（User / Role / UserRole）：查询与判定必须在一起，拆进 DAO 会把判据拆成两半，可读性反而更差'
+  },
+  'app/console/services/button-grant.service.js': {
+    max: 1,
+    why: "菜单快照扫描 `getModel('console.SysMenu')`：这是一次性全量读，且要按 id 建祖先映射，menu.dao 的 tree 形态不适合"
+  },
+  'app/console/services/data-scope.service.js': {
+    max: 6,
+    why: '**数据范围判据本身**（UserRole / Role / User / RoleDept / RoleApp）：与 access-scope 同理，判据不拆'
+  },
+  'app/console/services/stepup.service.js': {
+    max: 2,
+    why: '二次验证要读 User + UserIdentity 的实时状态（锁定次数 / 锁定截止），且与 guard 侧那份实现共用同一套语义'
+  },
+  'app/console/services/user-danger.service.js': {
+    max: 3,
+    why: '高危操作要的是 **User 实例**（读旧值 → 改 → save），不是快照；另两处是注销表与动态模型名清理'
+  },
+  'app/console/services/user-profile.service.js': {
+    max: 5,
+    why: 'InlinePolicy 的读写、SysUserPost / SysPost 关联表、AuditLog / SessionLog 的原生聚合 SQL —— 都是各自域的附属表，console 侧没有对应 DAO'
+  },
+  'app/guard/services/stepup.service.js': {
+    max: 2,
+    why: '与 console 侧同名实现重复，但 guard 是框架侧目录，不能反向依赖 app 的 DAO'
+  },
+  'app/posecraft/services/profile.service.js': {
+    max: 4,
+    why: '跨应用读用户公开资料 + 作品/收藏/推荐计数：posecraft 域自己的表有 DAO，但 User 是共享模型'
+  },
+  'app/posecraft/utils/preview.js': {
+    max: 1,
+    why: '预览渲染时要按 id 取模板，处在一个纯函数工具里，引入 DAO 会把它变成有状态模块'
+  },
+  'app/retroweb/services/quota.service.js': {
+    max: 1,
+    why: '配额统计要对 retroweb.Task 做聚合，任务 DAO 目前只有列表查询'
+  },
+  'app/user/permission/seeder.js': {
+    max: 1,
+    why: '角色种子数据初始化：一次性脚本性质，写死模型名是为了在 seeder 里保持自包含'
+  },
+  'app/user/services/deactivation.service.js': {
+    max: 20,
+    why: '**跨域清理编排**（User / UserIdentity / oauth21.* / session.* / iam.* / 应用私有表）：用模型名字符串刻意避免静态依赖别的 app，收进 user 的 DAO 会破坏 app 隔离；且每张表只在这里出现一次，不存在口径漂移'
+  }
 };
 
 /**
@@ -106,12 +150,19 @@ describe('数据访问边界', () => {
     const counts = countByFile();
     const violations = [];
     for (const [rel, hits] of counts) {
-      const allowed = BASELINE[rel] ?? 0;
+      const allowed = BASELINE[rel]?.max ?? 0;
       if (hits > allowed) {
         violations.push(`${rel}: ${hits} 处（基线 ${allowed}）`);
       }
     }
     expect(violations).toEqual([]);
+  });
+
+  test('每条基线都写了理由（没有理由的基线就是黑名单）', () => {
+    const blank = Object.entries(BASELINE)
+      .filter(([, item]) => !item || !Number.isInteger(item.max) || String(item.why || '').trim().length < 10)
+      .map(([rel]) => rel);
+    expect(blank).toEqual([]);
   });
 
   test('基线条目对应的文件都还在（别留僵尸条目）', () => {
