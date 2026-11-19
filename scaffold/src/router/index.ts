@@ -206,6 +206,26 @@ router.beforeEach(async to => {
     // 身份有效但没后台权限：送独立说明页，**不要**回登录页 —— 再登一次结果相同，
     // 用户只会以为是自己密码错了（见 views/error/AccessDenied.vue 文件头）
     if (auth.denied) return { path: '/access-denied' };
+    /*
+     * 🔴 服务暂时不可达（断网 / 后端重启 / 5xx）：**放行**，不要回登录页。
+     *
+     * 这里拿不到"sid 是否还有效"的答案 —— 恰恰因为问不到后端。但 `sid` 是 Cookie，
+     * 不因这次请求失败而消失；把人送去登录页等于要求他重登一次，而后端一恢复
+     * 直接访问同一路径又能进（用户实测：`/` 跳登录、`/dashboard` 正常）。
+     *
+     * 真未登录不会漏：页面自己的请求会拿到 401，由 http 拦截器的
+     * `unauthorizedHandler` 统一送回登录页。放行只是"先别替用户做决定"。
+     */
+    if (auth.unavailable) {
+      /*
+       * 不阻塞导航，但**后台再试一次**：后端通常几秒内就恢复，
+       * 成功之后 `me` / `menus` 是响应式的，顶栏与侧栏会自己补上 ——
+       * 用户不用再手动刷新一次才能看到自己的名字和菜单。
+       * 失败也无害（只是重新置一次标记）。
+       */
+      void auth.load(true);
+      return true;
+    }
     return { path: '/login', query: { redirect: to.fullPath } };
   }
 

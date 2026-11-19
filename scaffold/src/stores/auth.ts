@@ -58,6 +58,17 @@ export const useAuthStore = defineStore('auth', () => {
   const denied = ref(false);
   /** 无权限时的服务端文案（展示给用户，含"请联系管理员"） */
   const deniedMessage = ref('');
+  /**
+   * 是否「服务暂时不可达」（网络故障 / 5xx / 超时）
+   *
+   * 🔴 与「未登录」是两件事，必须分开：
+   *    后端重启、网线拔了、网关 502 的时候，`sid` Cookie 多半还有效（它有自己的
+   *    有效期，与本次请求成不成功无关）。旧实现把所有异常都 `reset()`，于是刷新一下
+   *    就落到登录页；而服务器恢复后再访问同一路径又能直接进 —— 用户被逼着重登一次，
+   *    明明是"服务抖了一下"。
+   *    现在这一类错误只置标记、**不清身份**，由守卫决定是放行还是稍后重试。
+   */
+  const unavailable = ref(false);
   const loaded = ref(false);
   const loading = ref(false);
 
@@ -78,6 +89,7 @@ export const useAuthStore = defineStore('auth', () => {
     challengeBlocked.value = false;
     challengeCapped.value = false;
     denied.value = false;
+    unavailable.value = false;
     try {
       const [user, routes] = await Promise.all([fetchMe(), fetchRoutes()]);
       me.value = user;
@@ -107,6 +119,22 @@ export const useAuthStore = defineStore('auth', () => {
         loaded.value = false;
         return false;
       }
+      /*
+       * 🔴 网络故障 / 服务端异常：**不能 reset**。
+       *
+       * `status === 0` 是 axios 拿不到响应（断网、后端进程没起、网关拒绝连接）；
+       * `>= 500` 是后端活着但内部炸了。两种情况下会话状态都无从判断 ——
+       * 而 `sid` 是 Cookie，不随这次请求失败而消失。清掉内存里的 `me` 只会让守卫
+       * 把人送去登录页，可服务器一恢复又能直接进（用户实测：/ 跳登录，/dashboard 正常）。
+       *
+       * 真未登录的情况不会漏：页面自己的请求会拿 401，走 http 拦截器的
+       * `unauthorizedHandler` → 跳登录。这里放行是安全的。
+       */
+      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
+        unavailable.value = true;
+        return false;
+      }
+      // 其余（401 / 404 / 参数错误…）才是真的"这个身份用不了"
       reset();
       return false;
     } finally {
@@ -138,6 +166,7 @@ export const useAuthStore = defineStore('auth', () => {
     loaded.value = false;
     denied.value = false;
     deniedMessage.value = '';
+    unavailable.value = false;
   }
 
   /** 退出登录：先清 Cookie，再清本地状态 */
@@ -158,6 +187,7 @@ export const useAuthStore = defineStore('auth', () => {
     challengeCapped,
     denied,
     deniedMessage,
+    unavailable,
     isAuthenticated,
     load,
     hasPermission,
