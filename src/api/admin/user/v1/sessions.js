@@ -1,7 +1,14 @@
 /**
  * 用户会话管理接口（管理端）
  *
- * 落 /admin/user/v1/sessions/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
+ * 落 /admin/user/v1/sessions/*。鉴权走 **PBAC 权限码**（与用户管理的其它操作同一套）：
+ *   · 查看设备会话 → `admin:user:read`（与列表 / 详情同权）
+ *   · 踢设备下线   → `admin:user:update`（与编辑 / 冻结同权）
+ *
+ * 🔴 这两条原来用 `allowRoles` 角色白名单，等于与控制台的菜单/按钮授权完全脱钩：
+ *    把「用户管理」页面和「高危操作」按钮取消之后，持有那几个角色的人照样能看设备指纹、
+ *    照样能把人踢下线。而且白名单写死了角色名 —— 新建的管理员角色永远用不了，
+ *    已有的角色也永远撤不掉。改成权限码后，它才和"取消勾选 = 按钮消失 + 接口 403"一致。
  *
  * GET  /admin/user/v1/sessions/list          — 某用户的所有设备会话（供"设备管理"页展示）
  * POST /admin/user/v1/sessions/kick-by-device — 按 device_id 精准踢单设备会话
@@ -15,6 +22,7 @@
  * @since 2026-09-03
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import { getModel } from '../../../../framework/persistence/db/index.js';
 import { kickDeviceEverywhere, logAuditEvent, LONG_SESSION_TTL } from '../../../../framework/security/auth/index.js';
 import crypto from 'node:crypto';
@@ -26,8 +34,7 @@ async function registerSessionsRoutes(fastify) {
     description: '查看用户设备会话与远程踢单设备（admin）',
     prefix: '/user/v1',
     enabled: true,
-    requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer']
+    requireLogin: true
   });
 
   /**
@@ -44,7 +51,8 @@ async function registerSessionsRoutes(fastify) {
     method: 'GET',
     url: '/sessions/list',
     requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
+    // 看设备 = 看用户数据的一部分，与列表/详情同权
+    requirePermission: ADMIN_PERMISSIONS.USER.READ,
     handler: async (request, reply) => {
       const { userId, appId, revoked } = request.query;
       if (!userId) {
@@ -129,7 +137,8 @@ async function registerSessionsRoutes(fastify) {
     method: 'POST',
     url: '/sessions/kick-by-device',
     requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
+    // 踢设备 = 动别人账号，与编辑/冻结同权（同一个 update 码）
+    requirePermission: ADMIN_PERMISSIONS.USER.UPDATE,
     handler: async (request, reply) => {
       const { userId, appId, deviceId } = request.body || {};
 
