@@ -1,7 +1,9 @@
 /**
  * 账号封禁管理接口（管理端）
  *
- * 落 /admin/user/v1/bans/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
+ * 落 /admin/user/v1/*。
+ * 鉴权走 PBAC 权限码（逐条路由 requirePermission），不再使用角色白名单：
+ * 组级只要求登录，具体能力由 `admin:user:*` 决定 —— 这样它才和控制台的菜单/按钮授权一致。
  *
  * POST /admin/user/v1/bans/disable — 封禁（service 维度 + 时限/永久 + 可选阶梯等级）
  * POST /admin/user/v1/bans/untie   — 解封（可一次解多个 service）
@@ -17,6 +19,7 @@
  * @since 2026-11-01
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import {
   disable,
   disableLevel,
@@ -44,8 +47,7 @@ async function registerBanRoutes(fastify) {
     description: 'service 维度账号封禁/解封/状态查询（admin）',
     prefix: '/user/v1',
     enabled: true,
-    requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator']
+    requireLogin: true
   });
 
   /**
@@ -59,7 +61,7 @@ async function registerBanRoutes(fastify) {
     method: 'POST',
     url: '/bans/disable',
     requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
+    requirePermission: ADMIN_PERMISSIONS.USER.PURGE,
     handler: async (request, reply) => {
       const { userId, service, time, reason = '', level = 0, disableLevelFlag = false } = request.body || {};
       if (!userId || !service) {
@@ -90,7 +92,7 @@ async function registerBanRoutes(fastify) {
     method: 'POST',
     url: '/bans/untie',
     requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator'],
+    requirePermission: ADMIN_PERMISSIONS.USER.PURGE,
     handler: async (request, reply) => {
       const { userId, services } = request.body || {};
       if (!userId || !Array.isArray(services) || services.length === 0) {
@@ -116,7 +118,7 @@ async function registerBanRoutes(fastify) {
     method: 'GET',
     url: '/bans/status',
     requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
+    requirePermission: ADMIN_PERMISSIONS.USER.READ,
     handler: async (request, reply) => {
       const { userId, service } = request.query || {};
       if (!userId || !service) {

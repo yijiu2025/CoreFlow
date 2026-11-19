@@ -63,6 +63,12 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
   ],
   ['conventions/terminal-colors.test.js', '读 colors.js 源码文本，校验输出用 IS_TTY 判断而非直读 stdout'],
   [
+    'conventions/user-admin-routes-permission.test.js',
+    '读 5 个管理端用户域路由文件（admin/bans/deactivation/device-accounts/sessions）的源码文本，' +
+      '断言没有 allowRoles 且每条路由都带 requirePermission —— 断言对象是"用了哪种鉴权写法"，' +
+      'import 模块只能拿到注册后的路由表，看不出这个区别'
+  ],
+  [
     'conventions/session-routes-permission.test.js',
     '读 sessions.js 源码文本，断言两条设备会话路由用 requirePermission 而非 allowRoles 白名单 ——' +
       '断言对象是路由声明的字段，import 模块只会拿到已注册的路由表，看不到"用了哪种鉴权写法"'

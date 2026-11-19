@@ -1,7 +1,9 @@
 /**
  * 设备账户关联查询接口（管理端）
  *
- * 落 /admin/user/v1/devices/*，继承 admin 域 system 级 requireLogin:true + allowRoles:['superadmin'/'admin_admin'/'admin_operator'(读接口另含 admin_viewer)]。
+ * 落 /admin/user/v1/*。
+ * 鉴权走 PBAC 权限码（逐条路由 requirePermission），不再使用角色白名单：
+ * 组级只要求登录，具体能力由 `admin:user:*` 决定 —— 这样它才和控制台的菜单/按钮授权一致。
  *
  * GET /admin/user/v1/devices/accounts — 按 device_id 反查该设备登录过的账户列表
  *
@@ -14,6 +16,7 @@
  * @since 2026-09-05
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import { getDeviceAccountSummary } from '../../../../app/admin/services/device-account.service.js';
 
 async function registerDeviceAccountsRoutes(fastify) {
@@ -23,8 +26,7 @@ async function registerDeviceAccountsRoutes(fastify) {
     description: '按 device_id 反查登录过的账户列表（admin 审计）',
     prefix: '/user/v1',
     enabled: true,
-    requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer']
+    requireLogin: true
   });
 
   /**
@@ -40,7 +42,7 @@ async function registerDeviceAccountsRoutes(fastify) {
     method: 'GET',
     url: '/devices/accounts',
     requireLogin: true,
-    allowRoles: ['superadmin', 'admin_admin', 'admin_operator', 'admin_viewer'],
+    requirePermission: ADMIN_PERMISSIONS.USER.READ,
     handler: async (request, reply) => {
       const { deviceId } = request.query;
       if (!deviceId) {
