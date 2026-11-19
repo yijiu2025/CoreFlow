@@ -35,11 +35,11 @@ const SRC = fileURLToPath(new URL('../../', import.meta.url));
 const BASELINE = {
   'api/admin/user/v1/sessions.js': {
     max: 2,
-    why: 'SessionToken 属 session 域，admin 域没有对应 DAO；另一处是踢人前的目标账号快照（要 id+username），User 的归属 DAO 现在有两份（app/user 与 app/console），先统一归属再收'
+    why: 'SessionToken 属 session 域，admin 域没有对应 DAO；另一处是踢人前的目标账号快照。**暂不收**：会话操作是认证核心路径，这两个接口目前没有行为测试，先补测试再搬（否则改错就是"踢不掉/登不上"）'
   },
   'api/user/v1/sessions.js': {
     max: 4,
-    why: '会话表（SessionToken）的直接读写：session 域没有 DAO，四段逻辑各自要事务'
+    why: '会话表的直接读写（列表 / 踢单条 / 踢设备 / 清已撤销 / 全踢）：六条路由共用一张表，但每条的 where 与副作用都不同。**暂不收**：同样是认证核心路径且无行为测试，先把接口测试补上，再考虑搬进 framework 的 session 层'
   },
   'app/admin/services/device-account.service.js': {
     max: 2,
