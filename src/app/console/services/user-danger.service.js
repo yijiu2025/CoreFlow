@@ -17,11 +17,11 @@
  * @since 2026-11-11
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
-import { Op } from 'sequelize';
 import { logAuditEvent } from '../../../framework/security/auth/index.js';
 import stepUpService from './stepup.service.js';
 import deactivationService from '../../user/services/deactivation.service.js';
 import tempPasswordService from '../../user/services/temp-password.service.js';
+import userDao from '../dao/user.dao.js';
 import { getActorScope, getTargetScope, assertCanManageUser, appLabel } from './access-scope.service.js';
 import consoleConfig from '../config.js';
 
@@ -83,8 +83,8 @@ async function assertActionAuthority(actor, action, targetId) {
  * @throws {Error} `NOT_FOUND:用户不存在`
  */
 async function loadTarget(targetId) {
-  const User = getModel('User');
-  const user = await User.findByPk(Number(targetId));
+  // 走 DAO 而不是 `getModel('User').findByPk`：这里是 console 域自己那张用户表的主查询入口
+  const user = await userDao.findById(Number(targetId));
   if (!user) throw new Error('NOT_FOUND:用户不存在');
   return user;
 }
@@ -352,12 +352,14 @@ class UserDangerService {
     const map = new Map();
     if (ids.length === 0) return map;
 
-    const UserDeactivation = getModel('user.UserDeactivation');
-    const rows = await UserDeactivation.findAll({
-      where: { user_id: { [Op.in]: ids }, status: 1 },
-      order: [['requested_at', 'DESC']],
-      raw: true
-    });
+    /*
+     * 查询归 user 域：注销申请（`user_user_deactivation`）由用户域持有，
+     * 后台只是"读一批"。原来这里直接取用户域的注销表模型，
+     * 等于让后台绕过用户域去摸它的表 —— 那次清理逻辑一改，这里就悄悄读错。
+     *
+     * 分组与"scope=all 优先展示"仍留在本域：那是**展示规则**，不是数据访问。
+     */
+    const rows = await deactivationService.pendingByUserIds(ids);
     for (const row of rows) {
       const key = Number(row.user_id);
       const hit = map.get(key);

@@ -90,6 +90,26 @@ class UserDeactivationDao {
   }
 
   /**
+   * 批量查活跃注销申请（列表页用）
+   *
+   * 为什么不逐个 `findPendingByUser`：一页 20 个用户就是 20 次查询，翻页会明显变慢。
+   * 一次 IN 查完再由调用方分组 —— 分组与"哪条优先展示"是**展示规则**，留在这里
+   * 会让 DAO 开始承载业务判断。
+   *
+   * @param {number[]} userIds 用户 ID 列表
+   * @returns {Promise<Array<object>>} 原始行（按 requested_at 倒序）
+   */
+  async findPendingByUserIds(userIds) {
+    const ids = (userIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0);
+    if (ids.length === 0) return [];
+    return getModel('user.UserDeactivation').findAll({
+      where: { user_id: { [Op.in]: ids }, status: DEACTIVATION_STATUS.PENDING },
+      order: [['requested_at', 'DESC']],
+      raw: true
+    });
+  }
+
+  /**
    * 查某用户某 app 是否有活跃注销申请（登录拦截用）
    * @param {number} userId
    * @param {string} appId - 当前登录的 app_id

@@ -59,11 +59,11 @@ const BASELINE = {
   },
   'app/console/services/stepup.service.js': {
     max: 2,
-    why: '二次验证要读 User + UserIdentity 的实时状态（锁定次数 / 锁定截止），且与 guard 侧那份实现共用同一套语义'
+    why: '二次验证要读 User + UserIdentity 的实时状态（锁定次数 / 锁定截止）。与 guard 那份**不是重复**：本份把挑战绑定到 `action + targetId` 并一次性消费，guard 那份绑定 `patchHash` 并签发票据 —— 二者语义不同，合并会破坏"一次授权只用于那一次操作"'
   },
   'app/console/services/user-danger.service.js': {
-    max: 3,
-    why: '高危操作要的是 **User 实例**（读旧值 → 改 → save），不是快照；另两处是注销表与动态模型名清理'
+    max: 1,
+    why: '只剩 `safeFindAll(modelName)` 的通用容错查询：模型可能按部署裁剪掉，缺表时降级成空数组而不是整页 500 —— 这是刻意的动态取模型，不是越界'
   },
   'app/console/services/user-profile.service.js': {
     max: 5,
@@ -71,7 +71,7 @@ const BASELINE = {
   },
   'app/guard/services/stepup.service.js': {
     max: 2,
-    why: '与 console 侧同名实现重复，但 guard 是框架侧目录，不能反向依赖 app 的 DAO'
+    why: '同 console 那份读的是同一对模型（User / UserIdentity），但挑战绑定的是 `patchHash`（一次授权只能用于被批准的那次变更）。guard 属框架侧目录，也不能反向依赖 app 的 DAO'
   },
   'app/posecraft/services/profile.service.js': {
     max: 4,

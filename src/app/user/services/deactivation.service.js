@@ -806,6 +806,27 @@ class DeactivationService {
    * @param {number} userId 用户 ID
    * @returns {Promise<Array<object>>} 记录
    */
+  /**
+   * 批量查多个用户的活跃注销申请（管理端列表用）
+   *
+   * 字段形状与 `listPending` 一致，额外带上 `user_id` 供调用方分组。
+   * 只回数据、不做"哪条优先"的判断 —— 那是展示层的事。
+   *
+   * @param {number[]} userIds 用户 ID 列表
+   * @returns {Promise<Array<object>>} 申请列表
+   */
+  async pendingByUserIds(userIds) {
+    const rows = await deactivationDao.findPendingByUserIds(userIds);
+    return rows.map(row => ({
+      user_id: Number(row.user_id),
+      id: Number(row.id),
+      scope: row.scope,
+      app_id: row.app_id,
+      scheduled_at: row.scheduled_at,
+      requested_by_name: row.requested_by_name
+    }));
+  }
+
   async listPendingKicks(userId) {
     const rows = await deactivationDao.findKickPendingByUser(userId);
     return rows.map(row => ({
