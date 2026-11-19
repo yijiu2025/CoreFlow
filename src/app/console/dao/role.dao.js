@@ -176,7 +176,13 @@ class RoleDao {
     const offset = (Number(pageNum) - 1) * Number(pageSize);
     const { rows: roles, count } = await Role.findAndCountAll({
       where,
-      attributes: ['id', 'app_id', 'code', 'name', 'rank_level', 'description', 'policy', 'created_at'],
+      /*
+       * 🔴 `data_scope` 必须在这个白名单里：列表是编辑弹窗的**唯一回填来源**，
+       *    漏了它 `r.data_scope` 恒为 undefined，前端 `?? 1` 兜底成「全部数据」——
+       *    表现就是"设了数据范围，刷新后又是全部数据，之前选的看不见了"。
+       *    `dept_ids` / `app_ids` 的开关也依赖它（只有自定义档才回填部门）。
+       */
+      attributes: ['id', 'app_id', 'code', 'name', 'rank_level', 'description', 'policy', 'data_scope', 'created_at'],
       // rank_level 是「职级越高数字越大」，降序 = 高权限在前
       order: [
         ['rank_level', 'DESC'],
@@ -217,6 +223,14 @@ class RoleDao {
       if (!deptMap.has(key)) deptMap.set(key, []);
       deptMap.get(key).push(Number(row.dept_id));
     }
+    // 数据范围的应用维度（与部门维度并列，可选）
+    const appRows = await getModel('RoleApp').findAll({ attributes: ['role_id', 'app_id'], raw: true });
+    const appMap = new Map();
+    for (const row of appRows) {
+      const key = Number(row.role_id);
+      if (!appMap.has(key)) appMap.set(key, []);
+      appMap.get(key).push(String(row.app_id));
+    }
     const menuMap = new Map();
     for (const row of menuRows) {
       const key = Number(row.role_id);
@@ -236,6 +250,8 @@ class RoleDao {
         data_scope: Number(r.data_scope || 1),
         // 只有「自定义」档才有意义，其它档一律给空数组，前端不用自己判
         dept_ids: Number(r.data_scope) === 2 ? deptMap.get(Number(r.id)) || [] : [],
+        // 应用维度独立于档位：空数组 = 不限应用（保持旧行为）
+        app_ids: appMap.get(Number(r.id)) || [],
         menu_ids: menuMap.get(Number(r.id)) || [],
         policy: undefined
       })),
@@ -347,7 +363,8 @@ class RoleDao {
     description = '',
     permissions = [],
     dataScope = 1,
-    deptIds = []
+    deptIds = [],
+    dataAppIds = []
   }) {
     const role = await getModel('Role').create({
       code,
@@ -359,6 +376,7 @@ class RoleDao {
       policy: buildPolicy(permissions)
     });
     await this.setRoleDepts(role.id, dataScope, deptIds);
+    await this.setRoleApps(role.id, dataAppIds);
     return role;
   }
 
@@ -369,7 +387,7 @@ class RoleDao {
    * @param {object} payload 待更新字段
    * @returns {Promise<boolean>} 是否命中记录
    */
-  async update(id, { name, rankLevel, description, permissions, dataScope, deptIds }) {
+  async update(id, { name, rankLevel, description, permissions, dataScope, deptIds, dataAppIds }) {
     const patch = {};
     if (name !== undefined) patch.name = name;
     if (rankLevel !== undefined) patch.rank_level = Number(rankLevel);
@@ -382,6 +400,10 @@ class RoleDao {
     // 数据范围改成非「自定义」时，关联表必须清空 —— 留着旧部门会在下次切回自定义时诈尸
     if (dataScope !== undefined || Array.isArray(deptIds)) {
       await this.setRoleDepts(id, dataScope ?? patch.data_scope ?? 1, deptIds);
+    }
+    // 应用维度只在显式提交时覆盖：不提交 = 保持原样（部分更新语义）
+    if (Array.isArray(dataAppIds)) {
+      await this.setRoleApps(id, dataAppIds);
     }
     return true;
   }
@@ -405,6 +427,33 @@ class RoleDao {
       if (ids.length === 0) return 0;
       await RoleDept.bulkCreate(
         ids.map(deptId => ({ role_id: Number(roleId), dept_id: deptId })),
+        { transaction: t }
+      );
+      return ids.length;
+    });
+  }
+
+  /**
+   * 覆盖式保存「数据范围」的应用集合
+   *
+   * 与 `setRoleDepts` 不同：应用维度**不依附于档位**（data_scope=1 也能限应用），
+   * 因此这里不做档位判断，空数组即清空 = 不限应用。
+   *
+   * @param {number} roleId 角色 ID
+   * @param {string[]} appIds 应用标识列表
+   * @returns {Promise<number>} 写入条数
+   */
+  async setRoleApps(roleId, appIds = []) {
+    const RoleApp = getModel('RoleApp');
+    const { sequelize } = RoleApp;
+    return sequelize.transaction(async t => {
+      await RoleApp.destroy({ where: { role_id: Number(roleId) }, transaction: t });
+      const ids = Array.from(
+        new Set((appIds || []).map(app => String(app || '').trim()).filter(app => app.length > 0))
+      ).slice(0, 32);
+      if (ids.length === 0) return 0;
+      await RoleApp.bulkCreate(
+        ids.map(appId => ({ role_id: Number(roleId), app_id: appId })),
         { transaction: t }
       );
       return ids.length;

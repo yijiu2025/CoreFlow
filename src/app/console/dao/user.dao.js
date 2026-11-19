@@ -13,6 +13,8 @@ import { getModel } from '../../../framework/persistence/db/index.js';
 import { getDeclaredDefaultRole, NORMAL_RANK_MAX } from '../../../framework/security/pbac/index.js';
 import grantDao from './grant.dao.js';
 import { hashPassword, validatePasswordStrength } from '../../../framework/security/auth/index.js';
+import { mergeAppScopes } from '../services/data-scope.service.js';
+import Logger from '../../../framework/support/log/index.js';
 
 /**
  * 超管角色编码
@@ -69,6 +71,14 @@ class ConsoleUserDao {
     appId = null,
     deviceId = '',
     scopeAppIds = null,
+    /**
+     * 操作者可管理的最高职级：列表要按它**遮住比自己高的账号**
+     *
+     * 详情接口（`assertCanView`：`actor.maxRank < target.maxRank` → 403）早就拦了，
+     * 列表却一条不过滤 —— 于是"点不进去，但能看到超管的账号 / 邮箱 / 部门"。
+     * `null` = 不限制（超管 / 脚本调用）。
+     */
+    actorMaxRank = null,
     dataScope = null
   }) {
     const User = getModel('User');
@@ -128,6 +138,38 @@ class ConsoleUserDao {
       where.id = { [Op.in]: merged.length > 0 ? merged : [-1] };
     };
 
+    /**
+     * 从候选集里**排除**一批用户 id
+     *
+     * 与 `restrictToUserIds`（取交集）配对使用：已经落到 `where.id IN` 时在内存里剔除，
+     * 否则退化成 `NOT IN`。两条路都要保留"空集不等于不过滤"的语义 ——
+     * 交集空了给 `[-1]`，差集空了直接不设条件（本来就没要排除谁）。
+     *
+     * @param {number[]} ids 要排除的用户 id
+     * @returns {void}
+     */
+    const excludeUserIds = ids => {
+      const list = [...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0))];
+      if (list.length === 0) return;
+      const existing = where.id?.[Op.in];
+      if (Array.isArray(existing)) {
+        const blocked = new Set(list);
+        const kept = existing.filter(id => !blocked.has(id));
+        where.id = { [Op.in]: kept.length > 0 ? kept : [-1] };
+        return;
+      }
+      /*
+       * `self` 档给的是标量 `id = 27`（见 userScopeWhere），不是 `Op.in` 数组。
+       * 直接覆盖成 `NOT IN` 会把"只能看自己"放大成"除了这批人都能看" ——
+       * 方向正好相反，必须在这里把标量也识别出来。
+       */
+      if (typeof where.id === 'number') {
+        if (list.includes(where.id)) where.id = { [Op.in]: [-1] };
+        return;
+      }
+      where.id = { [Op.notIn]: list };
+    };
+
     /*
      * 状态过滤
      *
@@ -180,9 +222,18 @@ class ConsoleUserDao {
      * 两步主键查询（角色 → 关联）而不是 JOIN：`User` 属 user 域、`Role` 属 iam 域，
      * 跨域挂 association 会耦合两个 app 的模型（同本文件其余聚合列的口径）。
      */
-    if (Array.isArray(scopeAppIds)) {
+    /*
+     * 数据范围的**应用维度**（`iam_role_app`）与角色应用域取交集。
+     *
+     * 两者语义不同：`scopeAppIds` 是"我有角色、因此能管"的动作域；
+     * `dataScope.appIds` 是角色上配置的"只准看这些应用的账号"。都配了就听更严的那个
+     * —— 交集为空即"一条也看不到"，而不是退回不限。
+     */
+    const effectiveAppIds = mergeAppScopes(scopeAppIds, dataScope?.appIds ?? null);
+
+    if (Array.isArray(effectiveAppIds)) {
       const scopedRoleIds = (
-        await getModel('Role').findAll({ where: { app_id: scopeAppIds }, attributes: ['id'], raw: true })
+        await getModel('Role').findAll({ where: { app_id: effectiveAppIds }, attributes: ['id'], raw: true })
       ).map(r => Number(r.id));
       if (scopedRoleIds.length === 0) return { rows: [], total: 0 };
 
@@ -241,6 +292,44 @@ class ConsoleUserDao {
       ];
       if (appUserIds.length === 0) return { rows: [], total: 0 };
       restrictToUserIds(appUserIds);
+    }
+
+    /*
+     * 职级遮蔽放在**最后**：它要和前面所有 `restrictToUserIds`（keyword / 设备码 /
+     * 应用域 / appId）叠加。放在中间会被后续的 `where.id = { [Op.in] }` 整个覆盖掉 ——
+     * 那等于遮蔽从未生效，而测试只看"有没有查高职级角色"是发现不了的。
+     */
+    /*
+     * 职级遮蔽：比自己高的账号不进列表（与详情接口同一口径）
+     *
+     * 走两步主键查询而不是 JOIN：`Role` 属 iam 域、`User` 属 user 域，
+     * 跨域挂 association 会耦合两个 app 的模型（同本文件其余聚合列的口径）。
+     */
+    if (Number.isFinite(actorMaxRank)) {
+      try {
+        const higherRoles = await getModel('Role').findAll({
+          where: { rank_level: { [Op.gt]: actorMaxRank }, delete_version: 0 },
+          attributes: ['id'],
+          raw: true
+        });
+        if (higherRoles.length > 0) {
+          const hidden = (
+            await getModel('UserRole').findAll({
+              where: {
+                role_id: higherRoles.map(role => Number(role.id)),
+                delete_version: 0
+              },
+              attributes: ['user_id'],
+              raw: true
+            })
+          ).map(link => Number(link.user_id));
+          excludeUserIds(hidden);
+        }
+      } catch (err) {
+        // 遮蔽是收敛项：查不到角色表时不能反向放大成"看全部"，
+        // 但也不该让整个列表 500 —— 退化为"只按其它条件过滤"并留日志。
+        Logger.warn(`[UserList] 职级遮蔽计算失败: ${err?.message}`);
+      }
     }
 
     const offset = (Number(pageNum) - 1) * Number(pageSize);

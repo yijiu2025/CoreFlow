@@ -424,6 +424,8 @@ export interface RoleRow {
   data_scope?: number;
   /** 自定义数据范围时勾选的部门（其它档位为空数组） */
   dept_ids?: number[];
+  /** 数据范围的应用维度：只准看这些应用的账号（空数组 = 不限应用） */
+  app_ids?: string[];
   menu_ids: number[];
   /** 应用显示名（后端解析） */
   app_label?: string;

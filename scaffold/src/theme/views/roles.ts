@@ -58,6 +58,8 @@ export interface RoleForm {
   dataScope: number;
   /** 自定义数据范围时的部门集合 */
   deptIds: number[];
+  /** 数据范围的应用维度（空数组 = 不限应用，不依附于档位） */
+  dataAppIds: string[];
 }
 
 /** 数据范围档位 */
@@ -135,6 +137,8 @@ export interface RolesViewContext {
   /** 超管职级只读（降到 1 会把自己关在门外） */
   rankLocked: ComputedRef<boolean>;
   deptFlat: ComputedRef<DeptFlatItem[]>;
+  /** 「数据范围 → 应用维度」的可选项（系统应用清单，取不到时退回已有角色所属应用） */
+  scopeAppOptions: ComputedRef<Array<{ id: string; name: string }>>;
   /** 权限目录 */
   catalogLoading: Ref<boolean>;
   permKeyword: Ref<string>;

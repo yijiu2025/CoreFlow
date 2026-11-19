@@ -23,6 +23,7 @@ import {
   createRole,
   deptTree,
   listRoles,
+  menuApps,
   menuTree,
   permissionCatalog,
   removeRole,
@@ -112,6 +113,39 @@ const appTabs = computed(() => {
   return [...counts.entries()]
     .map(([id, item]) => ({ id, ...item }))
     .sort((a, b) => (a.id === 'GLOBAL' ? -1 : b.id === 'GLOBAL' ? 1 : a.label.localeCompare(b.label, 'zh-CN')));
+});
+
+/**
+ * 「数据范围 → 应用」候选
+ *
+ * 优先系统应用清单，退化到已有角色所属应用。
+ * 额外固定一项 `GLOBAL`：它不是业务应用，而是"只有全局角色的账号"（会员等级一类）——
+ * 这类账号挂在任何具体应用下都搜不到，必须单独给一个开关，否则管理员永远管不到他们。
+ */
+const scopeAppOptions = computed(() => {
+  const base =
+    appCatalog.value.length > 0
+      ? appCatalog.value
+      : appTabs.value.filter(tab => tab.id !== 'GLOBAL').map(tab => ({ id: tab.id, name: tab.label }));
+  const options: Array<{ id: string; name: string }> = [
+    { id: 'GLOBAL', name: '全局角色账号（仅全局角色的用户）' },
+    ...base.filter(app => app.id !== 'GLOBAL')
+  ];
+
+  /*
+   * 🔴 已配置、但不在系统清单里的应用也必须列出来。
+   *
+   * `/menus/apps` 只返回"注册过权限码"的应用，而 `iam_role_app` 里可能存着更早
+   * （或别的客户端）写进去的标识 —— 那些记录在弹窗里既看不见、也取消不掉，
+   * 却真实参与列表过滤。真实现场：某角色库里 9 条、界面只显示 5 项，
+   * 于是"只勾了两个应用，用户还是能看到全部"永远不会被修好。
+   */
+  const known = new Set(options.map(option => option.id));
+  const orphan = (form.dataAppIds ?? [])
+    .filter(id => id && !known.has(id))
+    .map(id => ({ id, name: `${id}（已配置，未在应用清单中）` }));
+
+  return [...options, ...orphan];
 });
 
 /**
@@ -392,12 +426,44 @@ const form = reactive({
   /** 数据范围：1 全部 / 2 自定义 / 3 本部门 / 4 本部门及以下 / 5 仅本人 */
   dataScope: 1,
   /** 自定义数据范围时的部门集合 */
-  deptIds: [] as number[]
+  deptIds: [] as number[],
+  /** 数据范围的应用维度（空数组 = 不限应用） */
+  dataAppIds: [] as string[]
 });
+
+/**
+ * 系统应用清单（「数据范围 → 应用」的候选项）
+ *
+ * 单独拉一次 `/menus/apps`：它回的是"注册过权限码的应用"，比从角色列表反推更完整。
+ * 拿不到（没有菜单读权限 / 接口失败）就退回「已有角色所属应用」——
+ * 配置数据范围不该因为一个辅助接口 403 就整块不可用。
+ */
+const appCatalog = ref<Array<{ id: string; name: string }>>([]);
+async function loadAppCatalog(): Promise<void> {
+  try {
+    const list = await menuApps();
+    /*
+     * 只留「当前账号可配置」的应用：后端已经给了 writable（与写接口同一判据），
+     * 原来把整张表都铺出来，等于让人去配一个自己根本管不着的应用。
+     * GLOBAL 也排除 —— 它不是业务应用，勾进去会让 `app_ids` 永远匹配不到目标用户。
+     */
+    appCatalog.value = list
+      .filter(item => item.writable && item.id !== 'GLOBAL')
+      .map(item => ({ id: item.id, name: item.name || item.id }));
+  } catch {
+    appCatalog.value = [];
+  }
+}
 
 /** 数据范围选项（文案与参考实现一致，便于运维迁移心智） */
 const SCOPE_OPTIONS = [
-  { value: 1, label: '全部数据', hint: '系统内所有部门的数据' },
+  /*
+   * 文案刻意写「全部**部门**数据」：
+   * 数据范围只管部门维度（`dept_id` 过滤），职级是**另一道独立闸** ——
+   * 列表与详情都会挡住"职级高于自己"的账号。写成"全部数据"会让人以为
+   * 配了它就能看到超管，实测表现为"给了全部数据却看不见上级"的困惑。
+   */
+  { value: 1, label: '全部部门数据', hint: '不限部门；仍受职级限制 —— 看不到职级高于自己的账号' },
   { value: 4, label: '本部门及以下', hint: '本部门与全部下级部门的数据' },
   { value: 3, label: '本部门', hint: '仅本部门的数据' },
   { value: 5, label: '仅本人', hint: '只能看到本人创建的数据' },
@@ -588,14 +654,20 @@ function ancestorsOf(nodeId: number): number[] {
  */
 function toggleMenu(nodeId: number, on: boolean): void {
   const next = new Set(checked.value);
-  // 级联只碰"该角色有权限码"的节点：勾一个没码的按钮不会生效，写进授权表只会变成噪音
-  const subtree = selfAndDescendants(nodeId).filter(id => {
-    const node = menuIndex.value.get(id);
-    return !node || menuEligible(node);
-  });
+  const subtree = selfAndDescendants(nodeId);
 
+  /*
+   * 勾选 / 取消的级联范围**必须不同**：
+   *   · 勾选：只级联"该角色有权限码"的节点 —— 勾一个没码的按钮不会生效，写进授权表只是噪音；
+   *   · 取消：级联**全部**后代 —— 弹窗里被隐藏的节点（角色 policy 里没有对应码）同样
+   *     还在授权表里，只删可见的那几个会留下"父节点被取消、子节点仍授权"的矛盾状态，
+   *     后端补齐祖先时又把它原样加回来（表现为"取消 → 保存 → 刷新又勾上"）。
+   */
   if (on) {
-    for (const id of subtree) next.add(id);
+    for (const id of subtree) {
+      const node = menuIndex.value.get(id);
+      if (!node || menuEligible(node)) next.add(id);
+    }
     for (const id of ancestorsOf(nodeId)) next.add(id);
   } else {
     for (const id of subtree) next.delete(id);
@@ -791,6 +863,7 @@ function openCreate(): void {
   // 默认「仅本人」：建角色时没人主动选范围，默认给全量是最危险的方向
   form.dataScope = 5;
   form.deptIds = [];
+  form.dataAppIds = [];
   void loadDepts();
   form.description = '';
   form.permissions = [];
@@ -817,6 +890,7 @@ function openFormEdit(row: RoleRow): void {
   form.rankLevel = row.rank_level;
   form.dataScope = row.data_scope ?? 1;
   form.deptIds = [...(row.dept_ids ?? [])];
+  form.dataAppIds = [...(row.app_ids ?? [])];
   void loadDepts();
   form.description = row.description || '';
   form.permissions = [...row.permissions];
@@ -876,7 +950,8 @@ async function submitForm(): Promise<void> {
         // 传了只会 403；不传则 name/职级仍可维护。
         ...(formBuiltin.value ? {} : { permissions: form.permissions }),
         dataScope: form.dataScope,
-        deptIds: form.dataScope === 2 ? form.deptIds : []
+        deptIds: form.dataScope === 2 ? form.deptIds : [],
+        dataAppIds: form.dataAppIds
       });
       notify('已保存');
     } else {
@@ -888,7 +963,8 @@ async function submitForm(): Promise<void> {
         description: form.description,
         permissions: form.permissions,
         dataScope: form.dataScope,
-        deptIds: form.dataScope === 2 ? form.deptIds : []
+        deptIds: form.dataScope === 2 ? form.deptIds : [],
+        dataAppIds: form.dataAppIds
       });
       notify('已创建');
     }
@@ -978,6 +1054,8 @@ onMounted(() => {
     traceFocus.value = incoming;
   }
   void load();
+  // 应用清单只在进页面时取一次：它是「数据范围 → 应用」的候选项，不随筛选变化
+  void loadAppCatalog();
 });
 /** 矩阵与溯源（异步；版式经 ctx 拿，不自己 import 业务组件） */
 const matrix = PermissionMatrix;
@@ -1033,6 +1111,7 @@ const ctx: RolesViewContext = {
   scopeConfigurable,
   rankLocked,
   deptFlat,
+  scopeAppOptions,
   catalogLoading,
   permKeyword,
   catalogGroups,

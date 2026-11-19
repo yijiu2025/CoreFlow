@@ -14,10 +14,20 @@
  * 🔴 过滤必须在 SQL 层做（`where` 注入），不能只在前端隐藏入口 ——
  *    前端隐藏挡不住直接调接口。
  *
+ * 🔴 除部门外还有**应用维度**（`iam_role_app`）："只看某个应用的账号"不可能用
+ *    dept_id 表达，也不是角色所属 app（那是动作域）。两个维度同时存在时取交集。
+ *
  * @author yijiu2025
  * @since 2026-11-12
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
+import Logger from '../../../framework/support/log/index.js';
+
+/** 公共角色的伪应用标识（`UserRole.app_id = 'GLOBAL'`） */
+const GLOBAL_APP = 'GLOBAL';
+
+/** 超管角色编码（应用维度豁免） */
+const SUPER_ROLE_CODE = 'superadmin';
 
 /** 数据范围取值 */
 const DATA_SCOPE = { ALL: 1, CUSTOM: 2, DEPT: 3, DEPT_TREE: 4, SELF: 5 };
@@ -64,6 +74,43 @@ async function subtreeOf(seeds) {
 }
 
 /**
+ * 角色配置的数据可见应用（应用维度）
+ *
+ * 🔴 **fail-closed**：角色一条 `iam_role_app` 都没配时返回**空数组**，
+ * 意思是"没有授权任何应用的数据" —— 不是"不限应用"。这是刻意的：
+ * 数据范围是收敛项，默认放开（旧行为）等于给每个新角色发了一张全量通行证，
+ * 而管理员往往意识不到自己"没配"就等于"全都能看"。
+ *
+ * 三种返回值：
+ *   · `string[]` 有值 → 只能用这些应用的数据（可能与角色应用域取交集后更小）；
+ *   · `[]`        没配 → 一个应用都不许看（fail-closed）；
+ *   · `null`      仅用于**表/模型不可用**的降级（漏迁移时不该把全站锁死）。
+ *
+ * 多角色取并集 —— 与部门档的"并集"语义一致。
+ *
+ * @param {number[]} roleIds 角色的角色 ID
+ * @returns {Promise<string[]|null>} 应用标识集合
+ */
+async function dataAppIdsOf(roleIds) {
+  if (!Array.isArray(roleIds) || roleIds.length === 0) return null;
+  try {
+    const RoleApp = getModel('RoleApp');
+    if (!RoleApp) return null;
+    const rows = await RoleApp.findAll({
+      where: { role_id: roleIds },
+      attributes: ['app_id'],
+      raw: true
+    });
+    // 去重后原样返回：空数组就是空数组（fail-closed），不要兜成 null
+    return [...new Set(rows.map(row => String(row.app_id || '').trim()).filter(Boolean))];
+  } catch (err) {
+    // 表还没迁移 / 模型没注册：降级为"不限"，否则一次漏迁移就把所有人锁在门外
+    Logger.warn(`[DataScope] 应用范围读取失败，按不限处理: ${err?.message}`);
+    return null;
+  }
+}
+
+/**
  * 解析某用户的数据范围
  *
  * @param {number} userId 用户 ID
@@ -72,20 +119,30 @@ async function subtreeOf(seeds) {
  */
 async function resolveDataScope(userId) {
   const id = Number(userId);
-  if (!Number.isInteger(id) || id <= 0) return { mode: 'self', deptIds: null, actorDeptId: null };
+  if (!Number.isInteger(id) || id <= 0) return { mode: 'self', deptIds: null, actorDeptId: null, appIds: null };
 
   const roleIds = await activeRoleIds(id);
-  if (roleIds.length === 0) return { mode: 'self', deptIds: null, actorDeptId: null };
+  if (roleIds.length === 0) return { mode: 'self', deptIds: null, actorDeptId: null, appIds: null };
+
+  // 应用维度与部门维度并列：先算一次，后面每个分支都带上（读/写共用同一份判据）
+  const appIds = await dataAppIdsOf(roleIds);
 
   const Role = getModel('Role');
   const roles = await Role.findAll({
     where: { id: roleIds, delete_version: 0 },
-    attributes: ['id', 'data_scope'],
+    attributes: ['id', 'data_scope', 'code'],
     raw: true
   });
+  /*
+   * 超管豁免应用维度：`role_app` 没配时超管会被空集一并挡在门外（列表直接空），
+   * 而他恰恰是唯一能把配置改回来的人 —— 这里必须给 `null`（不限）。
+   */
+  if (roles.some(role => String(role.code) === SUPER_ROLE_CODE)) {
+    return { mode: 'all', deptIds: null, actorDeptId: null, appIds: null };
+  }
   const scopes = roles.map(role => Number(role.data_scope || DATA_SCOPE.ALL));
-  if (scopes.length === 0) return { mode: 'self', deptIds: null, actorDeptId: null };
-  if (scopes.includes(DATA_SCOPE.ALL)) return { mode: 'all', deptIds: null, actorDeptId: null };
+  if (scopes.length === 0) return { mode: 'self', deptIds: null, actorDeptId: null, appIds };
+  if (scopes.includes(DATA_SCOPE.ALL)) return { mode: 'all', deptIds: null, actorDeptId: null, appIds };
 
   // 自己的部门：本部门 / 本部门及以下都从它出发
   const me = await getModel('User').findByPk(id, { attributes: ['id', 'dept_id'], raw: true });
@@ -112,8 +169,53 @@ async function resolveDataScope(userId) {
     }
   }
 
-  if (allowed.size === 0) return { mode: 'self', deptIds: null, actorDeptId: myDeptId || null };
-  return { mode: 'depts', deptIds: [...allowed], actorDeptId: myDeptId || null };
+  if (allowed.size === 0) return { mode: 'self', deptIds: null, actorDeptId: myDeptId || null, appIds };
+  return { mode: 'depts', deptIds: [...allowed], actorDeptId: myDeptId || null, appIds };
+}
+
+/**
+ * 合并「角色应用域」与「数据范围应用维度」
+ *
+ * 两个来源语义不同，但落到查询上是同一件事：目标用户必须在这些应用下**有角色**。
+ * 都配了就取交集（更严者胜），任一侧为 `null` 表示该侧不限。
+ *
+ * 返回 `null` = 不过滤；返回数组（**可能是空数组**）= 按它过滤。
+ *
+ * 🔴 空数组 = "一条也看不到"，绝不等于"不参与"：fail-closed 的整个语义都压在这一行上。
+ *    `dataAppIds = []`（角色没配应用）必须收敛成空集，不能被当成"这一侧不限制"。
+ *    只有 `null`（表不可用 / 超管）才表示"这一侧不参与"。
+ *
+ * @param {string[]|null} scopeAppIds 角色应用域（null = 不限）
+ * @param {string[]|null} dataAppIds 数据范围的应用维度（null / 空数组 = 不限）
+ * @returns {string[]|null} 合并结果
+ */
+function mergeAppScopes(scopeAppIds, dataAppIds) {
+  const data = Array.isArray(dataAppIds) ? dataAppIds.map(String).filter(Boolean) : null;
+  // 不参与（表不可用 / 超管）：完全听角色应用域
+  if (!data) return Array.isArray(scopeAppIds) ? scopeAppIds : null;
+  // fail-closed：角色没配应用 → 一个都不许看，直接短路，不和应用域取交集
+  if (data.length === 0) return [];
+
+  /*
+   * `GLOBAL` 是**追加项**，不参与和应用域取交集。
+   *
+   * 它代表"只有全局角色的账号"（会员等级一类，`Role.app_id = 'GLOBAL'`），
+   * 这类账号挂在任何具体应用下都搜不到，必须单独放行。
+   * 拿它去和 `actor.apps`（只含具体应用）取交集的话，永远被过滤成空 ——
+   * 那等于这个选项勾了没用。
+   */
+  const wantsGlobal = data.includes(GLOBAL_APP);
+  const concrete = data.filter(app => app !== GLOBAL_APP);
+
+  let merged;
+  if (!Array.isArray(scopeAppIds)) {
+    merged = concrete;
+  } else {
+    const allowed = new Set(concrete);
+    merged = scopeAppIds.map(String).filter(app => allowed.has(app));
+  }
+  if (wantsGlobal) merged = [...new Set([...merged, GLOBAL_APP])];
+  return merged;
 }
 
 /**
@@ -259,9 +361,12 @@ export {
   assertScopeConfigurable,
   resolveDataScope,
   userScopeWhere,
+  mergeAppScopes,
+  GLOBAL_APP,
   assertDeptWritable,
   filterDeptTree,
   subtreeOf,
   activeRoleIds,
+  dataAppIdsOf,
   logScopeSql
 };

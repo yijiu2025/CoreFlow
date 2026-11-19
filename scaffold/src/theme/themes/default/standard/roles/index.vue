@@ -62,6 +62,7 @@ const {
   scopeConfigurable,
   rankLocked,
   deptFlat,
+  scopeAppOptions,
   catalogLoading,
   permKeyword,
   catalogGroups,
@@ -534,6 +535,26 @@ const {
                 {{ item.node.name }}
               </label>
               <p v-if="deptFlat.length === 0" class="form-hint">暂无可选部门</p>
+            </div>
+
+            <!--
+              应用范围（数据维度的第二轴）：只准看这些应用的账号。
+              与部门是**并列**关系（取交集），且不依附于档位 ——
+              「全部数据、但只看 posecraft」是合法配置。
+              🔴 **不勾 = 一个应用都不授权**（fail-closed）：该角色的人会看不到任何用户，
+                 这是刻意的 —— "没配"不该等于"默认全量"。
+            -->
+            <div class="scope__depts">
+              <p class="form-hint">限定可见应用（不勾 = 不授予任何应用数据）：</p>
+              <label v-for="app in scopeAppOptions" :key="app.id" class="scope__dept">
+                <input v-model="form.dataAppIds" type="checkbox" :value="app.id" />
+                {{ app.name }}
+              </label>
+              <p v-if="scopeAppOptions.length === 0" class="form-hint">暂无可用应用清单</p>
+              <!-- fail-closed 的破坏力就在这里：不勾 = 立刻失明，保存前必须看见这句话 -->
+              <p v-if="form.dataAppIds.length === 0" class="form-hint" style="color: #f0a020">
+                未选择任何应用 —— 保存后该角色将看不到任何用户（这是刻意的，避免"没配 = 全量"）。
+              </p>
             </div>
           </div>
           <label class="field">

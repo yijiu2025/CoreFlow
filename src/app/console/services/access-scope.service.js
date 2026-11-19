@@ -27,6 +27,7 @@
 import { getModel } from '../../../framework/persistence/db/index.js';
 import { listAppConfigs } from '../../../framework/config/app-registry.js';
 import { isWildcardMatch } from '../../../framework/security/auth/permission/wildcard-match.js';
+import { resolveDataScope } from './data-scope.service.js';
 
 /** 公共角色所属的伪应用标识 */
 const GLOBAL_APP = 'GLOBAL';
@@ -125,21 +126,39 @@ async function describe(roleIds) {
 /**
  * 操作者的可管理范围
  *
+ * `dataScope` 一并解析出来：读路径（列表 / 导出 / 日志）用它过滤行，
+ * 写路径（编辑 / 冻结 / 删除）也必须用同一份判据 —— 否则会出现
+ * "列表里看不见、直接调接口却改得到"的越权链。
+ *
  * @param {number} operatorId 操作者用户 ID
- * @returns {Promise<{roleIds: number[], apps: Set<string>, maxRank: number, isSuper: boolean, crossApp: boolean}>}
+ * @returns {Promise<object>} 角色画像 + `dataScope`
  */
 async function getActorScope(operatorId) {
-  return describe(await activeRoleIds(operatorId));
+  const scope = await describe(await activeRoleIds(operatorId));
+  scope.dataScope = await resolveDataScope(operatorId);
+  return scope;
 }
 
 /**
  * 目标用户的当前状态
  *
+ * `deptId` 供数据范围判定使用：`describe()` 只算角色画像（apps / maxRank），
+ * 不含部门 —— 而"能不能碰这个部门的人"必须看目标自己的部门。
+ *
  * @param {number} userId 目标用户 ID
- * @returns {Promise<{roleIds: number[], apps: Set<string>, maxRank: number, isSuper: boolean}>}
+ * @returns {Promise<object>} 角色画像 + `deptId`
  */
 async function getTargetScope(userId) {
-  return describe(await activeRoleIds(userId));
+  const scope = await describe(await activeRoleIds(userId));
+  try {
+    const row = await getModel('User').findByPk(Number(userId), { attributes: ['dept_id'], raw: true });
+    scope.deptId = row?.dept_id ? Number(row.dept_id) : null;
+  } catch (err) {
+    // 查不到部门时按"无部门"处理：数据范围判定会 fail-closed，不会因此放宽
+    scope.deptId = null;
+    void err;
+  }
+  return scope;
 }
 
 /**
@@ -194,10 +213,62 @@ function assertCanManageUser(actor, target, targetUserId, operatorId, { action =
     throw new Error(`FORBIDDEN:不能${action}${label}，管理员之间不能互相修改`);
   }
 
+  /*
+   * 数据范围（行级）：看得见的才管得到
+   *
+   * 读路径（列表 / 导出 / 日志）早就按 `dataScope` 过滤了，写路径原来完全不看 ——
+   * 于是"列表里看不见的人，直接调接口却改得到"。这里把**同一份判据**接到写路径：
+   *   · `self`（仅本人）  → 不允许操作任何他人账号；
+   *   · `depts`（本部门 / 及以下 / 自定义）→ 目标部门必须落在范围内；
+   *   · `appIds`（应用维度，独立于档位）→ 目标必须在被授权的应用下**有角色**。
+   *
+   * 目标没有部门按 fail-closed 处理：空部门的人不属于任何人的范围，
+   * 只有超管（上面已 return）能管。应用维度同理，`apps` 不含 GLOBAL。
+   */
+  const scope = actor.dataScope;
+  if (scope) {
+    if (scope.mode === 'self') {
+      throw new Error(`FORBIDDEN:你的数据范围仅限本人，不能${action}他人账号`);
+    }
+    if (scope.mode === 'depts') {
+      const allowed = new Set((scope.deptIds ?? []).map(Number));
+      if (!target.deptId || !allowed.has(Number(target.deptId))) {
+        throw new Error(`FORBIDDEN:该用户不在你的数据范围内，不能${action}`);
+      }
+    }
+    /*
+     * 🔴 空数组**也要拦**（fail-closed）：角色一条 `iam_role_app` 都没配 =
+     *    "没有授权任何应用的数据"，不是"不限应用"。只有 `null`（超管 / 表不可用）
+     *    才跳过这一段 —— 这一行是 fail-closed 与"默认放开"的分水岭。
+     */
+    if (Array.isArray(scope.appIds)) {
+      if (scope.appIds.length === 0) {
+        throw new Error(`FORBIDDEN:你的数据范围未授权任何应用，不能${action}他人账号`);
+      }
+      const apps = new Set(scope.appIds.map(String));
+      // `target.apps` 已排除 GLOBAL（见 describe），所以"apps 为空"= 只有全局角色
+      const targetApps = [...(target.apps ?? [])].map(String);
+      const hit =
+        targetApps.some(app => apps.has(app)) ||
+        // 勾了 GLOBAL ⇒ 这类账号也归你管；没勾就仍然够不着
+        (targetApps.length === 0 && apps.has(GLOBAL_APP));
+      if (!hit) {
+        throw new Error(`FORBIDDEN:该用户不在你被授权的应用范围内，不能${action}`);
+      }
+    }
+  }
+
   if (!actor.crossApp) {
     const mine = [...actor.apps];
-    const overlapped = [...target.apps].some(app => actor.apps.has(app));
-    if (mine.length > 0 && !overlapped) {
+    const targetApps = [...(target.apps ?? [])];
+    /*
+     * 只有全局角色的账号**没有应用归属**，这里不该按"别家应用"处理 ——
+     * 能不能碰已经由上面数据范围的 GLOBAL 开关判过了（勾了才走得到这里）。
+     * 不豁免的话，勾了 GLOBAL 也照样被这一条拦死。
+     */
+    const globalOnly = targetApps.length === 0;
+    const overlapped = targetApps.some(app => actor.apps.has(app));
+    if (!globalOnly && mine.length > 0 && !overlapped) {
       const appName = mine.map(appLabel).join(' / ');
       throw new Error(`FORBIDDEN:该用户在${appName}没有账号，你只能管理本应用的用户`);
     }
