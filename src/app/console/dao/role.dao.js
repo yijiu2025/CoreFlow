@@ -362,6 +362,28 @@ class RoleDao {
   }
 
   /**
+   * 按角色编码批量取 ID
+   *
+   * 会话里拿到的是角色**编码**（`user.roles`，来自 JWT），菜单裁剪要的是**ID**。
+   * 空集合直接返回 `[]`，不要退化成"查全部" —— 那会让没有角色的会话拿到整棵菜单树。
+   *
+   * @param {string[]} codes 角色编码
+   * @returns {Promise<number[]>} 角色 ID
+   */
+  async findIdsByCodes(codes) {
+    const list = Array.from(
+      new Set((Array.isArray(codes) ? codes : []).map(code => String(code || '').trim()).filter(Boolean))
+    );
+    if (list.length === 0) return [];
+    const rows = await getModel('Role').findAll({
+      where: { code: list },
+      attributes: ['id'],
+      raw: true
+    });
+    return rows.map(row => Number(row.id));
+  }
+
+  /**
    * 全量角色的轻量列表（id / code / name）
    *
    * 导入、下拉映射这类"要先建一张参照表"的场景用。返回原始行，

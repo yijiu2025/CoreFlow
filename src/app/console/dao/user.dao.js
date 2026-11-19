@@ -525,6 +525,55 @@ class ConsoleUserDao {
    * @returns {Promise<boolean>} 是否重复
    */
   /**
+   * 按**全局 uid** 取用户（会话里只有 uid，没有内部 id）
+   *
+   * `/session/*` 系列接口都从 `request.state.user.uid` 出发，原先各自
+   * `getModel('User').findOne({ where: { uid } })` 写了四遍 —— 字段口径一旦不同，
+   * "同一个账号在不同接口里取到的列不一样"这种问题很难查。
+   *
+   * @param {string} uid 全局唯一标识
+   * @param {string[]} [attributes] 需要的列
+   * @returns {Promise<object|null>} 原始行
+   */
+  async findByUid(uid, attributes = ['id']) {
+    const key = String(uid || '').trim();
+    if (!key) return null;
+    return getModel('User').findOne({ where: { uid: key }, attributes, raw: true });
+  }
+
+  /**
+   * 取该用户的密码凭证
+   *
+   * @param {number} userId 用户内部 ID
+   * @returns {Promise<object|null>} `{ id, credential }` 或 null
+   */
+  async findPasswordIdentity(userId) {
+    const id = Number(userId);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    return getModel('UserIdentity').findOne({
+      where: { user_id: id, identity_type: 'password' },
+      attributes: ['id', 'credential'],
+      raw: true
+    });
+  }
+
+  /**
+   * 覆盖密码凭证
+   *
+   * 🔴 哈希由调用方算（scrypt 是 CPU 密集操作，不该占着 DAO 的连接上下文）。
+   *
+   * @param {number} identityId 凭证行 ID
+   * @param {string} hashed 已哈希的新凭证
+   * @returns {Promise<boolean>} 是否命中记录
+   */
+  async updatePasswordIdentity(identityId, hashed) {
+    const id = Number(identityId);
+    if (!Number.isInteger(id) || id <= 0) return false;
+    const [affected] = await getModel('UserIdentity').update({ credential: hashed }, { where: { id } });
+    return affected > 0;
+  }
+
+  /**
    * 按 ID 取用户的部分字段快照（`raw`）
    *
    * 审计 / 权限判定只需要几个字段（账号、邮箱、部门、状态），

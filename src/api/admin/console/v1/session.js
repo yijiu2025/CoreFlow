@@ -13,7 +13,6 @@
  * @since 2026-11-09
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { getModel } from '../../../../framework/persistence/db/index.js';
 import {
   clearAuthCookies,
   hashPassword,
@@ -21,6 +20,10 @@ import {
   validatePasswordStrength
 } from '../../../../framework/security/auth/index.js';
 import menuDao from '../../../../app/console/dao/menu.dao.js';
+import userDao from '../../../../app/console/dao/user.dao.js';
+import roleDao from '../../../../app/console/dao/role.dao.js';
+import deptDao from '../../../../app/console/dao/dept.dao.js';
+import profileDao from '../../../../app/console/dao/profile.dao.js';
 import { isSuperViewer, effectiveCodes } from '../../../../app/console/services/button-grant.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 import avatarService from '../../../../app/console/services/avatar.service.js';
@@ -89,29 +92,12 @@ async function registerSessionRoutes(fastify) {
   async function readConsoleProfile(userId) {
     const empty = { nickname: '', avatar: '', preferences: {} };
     if (!userId) return empty;
-    const row = await getModel('ConsoleUserProfile').findOne({
-      where: { user_id: Number(userId) },
-      raw: true
-    });
+    const row = await profileDao.find(userId);
     return {
       nickname: row?.nickname || '',
       avatar: row?.avatar || '',
       preferences: normalizePrefs(row?.preferences)
     };
-  }
-
-  /**
-   * 取或建该用户的 console 资料行
-   *
-   * @param {number} userId 用户内部 ID
-   * @returns {Promise<object>} Sequelize 实例
-   */
-  async function ensureConsoleProfile(userId) {
-    const [record] = await getModel('ConsoleUserProfile').findOrCreate({
-      where: { user_id: Number(userId) },
-      defaults: { user_id: Number(userId), nickname: null, avatar: null, preferences: {} }
-    });
-    return record;
   }
 
   registerSecureRoute(fastify, {
@@ -130,12 +116,9 @@ async function registerSessionRoutes(fastify) {
         return reply.result.forbidden('该账号没有管理后台的访问权限，请联系管理员分配角色后再试');
       }
 
-      const row = await getModel('User').findOne({
-        where: { uid: user.uid },
-        attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status', 'dept_id']
-      });
+      const row = await userDao.findByUid(user.uid, ['id', 'uid', 'username', 'email', 'avatar', 'status', 'dept_id']);
       // 部门名单独查：不给 User 模型挂 console 域的关联，避免两个 app 的模型耦合
-      const dept = row?.dept_id ? await getModel('console.SysDept').findByPk(row.dept_id) : null;
+      const dept = row?.dept_id ? await deptDao.findById(row.dept_id) : null;
 
       /*
        * 权限码：**只下发一份"最终生效"的清单**，不在前端拼语义
@@ -205,14 +188,9 @@ async function registerSessionRoutes(fastify) {
         return reply.result.success('获取成功', tree);
       }
 
-      const Role = getModel('Role');
-      const roles = await Role.findAll({
-        where: { code: (user.roles || []).length > 0 ? user.roles : ['__none__'] },
-        attributes: ['id']
-      });
       const allowed = new Set();
-      for (const role of roles) {
-        for (const id of await menuDao.getRoleMenuIds(role.id)) allowed.add(id);
+      for (const roleId of await roleDao.findIdsByCodes(user.roles)) {
+        for (const id of await menuDao.getRoleMenuIds(roleId)) allowed.add(id);
       }
 
       /**
@@ -271,12 +249,12 @@ async function registerSessionRoutes(fastify) {
       }
     },
     handler: withFail(async (request, reply) => {
-      const row = await getModel('User').findOne({ where: { uid: request.state.user?.uid }, attributes: ['id'] });
+      const row = await userDao.findByUid(request.state.user?.uid, ['id']);
       if (!row) throw new Error('NOT_FOUND:账号不存在');
 
-      const record = await ensureConsoleProfile(row.id);
+      const record = await profileDao.find(row.id);
       // 合并而不是覆盖：只传 accent 时不该把将来新增的偏好键抹掉
-      const next = { ...normalizePrefs(record.preferences) };
+      const next = { ...normalizePrefs(record?.preferences) };
       // 逐键合并：只写这次传上来的，其余保持不动（自动保存一次只改一个维度）
       for (const key of ['accent', 'theme', 'mode', 'view', 'bg', 'density']) {
         if (typeof request.body?.[key] === 'string') next[key] = request.body[key];
@@ -292,8 +270,7 @@ async function registerSessionRoutes(fastify) {
       ) {
         next.overrides = { ...request.body.overrides };
       }
-      record.preferences = next;
-      await record.save();
+      await profileDao.patch(row.id, { preferences: next });
       return reply.result.success('已保存', next);
     })
   });
@@ -325,17 +302,18 @@ async function registerSessionRoutes(fastify) {
       }
     },
     handler: withFail(async (request, reply) => {
-      const user = await getModel('User').findOne({ where: { uid: request.state.user?.uid }, attributes: ['id'] });
+      const user = await userDao.findByUid(request.state.user?.uid, ['id']);
       if (!user) throw new Error('NOT_FOUND:账号不存在');
 
-      const record = await ensureConsoleProfile(user.id);
-      if (typeof request.body?.nickname === 'string') record.nickname = request.body.nickname.trim() || null;
-      if (typeof request.body?.avatar === 'string') record.avatar = request.body.avatar.trim() || null;
-      await record.save();
+      // 「传了才写」：undefined = 没传（自动保存只改一个维度），空串 = 清除
+      const fields = {};
+      if (typeof request.body?.nickname === 'string') fields.nickname = request.body.nickname.trim() || null;
+      if (typeof request.body?.avatar === 'string') fields.avatar = request.body.avatar.trim() || null;
+      const record = await profileDao.patch(user.id, fields);
 
       return reply.result.success('已保存', {
-        nickname: record.nickname || '',
-        avatar: record.avatar || ''
+        nickname: record?.nickname || '',
+        avatar: record?.avatar || ''
       });
     })
   });
@@ -358,16 +336,14 @@ async function registerSessionRoutes(fastify) {
       const file = await request.file();
       if (!file) throw new Error('INVALID_PARAM:没有收到文件');
 
-      const user = await getModel('User').findOne({ where: { uid: request.state.user?.uid }, attributes: ['id'] });
+      const user = await userDao.findByUid(request.state.user?.uid, ['id']);
       if (!user) throw new Error('NOT_FOUND:账号不存在');
 
       const buffer = await file.toBuffer();
       const { url } = await avatarService.saveAvatar({ userId: user.id, buffer, mimetype: file.mimetype });
 
       // 上传即生效：省掉"再点一次保存头像"的一步
-      const record = await ensureConsoleProfile(user.id);
-      record.avatar = url;
-      await record.save();
+      await profileDao.patch(user.id, { avatar: url });
 
       return reply.result.success('已上传', { avatar: url });
     })
@@ -393,9 +369,7 @@ async function registerSessionRoutes(fastify) {
       const user = request.state.user || {};
       const { oldPassword, newPassword } = request.body;
 
-      const identity = await getModel('UserIdentity').findOne({
-        where: { user_id: user.userId, identity_type: 'password' }
-      });
+      const identity = await userDao.findPasswordIdentity(user.userId);
       if (!identity) throw new Error('NOT_FOUND:当前账号没有密码凭证，无法修改密码');
 
       const ok = await verifyPassword(oldPassword, identity.credential);
@@ -405,7 +379,7 @@ async function registerSessionRoutes(fastify) {
       if (!validation.valid) throw new Error(`INVALID_PARAM:${validation.errors[0]}`);
 
       const hashed = await hashPassword(newPassword);
-      await getModel('UserIdentity').update({ credential: hashed }, { where: { id: identity.id } });
+      await userDao.updatePasswordIdentity(identity.id, hashed);
       return reply.result.success('密码已更新', null);
     })
   });
