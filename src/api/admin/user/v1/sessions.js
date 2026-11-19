@@ -24,8 +24,14 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import { getModel } from '../../../../framework/persistence/db/index.js';
-import { kickDeviceEverywhere, logAuditEvent, LONG_SESSION_TTL } from '../../../../framework/security/auth/index.js';
-import crypto from 'node:crypto';
+import {
+  kickDeviceEverywhere,
+  logAuditEvent,
+  LONG_SESSION_TTL,
+  // 会话表的读侧在 framework 的 session-repo 里（与自助接口同一份实现）
+  currentTokenHash,
+  listDeviceRows
+} from '../../../../framework/security/auth/index.js';
 
 async function registerSessionsRoutes(fastify) {
   registerGroupMetadata({
@@ -64,46 +70,24 @@ async function registerSessionsRoutes(fastify) {
         return reply.result.fail('userId 必须是数字主键（正整数），不接受 uid/UUID');
       }
 
-      const SessionToken = getModel('SessionToken');
-      if (!SessionToken) {
-        return reply.result.fail('SessionToken 模型未加载');
-      }
+      /*
+       * 当前请求的会话：管理员查看**自己**的设备时，要能认出"这台就是我现在用的"，
+       * 否则在列表里分不清哪一行是自己，一点就把自己踢下线。
+       * token 只用于比对，不回传（下面 `{ token, ...rest }` 把它摘掉）。
+       */
+      const currentHash = currentTokenHash(request.state.user?.sessionId);
 
-      const where = { user_id: numericUserId };
-      if (appId) where.app_id = appId;
-      if (revoked !== undefined) where.revoked = revoked === 'true' || revoked === true;
-
-      // 当前请求的会话：管理员查看**自己**的设备时，要能认出"这台就是我现在用的"，
-      // 否则在列表里分不清哪一行是自己，一点就把自己踢下线。token 只用于比对，不回传。
-      const currentSessionId = request.state.user?.sessionId;
-      const currentTokenHash = currentSessionId
-        ? crypto.createHash('sha256').update(currentSessionId).digest('hex')
-        : null;
-
-      const rows = await SessionToken.findAll({
-        where,
-        order: [['last_active', 'DESC']],
-        attributes: [
-          'id',
-          'user_id',
-          'app_id',
-          'device_id',
-          'device_fingerprint',
-          'ip',
-          'user_agent',
-          'last_active',
-          'revoked',
-          'updated_at',
-          'token'
-        ]
+      const rows = await listDeviceRows({
+        userId: numericUserId,
+        appId: appId || undefined,
+        revoked: revoked === undefined ? undefined : revoked === 'true' || revoked === true
       });
 
       return reply.result.success(
         '获取成功',
         rows.map(row => {
-          const plain = row.get({ plain: true });
+          const { token, ...plain } = row;
           // token 是会话凭证的哈希，不能出接口：只拿它算出 is_current 后丢掉
-          const { token, ...rest } = plain;
           /*
            * `stale` = 没被撤销、但最后活跃时间已经超过**最长**会话 TTL。
            *
@@ -111,11 +95,11 @@ async function registerSessionsRoutes(fastify) {
            * `session:<rawSid>`。所以用 TTL 推断，且取 `LONG_SESSION_TTL`（记住我 30 天）——
            * 宁可漏判（把已过期的显示成活跃）也不误判（把记住我的活会话标成过期）。
            */
-          const lastActive = rest.last_active ? new Date(rest.last_active).getTime() : 0;
-          const stale = !rest.revoked && lastActive > 0 && Date.now() - lastActive > LONG_SESSION_TTL * 1000;
+          const lastActive = plain.last_active ? new Date(plain.last_active).getTime() : 0;
+          const stale = !plain.revoked && lastActive > 0 && Date.now() - lastActive > LONG_SESSION_TTL * 1000;
           return {
-            ...rest,
-            is_current: Boolean(currentTokenHash) && token === currentTokenHash,
+            ...plain,
+            is_current: Boolean(currentHash) && token === currentHash,
             stale
           };
         })

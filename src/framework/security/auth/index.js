@@ -53,6 +53,14 @@ export {
   revokeDisabledSession,
   invalidateSessionUserCache
 } from './session/session-store.js';
+export {
+  currentTokenHash,
+  findOwnedSession,
+  findOwnedDeviceRow,
+  listUserDeviceRows,
+  listDeviceRows,
+  pruneRevokedOfUser
+} from './session/session-repo.js';
 export { markAppAccessRevoked, clearAppAccessRevoked, isAppAccessRevoked } from './session/session-access-guard.js';
 export { runSessionSaga, withSessionTransaction } from './session/session-saga.js';
 

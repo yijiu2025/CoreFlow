@@ -15,11 +15,16 @@ import {
   kickSession,
   kickAllSessions,
   kickDeviceEverywhere,
-  clearAuthCookies
+  clearAuthCookies,
+  // 会话表的一切读写都在 framework 的 session-repo 里：
+  // 这里原来还自己算 sha256(sessionId)，与 `sidHash` 那个"唯一真源"各写一份
+  currentTokenHash,
+  findOwnedSession,
+  findOwnedDeviceRow,
+  listUserDeviceRows,
+  pruneRevokedOfUser
 } from '../../../framework/security/auth/index.js';
 import { formatSessionList, formatDeviceList } from '../../../app/user/services/session-view.service.js';
-import { getModel } from '../../../framework/persistence/db/index.js';
-import crypto from 'crypto';
 
 async function registerSessionsRoutes(fastify) {
   registerGroupMetadata({
@@ -77,24 +82,9 @@ async function registerSessionsRoutes(fastify) {
         return reply.code(401).send({ code: 401, message: '未登录', data: null });
       }
 
-      const SessionToken = getModel('SessionToken');
-      if (!SessionToken) {
-        return reply.result.fail('SessionToken 模型未加载');
-      }
-
-      const rows = await SessionToken.findAll({
-        where: { user_id: user.userId || user.sub },
-        order: [['last_active', 'DESC']],
-        attributes: ['id', 'app_id', 'device_id', 'token', 'ip', 'user_agent', 'last_active', 'revoked']
-      });
-
+      const rows = await listUserDeviceRows(Number(user.userId || user.sub));
       // 当前会话 token 哈希（request.state.user.sessionId 由 auth 插件写入）
-      const currentSessionId = user.sessionId;
-      const currentTokenHash = currentSessionId
-        ? crypto.createHash('sha256').update(currentSessionId).digest('hex')
-        : null;
-
-      const view = formatDeviceList(rows, currentTokenHash);
+      const view = formatDeviceList(rows, currentTokenHash(user.sessionId));
 
       return reply.result.success('获取成功', view);
     }
@@ -122,11 +112,7 @@ async function registerSessionsRoutes(fastify) {
       }
 
       // 归属验证：目标 session 必须属于当前用户，否则返回 404（不泄露存在性）
-      const SessionToken = getModel('SessionToken');
-      const tokenHash = crypto.createHash('sha256').update(sessionId).digest('hex');
-      const token = await SessionToken.findOne({
-        where: { token: tokenHash, user_id: user.userId || user.sub, revoked: false }
-      });
+      const token = await findOwnedSession(sessionId, Number(user.userId || user.sub));
       if (!token) {
         return reply.code(404).send({ code: 404, message: '会话不存在', data: null });
       }
@@ -167,11 +153,7 @@ async function registerSessionsRoutes(fastify) {
       }
 
       const userId = Number(user.userId || user.sub);
-      const SessionToken = getModel('SessionToken');
-      const row = await SessionToken.findOne({
-        where: { id, user_id: userId },
-        attributes: ['id', 'app_id', 'device_id']
-      });
+      const row = await findOwnedDeviceRow(id, userId);
       // 归属不符与不存在返回同一个 404：不让调用方用 id 探测别人的设备行
       if (!row) {
         return reply.code(404).send({ code: 404, message: '设备不存在', data: null });
@@ -224,8 +206,7 @@ async function registerSessionsRoutes(fastify) {
       }
 
       const userId = Number(user.userId || user.sub);
-      const SessionToken = getModel('SessionToken');
-      const removed = await SessionToken.destroy({ where: { user_id: userId, revoked: true } });
+      const removed = await pruneRevokedOfUser(userId);
 
       return reply.result.success(removed > 0 ? `已清理 ${removed} 条已下线记录` : '没有需要清理的记录', { removed });
     }
