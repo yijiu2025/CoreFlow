@@ -69,7 +69,16 @@ export const useAuthStore = defineStore('auth', () => {
    *    现在这一类错误只置标记、**不清身份**，由守卫决定是放行还是稍后重试。
    */
   const unavailable = ref(false);
-  const loaded = ref(false);
+  /**
+   * 身份（`/session/me`）是否已拿到
+   *
+   * 与 `menusLoaded` 分开：两条链路走不同的接口，一条挂了不该把另一条的结果作废。
+   */
+  const meLoaded = ref(false);
+  /** 可见菜单（`/session/routes`）是否已拿到 */
+  const menusLoaded = ref(false);
+  /** 两者都齐才算"整体加载完成"（缺菜单时下次导航会补，见 `load`） */
+  const loaded = computed(() => meLoaded.value && menusLoaded.value);
   const loading = ref(false);
 
   /** 是否已登录（有用户信息即视为已登录） */
@@ -83,63 +92,118 @@ export const useAuthStore = defineStore('auth', () => {
    */
   async function load(force = false): Promise<boolean> {
     if (loaded.value && !force) return true;
-    if (loading.value) return loaded.value;
+    // 并发保护：身份拿到就算"可以放行"，菜单没齐不值得把导航再拦一次
+    if (loading.value) return meLoaded.value;
 
     loading.value = true;
     challengeBlocked.value = false;
     challengeCapped.value = false;
     denied.value = false;
     unavailable.value = false;
+
+    const needMe = force || !meLoaded.value;
+    const needMenus = force || !menusLoaded.value;
     try {
-      const [user, routes] = await Promise.all([fetchMe(), fetchRoutes()]);
-      me.value = user;
-      menus.value = routes;
-      // 登录/刷新后把服务端偏好同步到界面（外观跟账号走，不跟浏览器走）
-      useAccentStore().hydrate(user.preferences?.accent);
-      // 其余四维（配色 / 明暗 / 版式 / 背景）：服务端有值就覆盖本地，没有则保持本地
-      applyServerAppearance(user.preferences);
-      // 逐令牌覆盖单独水合：它的语义是"覆盖式"，不能跟其它键一起合并
-      useOverridesStore().hydrate(user.preferences?.overrides);
-      loaded.value = true;
+      /*
+       * 🔴 两条链路**独立 settle**，不用 Promise.all。
+       *
+       * 身份（me）与可见菜单是两个接口；用 all 的话，一个 5xx 会把另一个已经拿到的
+       * 结果一起丢掉 —— 表现为"用户名、权限码都拿到了，却因为菜单请求失败被当成
+       * 加载失败"。两者的重要程度也不同：没有身份就什么都做不了，没有菜单只是侧栏空。
+       */
+      const [meRes, menusRes] = await Promise.allSettled([
+        needMe ? fetchMe() : Promise.resolve(me.value),
+        needMenus ? fetchRoutes() : Promise.resolve(menus.value)
+      ]);
+
+      /* ① 身份：决定"能不能进"，失败按错误分类处理（与会话失效的判据完全独立） */
+      if (meRes.status === 'rejected') {
+        return handleLoadError(meRes.reason);
+      }
+      if (needMe) {
+        const user = meRes.value;
+        if (user) {
+          me.value = user;
+          // 登录/刷新后把服务端偏好同步到界面（外观跟账号走，不跟浏览器走）
+          useAccentStore().hydrate(user.preferences?.accent);
+          // 其余四维（配色 / 明暗 / 版式 / 背景）：服务端有值就覆盖本地，没有则保持本地
+          applyServerAppearance(user.preferences);
+          // 逐令牌覆盖单独水合：它的语义是"覆盖式"，不能跟其它键一起合并
+          useOverridesStore().hydrate(user.preferences?.overrides);
+          meLoaded.value = true;
+        }
+      }
+
+      /*
+       * ② 菜单：失败只影响侧栏，**不影响放行**。
+       *
+       * `menusLoaded` 保持 false ⇒ 下次导航会自动补一次（`needMenus` 为真时只打
+       * 这一个接口，身份不会重复请求）。这就是"半加载"的语义：
+       * 身份是硬条件，菜单是软条件。
+       */
+      if (menusRes.status === 'fulfilled' && needMenus) {
+        menus.value = menusRes.value || [];
+        menusLoaded.value = true;
+      } else if (menusRes.status === 'rejected') {
+        const err = menusRes.reason;
+        // 网络/服务端问题标记一下：守卫据此决定"别急着跳登录"，与身份那条同一个标记
+        if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
+          unavailable.value = true;
+        }
+        // 其余错误（401 已由 http 拦截器统一处理）不回滚身份
+      }
+
       return true;
     } catch (err) {
-      // 人机验证：会话没坏，只是这次请求被边界防护拦下。
-      // 此时**不清空**登录态、也不置 challengeBlocked 之外的任何东西 ——
-      // 整页跳转已经由 http 拦截器发出，这里只负责让守卫别把人踢去登录页。
-      if (err instanceof ApiError && err.challenge) {
-        challengeBlocked.value = !err.challengeCapped;
-        challengeCapped.value = err.challengeCapped;
-        return false;
-      }
-      // 403 = 身份有效但无后台权限（登录闸门 / me 的兜底判定）。保留服务端文案，
-      // 让 `/no-access` 能说清"不是密码错、也不是掉线"，并给出下一步。
-      if (err instanceof ApiError && err.status === 403) {
-        denied.value = true;
-        deniedMessage.value = err.message;
-        loaded.value = false;
-        return false;
-      }
-      /*
-       * 🔴 网络故障 / 服务端异常：**不能 reset**。
-       *
-       * `status === 0` 是 axios 拿不到响应（断网、后端进程没起、网关拒绝连接）；
-       * `>= 500` 是后端活着但内部炸了。两种情况下会话状态都无从判断 ——
-       * 而 `sid` 是 Cookie，不随这次请求失败而消失。清掉内存里的 `me` 只会让守卫
-       * 把人送去登录页，可服务器一恢复又能直接进（用户实测：/ 跳登录，/dashboard 正常）。
-       *
-       * 真未登录的情况不会漏：页面自己的请求会拿 401，走 http 拦截器的
-       * `unauthorizedHandler` → 跳登录。这里放行是安全的。
-       */
-      if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
-        unavailable.value = true;
-        return false;
-      }
-      // 其余（401 / 404 / 参数错误…）才是真的"这个身份用不了"
-      reset();
-      return false;
+      return handleLoadError(err);
     } finally {
       loading.value = false;
     }
+  }
+
+  /**
+   * 加载失败的错误分类
+   *
+   * 人机验证 / 无权限 / 服务不可达 / 真的失效 —— 四类各有各的落点，
+   * 混成一句"加载失败"就会把"服务抖了一下"演成"请重新登录"。
+   *
+   * @param err 异常
+   * @returns 恒为 false（调用方据此不再继续）
+   */
+  function handleLoadError(err: unknown): boolean {
+    // 人机验证：会话没坏，只是这次请求被边界防护拦下。
+    // 此时**不清空**登录态 —— 整页跳转已经由 http 拦截器发出，这里只负责让守卫别把人踢去登录页。
+    if (err instanceof ApiError && err.challenge) {
+      challengeBlocked.value = !err.challengeCapped;
+      challengeCapped.value = err.challengeCapped;
+      return false;
+    }
+    // 403 = 身份有效但无后台权限（登录闸门 / me 的兜底判定）。保留服务端文案，
+    // 让 `/no-access` 能说清"不是密码错、也不是掉线"，并给出下一步。
+    if (err instanceof ApiError && err.status === 403) {
+      denied.value = true;
+      deniedMessage.value = err.message;
+      meLoaded.value = false;
+      return false;
+    }
+    /*
+     * 🔴 网络故障 / 服务端异常：**不能 reset**。
+     *
+     * `status === 0` 是 axios 拿不到响应（断网、后端进程没起、网关拒绝连接）；
+     * `>= 500` 是后端活着但内部炸了。两种情况下会话状态都无从判断 ——
+     * 而 `sid` 是 Cookie，不随这次请求失败而消失。清掉内存里的 `me` 只会让守卫
+     * 把人送去登录页，可服务器一恢复又能直接进（用户实测：/ 跳登录，/dashboard 正常）。
+     *
+     * 真未登录的情况不会漏：页面自己的请求会拿 401，走 http 拦截器的
+     * `unauthorizedHandler` → 跳登录。这里放行是安全的。
+     */
+    if (err instanceof ApiError && (err.status === 0 || err.status >= 500)) {
+      unavailable.value = true;
+      return false;
+    }
+    // 其余（401 / 404 / 参数错误…）才是真的"这个身份用不了"
+    reset();
+    return false;
   }
 
   /**
@@ -163,7 +227,8 @@ export const useAuthStore = defineStore('auth', () => {
   function reset(): void {
     me.value = null;
     menus.value = [];
-    loaded.value = false;
+    meLoaded.value = false;
+    menusLoaded.value = false;
     denied.value = false;
     deniedMessage.value = '';
     unavailable.value = false;
