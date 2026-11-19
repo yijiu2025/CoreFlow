@@ -403,10 +403,7 @@ async function registerUserRoutes(fastify) {
        * `getTargetScope` 只返回角色画像（roleIds / 职级），不含账号、邮箱、部门、状态。
        * 审计要的是"从什么改成什么"，update 之后再查就只能看到改完的值，所以先取一次。
        */
-      const beforeRow = await getModel('User').findByPk(targetId, {
-        attributes: ['username', 'email', 'dept_id', 'status'],
-        raw: true
-      });
+      const beforeRow = await userDao.findBrief(targetId, ['username', 'email', 'dept_id', 'status']);
 
       /**
        * 角色变更走「范围规划」而不是直接透传：
@@ -474,7 +471,7 @@ async function registerUserRoutes(fastify) {
           const changed = [...added, ...removed];
           const [rows, targetUser] = await Promise.all([
             getModel('Role').findAll({ where: { id: changed }, attributes: ['id', 'name'], raw: true }),
-            getModel('User').findByPk(targetId, { attributes: ['id', 'uid', 'username'] })
+            userDao.findBrief(targetId, ['id', 'uid', 'username'])
           ]);
           const nameOf = new Map(rows.map(row => [Number(row.id), row.name]));
           await logAuditEvent({
@@ -528,10 +525,7 @@ async function registerUserRoutes(fastify) {
         throw new Error('CONFLICT:该账号有待执行的注销申请，请先在「高危操作」里撤销注销，再改状态');
       }
       // 变更前的状态与账号名：审计要能回答「从正常改成冻结」，只写目标值等于没记
-      const statusBefore = await getModel('User').findByPk(targetId, {
-        attributes: ['username', 'status'],
-        raw: true
-      });
+      const statusBefore = await userDao.findBrief(targetId, ['username', 'status']);
       const ok = await userDao.updateStatus(targetId, request.body.status);
       if (!ok) throw new Error('NOT_FOUND:用户不存在');
 

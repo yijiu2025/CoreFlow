@@ -524,6 +524,23 @@ class ConsoleUserDao {
    * @param {number} [excludeId=0] 排除的用户 ID
    * @returns {Promise<boolean>} 是否重复
    */
+  /**
+   * 按 ID 取用户的部分字段快照（`raw`）
+   *
+   * 审计 / 权限判定只需要几个字段（账号、邮箱、部门、状态），
+   * 走 `findById` 会把整行连同软删标志一起拉出来。这里统一走 DAO，
+   * 业务层不再直接 `getModel('User').findByPk(...)` —— 字段口径只有一处。
+   *
+   * @param {number} id 用户 ID
+   * @param {string[]} [attributes] 需要的列
+   * @returns {Promise<object|null>} 快照（不存在时 null）
+   */
+  async findBrief(id, attributes = ['id', 'username', 'status', 'dept_id']) {
+    const targetId = Number(id);
+    if (!Number.isInteger(targetId) || targetId <= 0) return null;
+    return getModel('User').findByPk(targetId, { attributes, raw: true });
+  }
+
   async isEmailTaken(email, excludeId = 0) {
     if (!email) return false;
     const User = getModel('User');

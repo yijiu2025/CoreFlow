@@ -39,7 +39,9 @@ jest.unstable_mockModule('../../../app/console/dao/user.dao.js', () => ({
     update: daoUpdate,
     page,
     options: jest.fn(),
-    isEmailTaken: jest.fn()
+    isEmailTaken: jest.fn(),
+    // 业务层已改为走 DAO 取快照（findBrief），这里转发到同一个桩
+    findBrief: (...args) => userFindByPk(...args)
   }
 }));
 jest.unstable_mockModule('../../../app/console/dao/role.dao.js', () => ({
