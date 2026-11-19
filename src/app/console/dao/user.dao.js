@@ -14,7 +14,6 @@ import { getDeclaredDefaultRole, NORMAL_RANK_MAX } from '../../../framework/secu
 import grantDao from './grant.dao.js';
 import { hashPassword, validatePasswordStrength } from '../../../framework/security/auth/index.js';
 import { mergeAppScopes } from '../services/data-scope.service.js';
-import Logger from '../../../framework/support/log/index.js';
 
 /**
  * 超管角色编码
@@ -72,13 +71,13 @@ class ConsoleUserDao {
     deviceId = '',
     scopeAppIds = null,
     /**
-     * 操作者可管理的最高职级：列表要按它**遮住比自己高的账号**
+     * 操作者职级：**不用于过滤行，只用于算每行的 `manageable`**
      *
-     * 详情接口（`assertCanView`：`actor.maxRank < target.maxRank` → 403）早就拦了，
-     * 列表却一条不过滤 —— 于是"点不进去，但能看到超管的账号 / 邮箱 / 部门"。
-     * `null` = 不限制（超管 / 脚本调用）。
+     * 2026-11-19 起「低职级看不到高职级」作废：看得见是管理台的常态
+     * （"搜不到人"比"看得到动不了"更让人困惑），限制改到**操作**上。
+     * `null` = 不限制（超管 / 脚本调用），此时所有行都可操作。
      */
-    actorMaxRank = null,
+    actorRank = null,
     dataScope = null
   }) {
     const User = getModel('User');
@@ -136,38 +135,6 @@ class ConsoleUserDao {
       if (Array.isArray(existing)) merged = next.filter(id => existing.includes(id));
       else if (typeof existing === 'number') merged = next.filter(id => id === existing);
       where.id = { [Op.in]: merged.length > 0 ? merged : [-1] };
-    };
-
-    /**
-     * 从候选集里**排除**一批用户 id
-     *
-     * 与 `restrictToUserIds`（取交集）配对使用：已经落到 `where.id IN` 时在内存里剔除，
-     * 否则退化成 `NOT IN`。两条路都要保留"空集不等于不过滤"的语义 ——
-     * 交集空了给 `[-1]`，差集空了直接不设条件（本来就没要排除谁）。
-     *
-     * @param {number[]} ids 要排除的用户 id
-     * @returns {void}
-     */
-    const excludeUserIds = ids => {
-      const list = [...new Set(ids.map(Number).filter(n => Number.isInteger(n) && n > 0))];
-      if (list.length === 0) return;
-      const existing = where.id?.[Op.in];
-      if (Array.isArray(existing)) {
-        const blocked = new Set(list);
-        const kept = existing.filter(id => !blocked.has(id));
-        where.id = { [Op.in]: kept.length > 0 ? kept : [-1] };
-        return;
-      }
-      /*
-       * `self` 档给的是标量 `id = 27`（见 userScopeWhere），不是 `Op.in` 数组。
-       * 直接覆盖成 `NOT IN` 会把"只能看自己"放大成"除了这批人都能看" ——
-       * 方向正好相反，必须在这里把标量也识别出来。
-       */
-      if (typeof where.id === 'number') {
-        if (list.includes(where.id)) where.id = { [Op.in]: [-1] };
-        return;
-      }
-      where.id = { [Op.notIn]: list };
     };
 
     /*
@@ -294,48 +261,10 @@ class ConsoleUserDao {
       restrictToUserIds(appUserIds);
     }
 
-    /*
-     * 职级遮蔽放在**最后**：它要和前面所有 `restrictToUserIds`（keyword / 设备码 /
-     * 应用域 / appId）叠加。放在中间会被后续的 `where.id = { [Op.in] }` 整个覆盖掉 ——
-     * 那等于遮蔽从未生效，而测试只看"有没有查高职级角色"是发现不了的。
-     */
-    /*
-     * 职级遮蔽：比自己高的账号不进列表（与详情接口同一口径）
-     *
-     * 走两步主键查询而不是 JOIN：`Role` 属 iam 域、`User` 属 user 域，
-     * 跨域挂 association 会耦合两个 app 的模型（同本文件其余聚合列的口径）。
-     */
-    if (Number.isFinite(actorMaxRank)) {
-      try {
-        const higherRoles = await getModel('Role').findAll({
-          where: { rank_level: { [Op.gt]: actorMaxRank }, delete_version: 0 },
-          attributes: ['id'],
-          raw: true
-        });
-        if (higherRoles.length > 0) {
-          const hidden = (
-            await getModel('UserRole').findAll({
-              where: {
-                role_id: higherRoles.map(role => Number(role.id)),
-                delete_version: 0
-              },
-              attributes: ['user_id'],
-              raw: true
-            })
-          ).map(link => Number(link.user_id));
-          excludeUserIds(hidden);
-        }
-      } catch (err) {
-        // 遮蔽是收敛项：查不到角色表时不能反向放大成"看全部"，
-        // 但也不该让整个列表 500 —— 退化为"只按其它条件过滤"并留日志。
-        Logger.warn(`[UserList] 职级遮蔽计算失败: ${err?.message}`);
-      }
-    }
-
     const offset = (Number(pageNum) - 1) * Number(pageSize);
     const { rows: users, count } = await User.findAndCountAll({
       where,
-      attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status', 'dept_id', 'created_at'],
+      attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status', 'dept_id', 'rank_level', 'created_at'],
       order: [['id', 'DESC']],
       offset,
       limit: Number(pageSize)
@@ -356,8 +285,17 @@ class ConsoleUserDao {
     const rows = list.map(u => {
       const roles = roleInfo.get(Number(u.id)) || { ids: [], names: [] };
       const posts = postInfo.get(Number(u.id)) || { ids: [], names: [] };
+      const rankLevel = Number(u.rank_level) || 0;
+      /*
+       * 可操作性由**职级**决定（不是可见性）：
+       * `actorRank` 为空 = 超管 / 脚本，全部可操作；否则必须严格高于目标职级。
+       * 同职级不能互相管理 —— 与 `assertCanManageUser` 的 `>=` 判据同源。
+       */
+      const manageable = actorRank === null || actorRank === undefined || actorRank > rankLevel;
       return {
         ...u,
+        rank_level: rankLevel,
+        manageable,
         dept_name: u.dept_id ? deptNames.get(Number(u.dept_id)) || null : null,
         role_names: roles.names.length > 0 ? roles.names.join(',') : null,
         post_names: posts.names.length > 0 ? posts.names.join(',') : null,
@@ -732,7 +670,7 @@ class ConsoleUserDao {
    * @returns {Promise<boolean>} 是否命中记录
    * @throws {Error} 邮箱重复时抛出
    */
-  async update(id, { username, email, deptId, status, roleIds, postIds }, actor = null) {
+  async update(id, { username, email, deptId, status, rankLevel, roleIds, postIds }, actor = null) {
     const User = getModel('User');
     const user = await User.findByPk(id);
     if (!user) return false;
@@ -744,6 +682,12 @@ class ConsoleUserDao {
       if (email !== undefined) patch.email = email || null;
       if (deptId !== undefined) patch.dept_id = deptId === '' ? null : deptId;
       if (status !== undefined) patch.status = Number(status);
+      /*
+       * 人员职级：这是**人**的层级，与角色权重无关（见 `syncRankFromRoles`）。
+       * 传 `undefined` 表示"这次不改"；显式传数字才写 —— 表单全量回传时不会误伤。
+       * 上限校验在接口层做（`assertCanSetRank`），DAO 只负责落库。
+       */
+      if (rankLevel !== undefined && rankLevel !== null) patch.rank_level = Number(rankLevel);
       if (Object.keys(patch).length > 0) await User.update(patch, { where: { id }, transaction: t });
 
       if (Array.isArray(roleIds)) {
@@ -778,6 +722,52 @@ class ConsoleUserDao {
    * @param {object} transaction 事务对象
    * @returns {Promise<void>}
    */
+  /**
+   * 按当前角色同步人员职级（**只升不降**）
+   *
+   * 现实里"给他一个 XX 管理员角色"通常也意味着"他是这一级了"，所以授角色顺带抬职级。
+   * 但**收回高角色不自动降级** —— 那属于人事决定，得在用户编辑页显式改，
+   * 否则一次误操作撤销角色会把人降级，而管理员根本没意识到。
+   *
+   * 🔴 必须在同一事务里：角色写完就提交、职级却不跟着变，会出现
+   *    "他有 80 级角色但职级还是 10"的中间态（正是拆分前的老问题）。
+   *
+   * @param {number} userId 用户 ID
+   * @param {object|null} [transaction] 事务
+   * @returns {Promise<{from: number, to: number, changed: boolean}>} 变化结果
+   */
+  async syncRankFromRoles(userId, transaction = null) {
+    const targetId = Number(userId);
+    if (!Number.isInteger(targetId) || targetId <= 0) return { from: 0, to: 0, changed: false };
+
+    const links = await getModel('UserRole').findAll({
+      where: { user_id: targetId, delete_version: 0 },
+      attributes: ['role_id'],
+      paranoid: false,
+      raw: true,
+      transaction
+    });
+    const roleIdsNow = Array.from(new Set(links.map(link => Number(link.role_id)).filter(id => id > 0)));
+
+    let roleMax = 0;
+    if (roleIdsNow.length > 0) {
+      const rows = await getModel('Role').findAll({
+        where: { id: roleIdsNow, delete_version: 0 },
+        attributes: ['rank_level'],
+        raw: true,
+        transaction
+      });
+      roleMax = rows.reduce((max, row) => Math.max(max, Number(row.rank_level) || 0), 0);
+    }
+
+    const user = await getModel('User').findByPk(targetId, { attributes: ['rank_level'], transaction });
+    const current = Number(user?.rank_level) || 0;
+    if (roleMax <= current) return { from: current, to: current, changed: false };
+
+    await getModel('User').update({ rank_level: roleMax }, { where: { id: targetId }, transaction });
+    return { from: current, to: roleMax, changed: true };
+  }
+
   async replaceRoles(userId, roleIds, transaction, context = {}) {
     const UserRole = getModel('UserRole');
     const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
@@ -823,7 +813,11 @@ class ConsoleUserDao {
     // 授权流水：只记**本次真正变化**的那些角色（before 是改动前的快照，见上方）
     const added = ids.filter(rid => !before.has(rid));
     const removed = [...before].filter(rid => !keep.has(rid));
-    if (added.length === 0 && removed.length === 0) return;
+    if (added.length === 0 && removed.length === 0) {
+      // 角色集合没变，但角色权重可能被管理员调整过 —— 顺手对齐一次（只升不降）
+      await this.syncRankFromRoles(userId, transaction);
+      return;
+    }
 
     const roles = await getModel('Role').findAll({
       where: { id: [...added, ...removed] },
@@ -857,6 +851,9 @@ class ConsoleUserDao {
       remark: context.remark,
       transaction
     });
+
+    // 授角色顺带抬职级（详见 syncRankFromRoles）
+    await this.syncRankFromRoles(userId, transaction);
   }
 
   /**

@@ -104,18 +104,46 @@ async function activeRoleIds(userId) {
 /**
  * 汇总一组角色的"可管理画像"
  *
+ * 🔴 **职级来自人，不来自角色**（2026-11-19 拆分）：
+ *    - `User.rank_level`：这个人能管多高的人（组织层级）；
+ *    - `Role.rank_level`：这个角色值多少级，只用于**授予检查**（`assertGrantable`）。
+ *    此前两者共用一个字段，导致"授一个高角色"等于顺手给人升职 —— 副作用不可见。
+ *
+ * 兼容兜底：用户职级为 0 但持有角色时，回落到"角色最高 rank"。
+ * 这是给尚未回填的历史数据留的（`migrations/user/20261119000001`），
+ * 回填完成后两者相等，兜底自然失效 —— 否则升级当天所有人会突然"谁都管不了"。
+ *
  * @param {number[]} roleIds 角色 ID
+ * @param {number|null} [userId] 用户 ID（不传则无法读到人员职级，回落角色最高值）
  * @returns {Promise<object>} 画像
  */
-async function describe(roleIds) {
+async function describe(roleIds, userId = null) {
   const roles = await loadRoles(roleIds);
   const list = [...roles.values()];
   const apps = new Set(list.map(r => r.appId).filter(app => app !== GLOBAL_APP));
-  const maxRank = list.reduce((max, r) => Math.max(max, r.rank), 0);
+  const roleMaxRank = list.reduce((max, r) => Math.max(max, r.rank), 0);
+
+  let rankLevel = 0;
+  if (userId) {
+    // 直接读模型而不是走 userDao：判据层要保持依赖轻（userDao 会拖进 auth / grant 一整条链，
+    // 单测里一 mock 就崩）。这类"判据自身的读取"在边界守卫里是允许保留的。
+    const row = await getModel('User').findByPk(Number(userId), {
+      attributes: ['rank_level'],
+      raw: true
+    });
+    rankLevel = Number(row?.rank_level) || 0;
+  }
+  const maxRank = rankLevel > 0 ? rankLevel : roleMaxRank;
+
   return {
     roleIds: list.map(r => r.id),
     roles,
     apps,
+    /** 人员职级（权威值；未回填时为 0） */
+    rankLevel,
+    /** 角色集合里的最高权重（只用于诊断与兜底） */
+    roleMaxRank,
+    /** 判定用的职级：优先人员职级，历史数据回落到角色最高值 */
     maxRank,
     isSuper: list.some(r => r.isSuper),
     // 持有管理后台角色 = 跨应用管理员（见文件头）
@@ -134,7 +162,7 @@ async function describe(roleIds) {
  * @returns {Promise<object>} 角色画像 + `dataScope`
  */
 async function getActorScope(operatorId) {
-  const scope = await describe(await activeRoleIds(operatorId));
+  const scope = await describe(await activeRoleIds(operatorId), operatorId);
   scope.dataScope = await resolveDataScope(operatorId);
   return scope;
 }
@@ -149,7 +177,7 @@ async function getActorScope(operatorId) {
  * @returns {Promise<object>} 角色画像 + `deptId`
  */
 async function getTargetScope(userId) {
-  const scope = await describe(await activeRoleIds(userId));
+  const scope = await describe(await activeRoleIds(userId), userId);
   try {
     const row = await getModel('User').findByPk(Number(userId), { attributes: ['dept_id'], raw: true });
     scope.deptId = row?.dept_id ? Number(row.dept_id) : null;
@@ -353,6 +381,32 @@ function planRoleChangeWithRoles({ actor, target, submittedRoleIds, submittedRol
  * @param {number[]} roleIds 角色 ID
  * @throws {Error} `FORBIDDEN:xxx`
  */
+/**
+ * 校验「能不能给人设这个职级」
+ *
+ * 规则与「能不能管这个人」同一条线：**职级必须严格低于自己**。
+ * 否则会出现"我把自己人提到和我同级，从此谁也管不了谁"的空洞。
+ *
+ * 超管例外：99 是他的天然上限，再往上没有意义，也不需要拦。
+ *
+ * @param {object} actor 操作者画像（用 `maxRank`）
+ * @param {number} nextRank 要设置的人员职级
+ * @param {object} [options] 选项
+ * @param {string} [options.action='设置职级'] 动作名（拼进错误文案）
+ * @throws {Error} `INVALID_PARAM:` / `FORBIDDEN:`
+ */
+function assertCanSetRank(actor, nextRank, { action = '设置职级' } = {}) {
+  const target = Number(nextRank);
+  if (!Number.isInteger(target) || target < 0 || target > 99) {
+    throw new Error('INVALID_PARAM:职级必须是 0-99 的整数');
+  }
+  if (actor?.isSuper) return;
+  const mine = Number(actor?.maxRank ?? 0);
+  if (target >= mine) {
+    throw new Error(`FORBIDDEN:不能${action}为 ${target} —— 不能设置为不低于你自己的职级（${mine}）`);
+  }
+}
+
 async function assertGrantable(actor, roleIds) {
   const ids = Array.from(new Set((roleIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0)));
   if (ids.length === 0) return;
@@ -529,6 +583,7 @@ export {
   getTargetScope,
   canWriteApp,
   assertCanManageUser,
+  assertCanSetRank,
   planRoleChange,
   planRoleChangeWithRoles,
   assertGrantable,

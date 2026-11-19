@@ -57,6 +57,7 @@ import {
   getTargetScope,
   assertCanManageUser,
   assertGrantable,
+  assertCanSetRank,
   planRoleChange
 } from '../../../../app/console/services/access-scope.service.js';
 import { describeCurrentAccess } from '../../../../app/console/services/user-access.service.js';
@@ -236,13 +237,13 @@ async function registerUserRoutes(fastify) {
       /*
        * 三个限制一次取全（`getActorScope` 内部会顺带解析 dataScope，
        * 原来这里调两次等于把 UserRole/Role/Dept/RoleApp 各查两遍）：
-       *   · dataScope   —— 行级范围（部门 + 应用）
+       *   · dataScope   —— 行级范围（部门 + 应用）：**决定看得见哪些行**
        *   · scopeAppIds —— 角色应用域
-       *   · actorMaxRank —— 职级遮蔽，与自己高的账号不进列表
+       *   · actorRank   —— 操作者职级：**只决定哪些行可操作**（不再过滤可见性）
        */
       const actor = await getActorScope(actorId);
       const dataScope = { ...(await resolveDataScope(actorId)), actorId };
-      const actorMaxRank = actor.isSuper ? null : actor.maxRank;
+      const actorRank = actor.isSuper ? null : actor.maxRank;
       const { rows, total } = await userDao.page({
         pageNum,
         pageSize,
@@ -253,7 +254,7 @@ async function registerUserRoutes(fastify) {
         deviceId,
         dataScope,
         scopeAppIds: scopeAppIdsFrom(actor),
-        actorMaxRank
+        actorRank
       });
       /*
        * 附上「待执行的注销申请」：删除是缓冲期语义，列表里必须能看出
@@ -388,6 +389,11 @@ async function registerUserRoutes(fastify) {
           email: { type: 'string', maxLength: 100 },
           deptId: { type: ['integer', 'null'], minimum: 0 },
           status: { type: 'integer', enum: [-1, 0, 1] },
+          /*
+           * 人员职级（0-99）：**人**的层级，决定他能管理多高的人。
+           * 与角色权重（`iam_role.rank_level`）是两件事，别混。
+           */
+          rankLevel: { type: 'integer', minimum: 0, maximum: 99 },
           roleIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
           postIds: { type: 'array', items: { type: 'integer', minimum: 1 } }
         }
@@ -403,7 +409,7 @@ async function registerUserRoutes(fastify) {
        * `getTargetScope` 只返回角色画像（roleIds / 职级），不含账号、邮箱、部门、状态。
        * 审计要的是"从什么改成什么"，update 之后再查就只能看到改完的值，所以先取一次。
        */
-      const beforeRow = await userDao.findBrief(targetId, ['username', 'email', 'dept_id', 'status']);
+      const beforeRow = await userDao.findBrief(targetId, ['username', 'email', 'dept_id', 'status', 'rank_level']);
 
       /**
        * 角色变更走「范围规划」而不是直接透传：
@@ -412,6 +418,15 @@ async function registerUserRoutes(fastify) {
        *   · 越权应用、超越职级的授予在规划阶段就 403。
        */
       const body = { ...request.body };
+      /*
+       * 职级上限：不能把人设成"不低于自己"。
+       *
+       * 与 `assertCanManageUser` 的 `>=` 同一条线 —— 否则会出现"我把亲信提到和我同级，
+       * 从此谁也管不了谁"的空洞。超管不受限（99 是天然上限）。
+       */
+      if (body.rankLevel !== undefined && body.rankLevel !== null) {
+        assertCanSetRank(actor, body.rankLevel);
+      }
       // 变更前的角色集合：审计要的是"从什么改成什么"，update 之后就取不到了
       const beforeRoleIds = Array.isArray(target?.roleIds) ? target.roleIds.map(Number) : [];
       if (Array.isArray(body.roleIds)) {
@@ -581,7 +596,7 @@ async function registerUserRoutes(fastify) {
         // 行级范围同样要带：漏了它，导出就是"列表看两行、CSV 拿全表"
         dataScope: await resolveDataScope(request.state.user?.userId),
         scopeAppIds: scopeAppIdsFrom(actor),
-        actorMaxRank: actor.isSuper ? null : actor.maxRank
+        actorRank: actor.isSuper ? null : actor.maxRank
       });
       const header = ['ID', '账号', '邮箱', '部门', '角色', '岗位', '状态', '创建时间'];
       const lines = rows.map(r =>

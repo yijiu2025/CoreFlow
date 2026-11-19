@@ -69,6 +69,8 @@ jest.unstable_mockModule('../../../app/console/services/access-scope.service.js'
   getActorScope: async () => ({ roleIds: [], apps: new Set(), maxRank: 999, isSuper: true, crossApp: true }),
   getTargetScope: async () => ({ roleIds: [], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false }),
   assertCanManageUser: () => undefined,
+  // 窄 mock 会炸链接期：users.js 新增了 assertCanSetRank 的导入，这里必须给全
+  assertCanSetRank: () => undefined,
   assertGrantable: async () => undefined,
   planRoleChange: async ({ submittedRoleIds }) => ({ finalRoleIds: [...submittedRoleIds], outside: [] })
 }));

@@ -90,6 +90,24 @@ const defineUser = (sequelize, DataTypes) => {
         comment: '1:正常, 0:封禁/冻结, -1:已注销'
       },
       /**
+       * 人员职级（0-99，越大越高）
+       *
+       * 🔴 这是**人**的属性，不是角色的属性：它回答"这个人能管多高的人"。
+       *    角色的 `rank_level` 是另一件事 —— 回答"这个角色值多少级、能不能被授出"。
+       *    两者此前共用一个字段（`iam_role.rank_level`），导致"授一个高角色"会
+       *    顺带把人的职级抬上去，而界面上没有任何地方体现这个副作用。
+       *
+       * 初始值由 `scripts/backfill-user-rank.mjs` 用「该用户所有角色里的最高 rank」回填，
+       * 因此升级前后的管理判定结果完全一致。
+       */
+      rank_level: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        validate: { min: 0, max: 99 },
+        comment: '人员职级(0-99)：决定能管理多高的人，与角色权重是两件事'
+      },
+      /**
        * 所属部门（sys_dept.id，0/NULL 表示未分配）
        *
        * 由 Console 管理后台维护；只加可空列、不加外键约束（沿用本仓「不加 FK、

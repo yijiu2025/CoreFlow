@@ -1,12 +1,14 @@
 /**
- * 用户列表的职级遮蔽（`user.dao.page` 的 `actorMaxRank`）
+ * 用户列表的「可操作性标记」（`user.dao.page` 的 `actorRank`）
  *
- * 真实缺口：详情接口早就拦"看不了职级比自己高的人"（`assertCanView`），
- * 列表却一条不过滤 —— 点不进去，但超管的账号 / 邮箱 / 部门在列表里一览无余。
+ * 2026-11-19 起语义反转：**低职级不再看不到高职级**。看得见是管理台的常态
+ * —— "搜不到人"比"看得到动不了"更让人困惑 —— 限制改到**操作**上。
  *
- * 两个容易写错的点，这里都钉住：
- *   1. 遮蔽要在**所有** where.id 条件之后应用（否则被后面的 IN 覆盖掉）；
- *   2. 剔除干净时要给空集 `[-1]`，不能退化成"不过滤"。
+ * 所以这里钉住的是：
+ *   1. 列表**不再**按职级过滤（不查高职级角色、不动 where.id）；
+ *   2. 每行带 `manageable`，由「操作者职级 > 目标职级」决定；
+ *   3. 超管（`actorRank = null`）全部可操作；
+ *   4. 同职级不可操作 —— 与 `assertCanManageUser` 的 `>=` 判据同源。
  *
  * @author yijiu2025
  * @since 2026-11-18
@@ -15,11 +17,6 @@ import { describe, expect, jest, beforeEach } from '@jest/globals';
 
 /** 用字符串当 Op 记号，断言时好认 */
 const Op = { gt: 'gt', gte: 'gte', lt: 'lt', in: 'in', notIn: 'notIn', or: 'or', like: 'like' };
-
-/** 持有高职级角色 99 的用户 */
-const HIGH_RANK_USERS = [{ user_id: 7 }, { user_id: 8 }];
-/** 在 appId=admin 下挂角色的用户 */
-const APP_USERS = [{ user_id: 7 }, { user_id: 9 }];
 
 const userFindAndCountAll = jest.fn();
 const roleFindAll = jest.fn();
@@ -52,7 +49,6 @@ jest.unstable_mockModule('../../../framework/persistence/db/index.js', () => ({
     }
     if (name === 'Role') return { findAll: roleFindAll };
     if (name === 'UserRole') return { findAll: userRoleFindAll };
-    // SysDept / SysUserPost / SessionToken 等一律空
     return { findAll: emptyFindAll, findOne: async () => null };
   }
 }));
@@ -64,72 +60,105 @@ function lastWhere() {
   return userFindAndCountAll.mock.calls.at(-1)[0].where;
 }
 
+/**
+ * 造一行用户（`page` 会对实例调 `get({ plain: true })`）
+ *
+ * @param {object} over 覆盖字段
+ * @returns {object} 伪 Sequelize 实例
+ */
+function userRow(over = {}) {
+  const plain = {
+    id: 1,
+    uid: 'u-1',
+    username: '张三',
+    email: 'a@b.c',
+    avatar: null,
+    status: 1,
+    dept_id: null,
+    rank_level: 5,
+    created_at: new Date(),
+    ...over
+  };
+  return { get: () => plain, ...plain };
+}
+
 beforeEach(() => {
   userFindAndCountAll.mockReset();
   userFindAndCountAll.mockResolvedValue({ rows: [], count: 0 });
-
-  // 角色查询分三支：高职级 / 按应用 / 超管角色
-  roleFindAll.mockReset();
-  roleFindAll.mockImplementation(async options => {
-    const where = options?.where || {};
-    if (where.rank_level) return [{ id: 99 }];
-    if (where.app_id) return [{ id: 1 }];
-    return [];
-  });
-
-  // 角色关联查询：99 = 高职级角色，[1] = appId 收窄出来的角色
-  userRoleFindAll.mockReset();
-  userRoleFindAll.mockImplementation(async options => {
-    const roleId = options?.where?.role_id;
-    if (roleId === 99 || (Array.isArray(roleId) && roleId.includes(99))) return HIGH_RANK_USERS;
-    if (Array.isArray(roleId) && roleId.includes(1)) return APP_USERS;
-    return [];
-  });
-
+  roleFindAll.mockReset().mockResolvedValue([]);
+  userRoleFindAll.mockReset().mockResolvedValue([]);
   emptyFindAll.mockClear();
 });
 
-describe('传了 actorMaxRank', () => {
-  test('按 rank_level > N 查「更高职级的角色」', async () => {
-    await userDao.page({ pageNum: 1, pageSize: 10, actorMaxRank: 10 });
-    const call = roleFindAll.mock.calls.find(entry => entry[0]?.where?.rank_level);
-    expect(call).toBeTruthy();
-    expect(call[0].where.rank_level[Op.gt]).toBe(10);
-    expect(call[0].where.delete_version).toBe(0);
+describe('列表不再按职级过滤', () => {
+  test('传 actorRank 也不去查「更高职级的角色」', async () => {
+    await userDao.page({ pageNum: 1, pageSize: 10, actorRank: 10 });
+    const askedRank = roleFindAll.mock.calls.some(entry => entry[0]?.where?.rank_level);
+    expect(askedRank).toBe(false);
   });
 
-  test('持有这些角色的用户被排除（无候选集时用 NOT IN）', async () => {
-    await userDao.page({ pageNum: 1, pageSize: 10, actorMaxRank: 10 });
-    expect(lastWhere().id).toEqual({ [Op.notIn]: [7, 8] });
-  });
-
-  test('已有 IN 候选集时在内存里剔除（两个条件叠加，不互相覆盖）', async () => {
-    await userDao.page({ pageNum: 1, pageSize: 10, appId: 'admin', actorMaxRank: 10 });
-    expect(lastWhere().id).toEqual({ [Op.in]: [9] });
-  });
-
-  test('候选集被剔除干净时给 [-1]，不退化成不过滤', async () => {
-    userRoleFindAll.mockImplementation(async options => {
-      const roleId = options?.where?.role_id;
-      if (Array.isArray(roleId) && roleId.includes(1)) return [{ user_id: 7 }];
-      if (roleId === 99 || (Array.isArray(roleId) && roleId.includes(99))) return [{ user_id: 7 }];
-      return [];
-    });
-    await userDao.page({ pageNum: 1, pageSize: 10, appId: 'admin', actorMaxRank: 10 });
-    expect(lastWhere().id).toEqual({ [Op.in]: [-1] });
-  });
-
-  test('没有更高职级的角色时不动 where.id', async () => {
-    roleFindAll.mockImplementation(async () => []);
-    await userDao.page({ pageNum: 1, pageSize: 10, actorMaxRank: 99 });
+  test('where.id 不被职级条件写入（无其它筛选项时压根没有 id 条件）', async () => {
+    await userDao.page({ pageNum: 1, pageSize: 10, actorRank: 10 });
     expect(lastWhere().id).toBeUndefined();
+  });
+
+  test('高职级账号照样在结果里（只是 manageable=false）', async () => {
+    userFindAndCountAll.mockResolvedValue({
+      rows: [userRow({ id: 7, username: '超管', rank_level: 99 }), userRow({ id: 9, username: '同事', rank_level: 3 })],
+      count: 2
+    });
+
+    const { rows } = await userDao.page({ pageNum: 1, pageSize: 10, actorRank: 10 });
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map(r => r.username)).toEqual(['超管', '同事']);
+    expect(rows.find(r => r.username === '超管').manageable).toBe(false);
   });
 });
 
-describe('不传 actorMaxRank（超管 / 脚本）', () => {
-  test('不查高职级角色，也不排除任何人', async () => {
-    await userDao.page({ pageNum: 1, pageSize: 10 });
-    expect(roleFindAll.mock.calls.some(entry => entry[0]?.where?.rank_level)).toBe(false);
-    expect(lastWhere().id).toBeUndefined();
+describe('manageable 由「操作者职级 > 目标职级」决定', () => {
+  test('低于自己的可操作，等于 / 高于自己的不可操作', async () => {
+    userFindAndCountAll.mockResolvedValue({
+      rows: [
+        userRow({ id: 1, username: '低', rank_level: 3 }),
+        userRow({ id: 2, username: '同级', rank_level: 10 }),
+        userRow({ id: 3, username: '更高', rank_level: 80 })
+      ],
+      count: 3
+    });
+
+    const { rows } = await userDao.page({ pageNum: 1, pageSize: 10, actorRank: 10 });
+
+    expect(rows.find(r => r.username === '低').manageable).toBe(true);
+    expect(rows.find(r => r.username === '同级').manageable).toBe(false);
+    expect(rows.find(r => r.username === '更高').manageable).toBe(false);
+  });
+
+  test('超管（不传 actorRank）全部可操作', async () => {
+    userFindAndCountAll.mockResolvedValue({
+      rows: [userRow({ id: 1, rank_level: 99 }), userRow({ id: 2, rank_level: 0 })],
+      count: 2
+    });
+
+    const { rows } = await userDao.page({ pageNum: 1, pageSize: 10 });
+    expect(rows.every(r => r.manageable)).toBe(true);
+  });
+
+  test('行里带上 rank_level（前端要显示职级，也要据此判断按钮态）', async () => {
+    userFindAndCountAll.mockResolvedValue({ rows: [userRow({ id: 1, rank_level: 42 })], count: 1 });
+
+    const { rows } = await userDao.page({ pageNum: 1, pageSize: 10, actorRank: 50 });
+    expect(rows[0].rank_level).toBe(42);
+  });
+
+  test('职级缺省按 0 处理（未回填的历史行不会变成"高不可攀"）', async () => {
+    userFindAndCountAll.mockResolvedValue({
+      rows: [userRow({ id: 1, rank_level: undefined })],
+      count: 1
+    });
+
+    const { rows } = await userDao.page({ pageNum: 1, pageSize: 10, actorRank: 1 });
+    expect(rows[0].rank_level).toBe(0);
+    expect(rows[0].manageable).toBe(true);
   });
 });

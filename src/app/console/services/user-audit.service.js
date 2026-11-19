@@ -60,7 +60,9 @@ const PROFILE_FIELDS = [
   ['username', 'username'],
   ['email', 'email'],
   ['deptId', 'dept_id'],
-  ['status', 'status']
+  ['status', 'status'],
+  // 人员职级（0-99）：调整它等于调整"能管多高的人"，属于必须留痕的动作
+  ['rankLevel', 'rank_level']
 ];
 
 /**

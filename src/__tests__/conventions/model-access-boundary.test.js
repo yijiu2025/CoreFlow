@@ -42,7 +42,7 @@ const BASELINE = {
     why: 'SessionToken + include User 的关联查询：DAO 化需要先给两张表挂 association，属于模型层的改动，不在收敛范围'
   },
   'app/console/services/access-scope.service.js': {
-    max: 3,
+    max: 4,
     why: '**权限判据本身**（User / Role / UserRole）：查询与判定必须在一起，拆进 DAO 会把判据拆成两半，可读性反而更差'
   },
   'app/console/services/button-grant.service.js': {

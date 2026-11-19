@@ -38,9 +38,25 @@ async function assertCanView(actorId, targetId) {
   if (Number(actorId) === Number(targetId)) return;
   const actor = await getActorScope(actorId);
   if (actor.isSuper) return;
+  /*
+   * 🔴 2026-11-19 起**不再按职级限制查看**。
+   *
+   * 列表已经改成"全部显示 + 高职级灰显不可操作"（见 `user.dao.page` 的 `manageable`）。
+   * 详情若继续按职级 403，就会出现"列表里点得开、点进去报没权限"的矛盾 ——
+   * 而"看得见但动不了"正是这次改法的本意。
+   *
+   * 现在只剩一道：**数据范围**（部门 / 应用）—— 看不见的人，详情也进不去；
+   * 看得见的人，详情可以看，但能不能改由 `assertCanManageUser` 判。
+   */
   const target = await getTargetScope(targetId);
-  if (actor.maxRank < target.maxRank) {
-    throw new Error('FORBIDDEN:不能查看职级高于自己的账号');
+  const scope = actor.dataScope;
+  if (!scope) return;
+  if (scope.mode === 'self') throw new Error('FORBIDDEN:你的数据范围仅限本人，不能查看他人账号');
+  if (scope.mode === 'depts') {
+    const allowed = new Set(scope.deptIds ?? []);
+    if (!target.deptId || !allowed.has(target.deptId)) {
+      throw new Error('FORBIDDEN:该用户不在你的数据范围内');
+    }
   }
 }
 
@@ -111,6 +127,7 @@ class UserProfileService {
       'avatar',
       'status',
       'dept_id',
+      'rank_level',
       'created_at',
       'delete_version'
     ]);
@@ -145,6 +162,8 @@ class UserProfileService {
         avatar: user.avatar || '',
         status: Number(user.status),
         deptId: user.dept_id ? Number(user.dept_id) : null,
+        /** 人员职级：详情页要显示，编辑弹窗用它做初值 */
+        rankLevel: Number(user.rank_level) || 0,
         deptName: dept?.name || '',
         postNames: postRefs.names,
         /** 岗位 ID（编辑回填用；名字会重名 / 可改名，反查必错） */
