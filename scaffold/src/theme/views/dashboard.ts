@@ -10,7 +10,7 @@
  * @author yijiu2025
  * @since 2026-11-15
  */
-import type { Component, ComputedRef, Ref } from 'vue';
+import type { ComputedRef, Ref } from 'vue';
 import { defineThemePage } from 'skinsuite/vue';
 import type { DashboardSummary } from '@/api/types';
 
@@ -45,10 +45,12 @@ export interface ResourceItem {
 /** 常用入口瓦片 */
 export interface ShortcutItem {
   label: string;
-  /** 目标路由路径（容器按它的 `meta.permission` 过滤） */
+  /** 目标路由路径 */
   path: string;
+  /** 副标：所属目录名（菜单树里的父级） */
   sub: string;
-  icon: Component;
+  /** 菜单表里的图标名（交给 `AppIcon` 解析），为空时用默认图标 */
+  icon: string | null;
 }
 
 /** 工作台版式上下文（版式只读它） */

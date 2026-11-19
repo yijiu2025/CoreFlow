@@ -17,20 +17,21 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { computed, onMounted, ref, type Component } from 'vue';
-import { useRouter } from 'vue-router';
-import { Building2, LogIn, ScrollText, ShieldCheck, Users } from 'lucide-vue-next';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { dashboardSummary } from '@/api/monitor';
 import { useAuthStore } from '@/stores/auth';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
-import type { DashboardSummary } from '@/api/types';
+import type { DashboardSummary, MenuNode } from '@/api/types';
+import type { ShortcutItem } from '@/theme/views/dashboard';
 import { ThemeView } from 'skinsuite/vue';
-import { filterByRoutePermission } from '@/utils/permission';
 import type { DashboardViewContext } from '@/theme/views/dashboard';
 
 const auth = useAuthStore();
-/** 解析入口所需权限码用（`router.resolve(to).meta.permission`） */
+/** 解析入口是否可达用（`router.resolve(path)`） */
 const router = useRouter();
+/** 用来把"当前这一页"从入口里排掉 */
+const route = useRoute();
 
 /** 当前渲染设备：本页版式只靠 CSS 断点适配，但要告知主题（版式目录按设备查） */
 const device = useRenderDevice();
@@ -163,37 +164,50 @@ const resources = computed(() => [
 ]);
 
 /**
- * 常用入口清单（产品精选的五个，不是"全部页面"）
+ * 把菜单树压平成入口
  *
- * 这里只写**去哪**和怎么显示，不写权限码 —— 权限从路由的 `meta.permission` 解析。
- * 两条理由：
- *   1. 单一来源：路由改了权限码，入口自动跟着变，不会出现"入口还在、点进去 403"；
- *   2. 与守卫同源：守卫的判据正是 `meta.permission`，同一个码决定"能不能进"和
- *      "要不要显示"，两边不可能分叉。
+ * 只取「能点的页面」：`type === 'menu'` 且有 `path`。目录不下钻成入口（它自己不可点），
+ * 但它的名字会作为副标 —— 工作台上「系统管理」这类分组信息比"系统/监控"的硬编码更准。
  *
- * 之前这里是一份写死的数组，而卡片标题旁写着"按权限可见的页面" ——
- * 于是没权限的人照样看到五个入口，点进去被弹回无权限页。
+ * 顶层直接挂的页面（工作台 `#1` 就是这种）没有父目录，副标用「总览」。
+ *
+ * @param nodes 菜单节点
+ * @param dirName 上一层目录名（副标）
+ * @returns 入口列表
  */
-const SHORTCUTS: Array<{ label: string; path: string; sub: string; icon: Component }> = [
-  { label: '用户管理', path: '/system/user', sub: '系统', icon: Users },
-  { label: '角色管理', path: '/system/role', sub: '系统', icon: ShieldCheck },
-  { label: '部门管理', path: '/system/dept', sub: '系统', icon: Building2 },
-  { label: '操作日志', path: '/monitor/oper-log', sub: '监控', icon: ScrollText },
-  { label: '登录日志', path: '/monitor/login-log', sub: '监控', icon: LogIn }
-];
+function flattenMenuEntries(nodes: MenuNode[], dirName = '总览'): ShortcutItem[] {
+  const out: ShortcutItem[] = [];
+  for (const node of nodes) {
+    // 隐藏菜单不进侧栏，也就不该出现在这里
+    if (Number(node.visible) === 0) continue;
+    if (node.type === 'dir') {
+      out.push(...flattenMenuEntries(node.children || [], node.name));
+      continue;
+    }
+    if (node.type !== 'menu' || !node.path) continue;
+    out.push({ label: node.name, path: node.path, sub: dirName, icon: node.icon });
+  }
+  return out;
+}
 
 /**
- * 按权限过滤后的入口
+ * 常用入口 = 会话菜单树里"我这个账号进得去"的页面
  *
- * 🔴 必须是 `computed`：`auth.me` 是异步拉取的（`/session/me`），
- *    在 setup 阶段直接过滤会把五个入口全滤掉（那时 permissions 还是空的），
- *    表现为"刷新工作台后入口区一片空白"。
+ * 为什么改成从菜单树来，而不是再维护一份清单：
+ *   · 菜单树（`/session/routes`）已经按角色的 `sys_role_menu` 裁剪过，**它就是
+ *     "这个账号能看见哪些页面"的权威答案**；再写一份清单等于同一件事两处表达，
+ *     迟早出现"侧栏没有、工作台却有"或反过来。
+ *   · 之前那份硬编码清单五项固定，卡片上却写着"按权限可见的页面" —— 名副其实不了。
  *
- * 未声明 `permission` 的路由**保持可见**——与路由守卫的判据一致
- * （守卫也是 `if (permission && !has)` 才拦）。这一条很重要：如果这里 fail-closed，
- * 就会出现"工作台不显示入口、手动输 URL 却能进"的矛盾。
+ * 两条过滤：
+ *   · 不把**当前这一页**列成入口（在工作台上放一个"工作台"入口很怪）；
+ *   · 菜单配了前端没有的 path 时不显示（点进去是 404，宁可少一项）。
  */
-const shortcuts = computed(() => filterByRoutePermission(SHORTCUTS, router, auth.hasPermission));
+const shortcuts = computed(() =>
+  flattenMenuEntries(auth.menus).filter(
+    item => item.path !== route.path && router.resolve(item.path).name !== 'not-found'
+  )
+);
 
 /**
  * 相对时间：日志里"3 分钟前"比一串日期更容易判断新鲜度

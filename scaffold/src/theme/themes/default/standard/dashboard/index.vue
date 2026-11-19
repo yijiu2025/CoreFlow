@@ -10,6 +10,7 @@
  * @since 2026-11-15
  */
 import { Activity, ArrowRight, RefreshCw, ShieldCheck, Users } from 'lucide-vue-next';
+import AppIcon from '@/components/ui/AppIcon.vue';
 import LoginPulseCard from '@/components/business/LoginPulseCard.vue';
 import Odometer from '@/components/ui/Odometer.vue';
 import type { DashboardViewContext } from '@/theme/views/dashboard';
@@ -221,7 +222,7 @@ const {
         </header>
         <div v-if="shortcuts.length > 0" class="quick">
           <router-link v-for="item in shortcuts" :key="item.path" :to="item.path" class="quick__link">
-            <span class="quick__ico"><component :is="item.icon" :size="17" /></span>
+            <span class="quick__ico"><AppIcon :name="item.icon" :size="17" /></span>
             <span class="quick__text">
               <span class="quick__title">{{ item.label }}</span>
               <span class="quick__sub">{{ item.sub }}</span>
