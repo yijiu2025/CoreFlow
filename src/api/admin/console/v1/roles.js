@@ -147,7 +147,14 @@ async function registerRoleRoutes(fastify) {
            */
           dataScope: { type: 'integer', enum: [1, 2, 3, 4, 5], default: 5 },
           /** 自定义数据范围时的部门集合（其它档位忽略） */
-          deptIds: { type: 'array', items: { type: 'integer', minimum: 1 }, default: [] }
+          deptIds: { type: 'array', items: { type: 'integer', minimum: 1 }, default: [] },
+          /**
+           * 数据范围的**应用维度**：只准看这些应用的账号。
+           *
+           * 与部门维度并列（取交集），且不依附于 dataScope 档位 ——
+           * "全部数据、但只看 posecraft" 是合法配置。空数组 = 不限应用。
+           */
+          dataAppIds: { type: 'array', items: { type: 'string', maxLength: 64 }, default: [] }
         }
       }
     },
@@ -215,7 +222,8 @@ async function registerRoleRoutes(fastify) {
           permissions: { type: 'array', items: { type: 'string' } },
           menuIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
           dataScope: { type: 'integer', enum: [1, 2, 3, 4, 5] },
-          deptIds: { type: 'array', items: { type: 'integer', minimum: 1 } }
+          deptIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
+          dataAppIds: { type: 'array', items: { type: 'string', maxLength: 64 } }
         }
       }
     },

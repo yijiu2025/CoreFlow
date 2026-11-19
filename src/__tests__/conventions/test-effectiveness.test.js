@@ -62,6 +62,16 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
       '断言对象是模板结构与挂载点，不 import 组件'
   ],
   ['conventions/terminal-colors.test.js', '读 colors.js 源码文本，校验输出用 IS_TTY 判断而非直读 stdout'],
+  [
+    'conventions/session-routes-permission.test.js',
+    '读 sessions.js 源码文本，断言两条设备会话路由用 requirePermission 而非 allowRoles 白名单 ——' +
+      '断言对象是路由声明的字段，import 模块只会拿到已注册的路由表，看不到"用了哪种鉴权写法"'
+  ],
+  [
+    'conventions/console-audit-coverage.test.js',
+    '按 registerSecureRoute 切块读源码文本，断言"每个写接口的 handler 内是否调用了审计"——' +
+      '断言对象是路由块内的调用存在性，import 被测模块不会让「漏记审计」表现为失败（调用了它们也照绿）'
+  ],
   ['conventions/test-effectiveness.test.js', '本文件：扫描全部测试文件的 import 图，天然不 import 被测模块'],
   ['config-leaf.test.js', '扫描 src/config/*.js 的源码文本，断言配置值模块零 import（分层结构守卫）'],
   [

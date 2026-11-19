@@ -18,6 +18,7 @@ import { getActorScope } from '../../../../app/console/services/access-scope.ser
 import { appNameOf, canConfigureApp } from '../../../../app/console/services/menu-scope.service.js';
 import { invalidateButtonGrants } from '../../../../app/console/services/button-grant.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
+import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 
 /** 菜单写入字段 schema（创建 / 编辑共用） */
 const menuBodySchema = {
@@ -146,6 +147,30 @@ function csvCell(value) {
   return `"${guarded.replace(/"/g, '""')}"`;
 }
 
+/**
+ * 写一条菜单审计
+ *
+ * 菜单即权限点：改一条菜单的 permission 就等于放开/收回一个按钮码，
+ * 而这条路径原本一条日志都没有。
+ *
+ * 失败不影响业务（`logAuditEvent` 内部已吞异常），与 roles / depts 的 audit() 同口径。
+ *
+ * @param {import('fastify').FastifyRequest} request 请求
+ * @param {string} type 事件类型
+ * @param {object} details 详情
+ * @returns {Promise<void>}
+ */
+async function audit(request, type, details) {
+  await logAuditEvent({
+    type,
+    userId: request.state?.user?.userId ? Number(request.state.user.userId) : null,
+    ip: request.ip,
+    userAgent: request.headers['user-agent'] || '',
+    appId: 'console',
+    details
+  });
+}
+
 async function registerMenuRoutes(fastify) {
   registerGroupMetadata({
     name: 'consoleMenu',
@@ -263,6 +288,15 @@ async function registerMenuRoutes(fastify) {
       }
       // 新增按钮 = 按钮码集合变了 → 守卫那边的快照必须重建
       if (menu.type === 'btn') invalidateButtonGrants();
+      await audit(request, 'MENU_CREATE', {
+        targetId: menu.id,
+        targetName: menu.name,
+        menuType: menu.type,
+        permission: menu.permission || null,
+        appId: menu.app_id || appId,
+        path: menu.path || null,
+        parentId: menu.parent_id || null
+      });
       return reply.result.success('创建成功', { id: menu.id });
     })
   });
@@ -309,6 +343,34 @@ async function registerMenuRoutes(fastify) {
        * 哪些按钮还算启用" —— 不失效的话，刚停用的按钮在 TTL 内仍可被调用。
        */
       invalidateButtonGrants();
+      /*
+       * 编辑留痕：只记真正变了的字段
+       *
+       * 菜单编辑最容易出事的是 `permission` —— 换一个码，这个按钮的授权范围就整体
+       * 换了主人；其次是 `status`（停用）与 `app_id`（跨应用搬迁）。全量回传的表单
+       * 每次保存都写一条会把日志淹掉，所以按 diff 写。
+       */
+      const menuChanges = [];
+      for (const [field, next, prev] of [
+        ['name', payload.name, menu.name],
+        ['path', payload.path, menu.path],
+        ['permission', payload.permission, menu.permission],
+        ['type', payload.type, menu.type],
+        ['status', payload.status, menu.status],
+        ['appId', payload.app_id, menu.app_id]
+      ]) {
+        if (next === undefined) continue;
+        if (String(next ?? '') === String(prev ?? '')) continue;
+        menuChanges.push({ field, from: prev ?? null, to: next });
+      }
+      if (menuChanges.length > 0) {
+        await audit(request, 'MENU_UPDATE', {
+          targetId: menu.id,
+          targetName: menu.name,
+          appId: menu.app_id || appId,
+          changes: menuChanges
+        });
+      }
       return reply.result.success('保存成功', null);
     })
   });
@@ -331,6 +393,19 @@ async function registerMenuRoutes(fastify) {
       if ((await menuDao.countChildren(id)) > 0) throw new Error('HAS_CHILDREN:请先删除子菜单');
       if ((await menuDao.countRoleRefs(id)) > 0) throw new Error('ROLE_REFERENCED:仍有角色引用该菜单，请先解除授权');
       await menuDao.remove(id);
+      /*
+       * 删除留痕：菜单一删，挂在它下面的按钮码与角色引用关系一起消失，
+       * 事后只能靠这条记录还原"原来有这么个页面/按钮"。
+       */
+      await audit(request, 'MENU_DELETE', {
+        targetId: menu.id,
+        targetName: menu.name,
+        menuType: menu.type,
+        permission: menu.permission || null,
+        appId: menu.app_id || 'admin',
+        path: menu.path || null,
+        parentId: menu.parent_id || null
+      });
       invalidateButtonGrants();
       return reply.result.success('删除成功', null);
     })

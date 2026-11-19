@@ -14,6 +14,7 @@ import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import postDao from '../../../../app/console/dao/post.dao.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
+import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 
 /** 岗位写入字段 schema */
 const postBodySchema = {
@@ -41,6 +42,28 @@ function toModelFields(body) {
   if (body.status !== undefined) payload.status = body.status;
   if (body.remark !== undefined) payload.remark = body.remark;
   return payload;
+}
+
+/**
+ * 写一条岗位审计
+ *
+ * 岗位是组织维度：调岗会影响数据可见范围与审批归属，原本增删改一条日志都没有。
+ * 失败不影响业务（`logAuditEvent` 内部已吞异常），与 roles / depts 同口径。
+ *
+ * @param {import('fastify').FastifyRequest} request 请求
+ * @param {string} type 事件类型
+ * @param {object} details 详情
+ * @returns {Promise<void>}
+ */
+async function audit(request, type, details) {
+  await logAuditEvent({
+    type,
+    userId: request.state?.user?.userId ? Number(request.state.user.userId) : null,
+    ip: request.ip,
+    userAgent: request.headers['user-agent'] || '',
+    appId: 'console',
+    details
+  });
 }
 
 async function registerPostRoutes(fastify) {
@@ -90,6 +113,13 @@ async function registerPostRoutes(fastify) {
       const payload = toModelFields(request.body);
       if (await postDao.isCodeTaken(payload.post_code)) throw new Error('DUPLICATE:岗位编码已存在');
       const post = await postDao.create(payload);
+      await audit(request, 'POST_CREATE', {
+        targetId: post.id,
+        targetName: payload.post_name,
+        postCode: payload.post_code,
+        status: payload.status ?? 1,
+        sort: payload.sort ?? null
+      });
       return reply.result.success('创建成功', { id: post.id });
     })
   });
@@ -111,8 +141,33 @@ async function registerPostRoutes(fastify) {
       if (payload.post_code && (await postDao.isCodeTaken(payload.post_code, id))) {
         throw new Error('DUPLICATE:岗位编码已存在');
       }
+      // 变更前快照：审计要的是「从什么改成什么」，update 之后就取不到了
+      const before = await postDao.findById(id);
       const ok = await postDao.update(id, payload);
       if (!ok) throw new Error('NOT_FOUND:岗位不存在');
+      /*
+       * 编辑留痕：岗位改名 / 改编码 / 停用都是组织层面的变化，
+       * 只记真正变了的字段（表单全量回传时未改动的键不进日志）。
+       */
+      const postChanges = [];
+      for (const [field, next, column] of [
+        ['postName', payload.post_name, 'post_name'],
+        ['postCode', payload.post_code, 'post_code'],
+        ['status', payload.status, 'status'],
+        ['sort', payload.sort, 'sort']
+      ]) {
+        if (next === undefined) continue;
+        const prev = before ? before[column] : null;
+        if (String(prev ?? '') === String(next ?? '')) continue;
+        postChanges.push({ field, from: prev ?? null, to: next });
+      }
+      if (postChanges.length > 0) {
+        await audit(request, 'POST_UPDATE', {
+          targetId: Number(id),
+          targetName: before?.post_name || '',
+          changes: postChanges
+        });
+      }
       return reply.result.success('保存成功', null);
     })
   });
@@ -130,7 +185,13 @@ async function registerPostRoutes(fastify) {
     handler: withFail(async (request, reply) => {
       const id = request.params.id;
       if ((await postDao.countUsers(id)) > 0) throw new Error('HAS_MEMBERS:该岗位下仍有成员，请先解除');
+      const removed = await postDao.findById(id);
       await postDao.remove(id);
+      await audit(request, 'POST_DELETE', {
+        targetId: Number(id),
+        targetName: removed?.post_name || '',
+        postCode: removed?.post_code || null
+      });
       return reply.result.success('删除成功', null);
     })
   });

@@ -238,6 +238,102 @@ export function summarizeOperEvent(row: OperSummaryInput): string {
       return `为用户（${who}）分配角色${roleId ? ` #${roleId}` : ''}`;
     }
 
+    /* ── 新建账号：谁建的、给了什么角色 ── */
+    case 'USER_CREATE': {
+      const who = pick(details, ['targetUsername']);
+      const roles = Array.isArray(details.roleNames) ? details.roleNames.map(String) : [];
+      const dept = pick(details, ['deptId']);
+      const bits = [roles.length ? `角色：${roles.join('、')}` : '', dept ? `部门 #${dept}` : ''].filter(Boolean);
+      return `新建账号${who ? `「${who}」` : ''}${bits.length ? `（${bits.join('，')}）` : ''}`;
+    }
+
+    /* ── 资料变更：changes 是唯一能回答"改成什么"的字段 ── */
+    case 'USER_UPDATE': {
+      const who = pick(details, ['targetUsername']) || '该用户';
+      const list = Array.isArray(details.changes) ? details.changes.map(changeText).filter(Boolean) : [];
+      return list.length ? `修改「${who}」：${list.join('；')}` : `修改「${who}」的资料`;
+    }
+
+    /* ── 启用 / 冻结：changes 里已是中文（后端 statusText 转过），不用再翻码值 ── */
+    case 'USER_STATUS': {
+      const who = pick(details, ['targetUsername']) || '该用户';
+      const verb = pick(details, ['verb']) || '修改状态';
+      const list = Array.isArray(details.changes) ? details.changes.map(changeText).filter(Boolean) : [];
+      return list.length ? `${verb}「${who}」：${list.join('；')}` : `${verb}「${who}」`;
+    }
+
+    /* ── 导出名单：数据外带，必须能看出"导了多少、按什么条件" ── */
+    case 'USER_EXPORT': {
+      const count = pick(details, ['count']);
+      const raw = details.filters;
+      const filters =
+        raw && typeof raw === 'object' && !Array.isArray(raw) ? filterText(raw as Record<string, unknown>) : '';
+      return `导出用户名单 ${count || '0'} 条${filters ? `（${filters}）` : '（全量，无筛选）'}`;
+    }
+
+    /* ── 批量授权：一次影响多人，摘要要给出人数与角色方向 ── */
+    case 'USER_BATCH_GRANT': {
+      const mode = pick(details, ['mode']);
+      const count = pick(details, ['count']);
+      const roles = Array.isArray(details.roleNames) ? details.roleNames.map(String) : [];
+      const sign = mode === 'remove' ? '−' : '+';
+      return `批量${mode === 'remove' ? '撤销' : '授予'}：${count || '0'} 个用户${roles.length ? ` ${sign}${roles.join('、')}` : ''}`;
+    }
+
+    /* ── 角色：新建 / 改名改职级 / 删除 ── */
+    case 'ROLE_CREATE': {
+      const who = pick(details, ['targetName']) || '新角色';
+      const code = pick(details, ['roleCode']);
+      const count = pick(details, ['permissionCount']);
+      const bits = [code ? `码 ${code}` : '', count ? `权限 ${count} 个` : ''].filter(Boolean);
+      return `新建角色「${who}」${bits.length ? `（${bits.join('，')}）` : ''}`;
+    }
+    case 'ROLE_UPDATE': {
+      const who = pick(details, ['targetName']) || '该角色';
+      const list = Array.isArray(details.changes) ? details.changes.map(changeText).filter(Boolean) : [];
+      return list.length ? `修改角色「${who}」：${list.join('；')}` : `修改角色「${who}」`;
+    }
+    case 'ROLE_DELETE': {
+      const who = pick(details, ['targetName']) || '该角色';
+      const code = pick(details, ['roleCode']);
+      return `删除角色「${who}」${code ? `（码 ${code}）` : ''}`;
+    }
+
+    /* ── 菜单：菜单即权限点，permission 变化必须显形 ── */
+    case 'MENU_CREATE': {
+      const who = pick(details, ['targetName']) || '新菜单';
+      const type = pick(details, ['menuType']);
+      const perm = pick(details, ['permission']);
+      const bits = [type, perm].filter(Boolean);
+      return `新增菜单「${who}」${bits.length ? `（${bits.join(' · ')}）` : ''}`;
+    }
+    case 'MENU_UPDATE': {
+      const who = pick(details, ['targetName']) || '该菜单';
+      const list = Array.isArray(details.changes) ? details.changes.map(changeText).filter(Boolean) : [];
+      return list.length ? `修改菜单「${who}」：${list.join('；')}` : `修改菜单「${who}」`;
+    }
+    case 'MENU_DELETE': {
+      const who = pick(details, ['targetName']) || '该菜单';
+      const perm = pick(details, ['permission']);
+      return `删除菜单「${who}」${perm ? `（${perm}）` : ''}`;
+    }
+
+    /* ── 岗位：组织维度 ── */
+    case 'POST_CREATE': {
+      const who = pick(details, ['targetName']) || '新岗位';
+      const code = pick(details, ['postCode']);
+      return `新建岗位「${who}」${code ? `（${code}）` : ''}`;
+    }
+    case 'POST_UPDATE': {
+      const who = pick(details, ['targetName']) || '该岗位';
+      const list = Array.isArray(details.changes) ? details.changes.map(changeText).filter(Boolean) : [];
+      return list.length ? `修改岗位「${who}」：${list.join('；')}` : `修改岗位「${who}」`;
+    }
+    case 'POST_DELETE': {
+      const who = pick(details, ['targetName']) || '该岗位';
+      return `删除岗位「${who}」`;
+    }
+
     /* ── 踢设备下线：谁把谁的哪台设备踢了 ── */
     case 'SESSION_KICK_DEVICE': {
       const device = pick(details, ['deviceId']);

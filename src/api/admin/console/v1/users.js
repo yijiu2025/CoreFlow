@@ -71,6 +71,13 @@ import stepUpService from '../../../../app/console/services/stepup.service.js';
 import { withFail } from '../../../../app/console/utils/respond.js';
 import { getModel } from '../../../../framework/persistence/db/index.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
+import {
+  USER_EVENTS,
+  auditUser,
+  diffProfile,
+  roleNamesOf,
+  statusText
+} from '../../../../app/console/services/user-audit.service.js';
 
 /**
  * 二次验证凭据（三个高危写接口共用）
@@ -192,8 +199,7 @@ function csvCell(value) {
  * @param {import('fastify').FastifyRequest} request 请求
  * @returns {Promise<string[]|null>} 允许的应用 ID 列表（null 表示不限）
  */
-async function scopeAppIdsOf(request) {
-  const actor = await getActorScope(request.state.user?.userId);
+function scopeAppIdsFrom(actor) {
   if (actor.isSuper || actor.crossApp) return null;
   return [...actor.apps];
 }
@@ -227,8 +233,16 @@ async function registerUserRoutes(fastify) {
         deviceId = ''
       } = request.query;
       const actorId = request.state.user?.userId;
-      // 行级数据范围：与前端传的 deptId 取交集，越权的 deptId 也只能在自己范围内再筛
+      /*
+       * 三个限制一次取全（`getActorScope` 内部会顺带解析 dataScope，
+       * 原来这里调两次等于把 UserRole/Role/Dept/RoleApp 各查两遍）：
+       *   · dataScope   —— 行级范围（部门 + 应用）
+       *   · scopeAppIds —— 角色应用域
+       *   · actorMaxRank —— 职级遮蔽，与自己高的账号不进列表
+       */
+      const actor = await getActorScope(actorId);
       const dataScope = { ...(await resolveDataScope(actorId)), actorId };
+      const actorMaxRank = actor.isSuper ? null : actor.maxRank;
       const { rows, total } = await userDao.page({
         pageNum,
         pageSize,
@@ -238,7 +252,8 @@ async function registerUserRoutes(fastify) {
         status,
         deviceId,
         dataScope,
-        scopeAppIds: await scopeAppIdsOf(request)
+        scopeAppIds: scopeAppIdsFrom(actor),
+        actorMaxRank
       });
       /*
        * 附上「待执行的注销申请」：删除是缓冲期语义，列表里必须能看出
@@ -273,7 +288,20 @@ async function registerUserRoutes(fastify) {
         app_label: appLabel(role.app_id),
         manageable: canWriteApp(actor, role.app_id) && (actor.isSuper || Number(role.rank_level) < actor.maxRank)
       }));
-      const apps = [...new Set(roles.map(role => role.app_id))].map(id => ({ id, label: appLabel(id) }));
+      /*
+       * 下拉候选 = **该账号实际被授权的可见应用**（`dataScope.appIds`）。
+       *
+       * 不能用 `canWriteApp` 判：持 `admin` 应用角色的人（哪怕只是观察者）会被算成
+       * `crossApp`，那里一律放行 —— 结果"只勾了两个应用"的角色，下拉里照样列全部。
+       * 用数据范围本身当判据，才能保证"能筛的"就是"配置了可见的应用"。
+       *
+       * `appIds` 为 `null` 只出现在超管（或表不可用）——那时退回应用域。
+       */
+      const dataScope = await resolveDataScope(request.state.user?.userId);
+      const visibleApps = Array.isArray(dataScope.appIds) ? new Set(dataScope.appIds.map(String)) : null;
+      const apps = [...new Set(roles.map(role => role.app_id))]
+        .filter(id => (visibleApps ? visibleApps.has(String(id)) : canWriteApp(actor, id)))
+        .map(id => ({ id, label: appLabel(id) }));
       return reply.result.success('获取成功', {
         ...data,
         roles,
@@ -314,7 +342,32 @@ async function registerUserRoutes(fastify) {
       // 新建时的角色授予同样受范围约束：否则「建个新号再给它超管」就是一条提权捷径
       const actor = await getActorScope(request.state.user?.userId);
       await assertGrantable(actor, request.body.roleIds);
+      /*
+       * 部门范围：能看见 != 能往里塞人。
+       * 原来只有导入校验部门，创建这条路可以直接往任意部门建号 —— 建完还从自己列表里消失。
+       */
+      assertDeptWritable(await resolveDataScope(request.state.user?.userId), request.body.deptId ?? null, {
+        action: '创建'
+      });
       const user = await userDao.create(request.body, actorOf(request));
+      /*
+       * 新建留痕
+       *
+       * 建号同时会带一批角色 —— 这既是"造了一个能登录的身份"，也可能是一次提权。
+       * 这条路径原来一条审计都没有，事后查不出「这个号是谁建的、给了什么角色」。
+       */
+      await auditUser(request, USER_EVENTS.CREATE, {
+        targetId: user.id,
+        targetUsername: user.username || request.body.username,
+        details: {
+          deptId: request.body.deptId ?? null,
+          status: request.body.status ?? 1,
+          statusText: statusText(request.body.status ?? 1),
+          roleIds: request.body.roleIds || [],
+          roleNames: await roleNamesOf(request.body.roleIds),
+          postIds: request.body.postIds || []
+        }
+      });
       return reply.result.success('创建成功', { id: user.id, uid: user.uid });
     })
   });
@@ -343,6 +396,17 @@ async function registerUserRoutes(fastify) {
     handler: withFail(async (request, reply) => {
       const targetId = Number(request.params.id);
       const { operatorId, actor, target } = await scopeOf(request, targetId, '编辑');
+
+      /*
+       * 资料字段的变更前快照
+       *
+       * `getTargetScope` 只返回角色画像（roleIds / 职级），不含账号、邮箱、部门、状态。
+       * 审计要的是"从什么改成什么"，update 之后再查就只能看到改完的值，所以先取一次。
+       */
+      const beforeRow = await getModel('User').findByPk(targetId, {
+        attributes: ['username', 'email', 'dept_id', 'status'],
+        raw: true
+      });
 
       /**
        * 角色变更走「范围规划」而不是直接透传：
@@ -376,6 +440,22 @@ async function registerUserRoutes(fastify) {
       }
       const ok = await userDao.update(targetId, body, actorOf(request));
       if (!ok) throw new Error('NOT_FOUND:用户不存在');
+
+      /*
+       * 资料字段留痕
+       *
+       * 原来这里只在角色变化时记 `ROLE_ASSIGNED`，改账号、改邮箱、换部门、切状态
+       * 一律无痕 —— 而"把某人换到另一个部门"本身就是数据可见范围的变更。
+       * 只记 diff 非空的字段，避免每次保存都刷一条"什么都没改"的日志。
+       */
+      const changes = diffProfile(beforeRow, body);
+      if (changes.length > 0) {
+        await auditUser(request, USER_EVENTS.UPDATE, {
+          targetId,
+          targetUsername: beforeRow?.username || '',
+          details: { changes }
+        });
+      }
 
       /*
        * 角色变更留痕
@@ -447,8 +527,33 @@ async function registerUserRoutes(fastify) {
       if (requests.length > 0) {
         throw new Error('CONFLICT:该账号有待执行的注销申请，请先在「高危操作」里撤销注销，再改状态');
       }
+      // 变更前的状态与账号名：审计要能回答「从正常改成冻结」，只写目标值等于没记
+      const statusBefore = await getModel('User').findByPk(targetId, {
+        attributes: ['username', 'status'],
+        raw: true
+      });
       const ok = await userDao.updateStatus(targetId, request.body.status);
       if (!ok) throw new Error('NOT_FOUND:用户不存在');
+
+      /*
+       * 冻结 / 解冻留痕
+       *
+       * 这是用户管理页最常点、影响最直接的一个按钮（一键把人挡在门外），
+       * 原来**一条日志都不写**：出了"某人突然登不上"的问题，只能靠猜。
+       * 记 from → to，才能回答"是谁在什么时候把他冻结的"。
+       */
+      const toStatus = Number(request.body.status);
+      const beforeStatus = statusBefore?.status ?? null;
+      await auditUser(request, USER_EVENTS.STATUS, {
+        targetId,
+        targetUsername: statusBefore?.username || '',
+        details: {
+          from: beforeStatus,
+          to: toStatus,
+          verb: toStatus === 1 ? '启用' : toStatus === 0 ? '冻结' : '改为注销态',
+          changes: [{ field: 'status', from: statusText(beforeStatus), to: statusText(toStatus) }]
+        }
+      });
       return reply.result.success('状态已更新', null);
     })
   });
@@ -464,6 +569,7 @@ async function registerUserRoutes(fastify) {
     schema: { querystring: listQuerySchema },
     handler: withFail(async (request, reply) => {
       const { keyword = '', deptId = null, appId = null, status = null, deviceId = '' } = request.query;
+      const actor = await getActorScope(request.state.user?.userId);
       // 导出与列表同一口径：给应用管理员导全表等于把别家应用的用户名单往外带
       const { rows } = await userDao.page({
         pageNum: 1,
@@ -474,7 +580,10 @@ async function registerUserRoutes(fastify) {
         status,
         // 导出必须和列表同一套条件：否则"筛了设备码导出全量"，名单和眼前的对不上
         deviceId,
-        scopeAppIds: await scopeAppIdsOf(request)
+        // 行级范围同样要带：漏了它，导出就是"列表看两行、CSV 拿全表"
+        dataScope: await resolveDataScope(request.state.user?.userId),
+        scopeAppIds: scopeAppIdsFrom(actor),
+        actorMaxRank: actor.isSuper ? null : actor.maxRank
       });
       const header = ['ID', '账号', '邮箱', '部门', '角色', '岗位', '状态', '创建时间'];
       const lines = rows.map(r =>
@@ -492,6 +601,21 @@ async function registerUserRoutes(fastify) {
           .join(',')
       );
       const csv = `\uFEFF${header.join(',')}\n${lines.join('\n')}`;
+      /*
+       * 导出留痕
+       *
+       * 导出 = 把整份名单（账号 + 邮箱 + 部门 + 角色）拷出系统，是标准的数据外带面。
+       * 原来查不出任何"谁导了多少人的名单"，泄露时无从回溯范围。
+       * 记条数与生效的筛选条件 —— 这两项决定了这条记录的价值。
+       */
+      await auditUser(request, USER_EVENTS.EXPORT, {
+        targetId: null,
+        targetUsername: '',
+        details: {
+          count: rows.length,
+          filters: { keyword, deptId, appId, status, deviceId }
+        }
+      });
       return reply
         .header('Content-Type', 'text/csv; charset=utf-8')
         .header('Content-Disposition', 'attachment; filename="users.csv"')
@@ -777,6 +901,26 @@ async function registerUserRoutes(fastify) {
         await userDao.update(plan.userId, { roleIds: plan.next }, { ...actor, remark: '批量授权' });
       }
 
+      /*
+       * 批量授权留痕
+       *
+       * 一次能给 200 个人加上同一个管理角色，是后台里破坏半径最大的一条路径。
+       * 原来只有 `user_grant_logs` 的逐用户流水（那是"授权账本"），
+       * `audit_logs` 里一条都没有 —— 操作日志页看不到"谁做过一次批量提权"。
+       * 这里记汇总；逐用户明细仍在流水表里，两者互补不重复。
+       */
+      await auditUser(request, USER_EVENTS.BATCH_GRANT, {
+        targetId: null,
+        targetUsername: '',
+        details: {
+          mode,
+          count: plans.length,
+          roleIds: grants,
+          roleNames: await roleNamesOf(grants),
+          userIds: targets.slice(0, 20),
+          userIdCount: targets.length
+        }
+      });
       return reply.result.success(`已更新 ${plans.length} 个用户的角色`, { count: plans.length });
     })
   });
