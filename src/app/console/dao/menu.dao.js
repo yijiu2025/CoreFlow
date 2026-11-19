@@ -104,6 +104,46 @@ class MenuDao {
     const SysRoleMenu = getModel('console.SysRoleMenu');
     const ids = new Set((menuIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0));
 
+    const all = await getModel('console.SysMenu').findAll({ attributes: ['id', 'parent_id'], raw: true });
+    const parentOf = new Map(all.map(m => [Number(m.id), Number(m.parent_id)]));
+    /** 子节点表：级联取消时要往下走 */
+    const childrenOf = new Map();
+    for (const [id, parent] of parentOf) {
+      if (!Number.isInteger(parent) || parent <= 0) continue;
+      if (!childrenOf.has(parent)) childrenOf.set(parent, []);
+      childrenOf.get(parent).push(id);
+    }
+    /** 某节点的全部后代 */
+    const descendantsOf = rootId => {
+      const out = [];
+      const stack = [...(childrenOf.get(Number(rootId)) ?? [])];
+      while (stack.length > 0) {
+        const id = stack.pop();
+        out.push(id);
+        for (const child of childrenOf.get(id) ?? []) stack.push(child);
+      }
+      return out;
+    };
+
+    /*
+     * 级联取消：显式取消一个节点时，连它的后代一起取消。
+     *
+     * 为什么必须有这一步（真实故障）：角色原有授权里可能残留着一批"界面上根本看不见"
+     * 的按钮（角色 policy 里没有对应权限码，弹窗按 21 项隐藏处理），它们在库里仍是
+     * 授权状态。管理员取消「用户管理」页面时只删掉了可见的那几个 id，隐藏按钮留在
+     * 提交集合里 —— 紧接着下面"补齐祖先"又把「用户管理」原样补回去，
+     * 表现就是"取消勾选 → 保存 → 刷新又勾上"，而且权限实际没被收回。
+     *
+     * 语义上"取消页面"就等于"取消它下面的一切"，所以先向下清干净，再向上补。
+     */
+    if (ids.size > 0) {
+      const before = new Set(await this.getRoleMenuIds(roleId));
+      for (const id of before) {
+        if (ids.has(id)) continue; // 仍授权，跳过
+        for (const descendant of descendantsOf(id)) ids.delete(descendant);
+      }
+    }
+
     /*
      * 补齐祖先：只授权"按钮"而不授权它所在的页面/目录时，侧栏根本渲染不出那一条，
      * 等于这次授权没生效 —— 前端弹窗已有级联，这里再兜一次，因为直接调接口
@@ -111,8 +151,6 @@ class MenuDao {
      *
      * 只向上补，不向下展开：给页面授权而保留按钮不显示是合法状态。
      */
-    const all = await getModel('console.SysMenu').findAll({ attributes: ['id', 'parent_id'], raw: true });
-    const parentOf = new Map(all.map(m => [Number(m.id), Number(m.parent_id)]));
     for (const id of [...ids]) {
       let parent = parentOf.get(id);
       while (Number.isInteger(parent) && parent > 0 && !ids.has(parent)) {

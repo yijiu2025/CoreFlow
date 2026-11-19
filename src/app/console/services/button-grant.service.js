@@ -48,18 +48,54 @@ const userCache = new Map();
 async function loadSnapshot() {
   if (snapshot.at && Date.now() - snapshot.at < CODES_TTL_MS) return snapshot;
 
+  /*
+   * 🔴 覆盖 `menu` + `btn`，不只是 btn。
+   *
+   * 只收按钮时，"取消整个页面"只影响侧栏渲染，接口照样按 policy 放行 ——
+   * 用户实测：菜单关了侧栏不显示，但直接访问 URL、点查询、看详情全都正常。
+   * 页面节点的 permission（`admin:user:read`）同样是"该角色被授权才能用"的码，
+   * 必须进同一份闸。
+   */
   const rows = await getModel('console.SysMenu').findAll({
-    where: { type: 'btn' },
-    attributes: ['id', 'permission', 'status', 'visible'],
+    where: { type: ['btn', 'menu'] },
+    attributes: ['id', 'permission', 'status', 'visible', 'type'],
     raw: true
   });
 
   const all = [...new Set(rows.map(row => row.permission).filter(Boolean))];
   const active = rows
     .filter(row => row.permission && Number(row.status) === 1 && Number(row.visible) === 1)
-    .map(row => ({ id: Number(row.id), permission: row.permission }));
+    .map(row => ({ id: Number(row.id), permission: row.permission, type: String(row.type) }));
+  const pageCodes = [...new Set(active.filter(item => item.type === 'menu').map(item => item.permission))];
 
-  snapshot = { at: Date.now(), all, active };
+  /*
+   * 码 → 所属页面集合（向上溯源到最近的 `type=menu` 节点，含自身）。
+   *
+   * 这是"页面关了，页面下所有接口一起关"的唯一实现方式 —— 不需要给每个接口
+   * 再登记一次"我属于哪个页面"（那会和 `permission` 重复，且必然漂移）。
+   *
+   * 🔴 一个码可能挂多个页面：`admin:log:remove` 同时属于「操作日志」与「登录日志」。
+   *    所以这里存**集合**，判定时用 OR —— 删掉其中一个页面不该把另一个页面的
+   *    清理按钮也废掉。用"一对一打包标记"的写法在这里就会误伤。
+   */
+  const byId = new Map(rows.map(row => [Number(row.id), row]));
+  const pagesOfCodeOf = new Map();
+  for (const row of rows) {
+    if (!row.permission) continue;
+    const pages = new Set();
+    let cursor = Number(row.id);
+    const seen = new Set();
+    while (cursor > 0 && !seen.has(cursor)) {
+      seen.add(cursor);
+      const node = byId.get(cursor);
+      if (!node) break;
+      if (node.type === 'menu') pages.add(cursor);
+      cursor = Number(node.parent_id);
+    }
+    if (pages.size > 0) pagesOfCodeOf.set(row.permission, pages);
+  }
+
+  snapshot = { at: Date.now(), all, active, pageCodes, pagesOfCodeOf };
   return snapshot;
 }
 
@@ -105,10 +141,19 @@ async function resolveButtonGate(user) {
 
   const cached = userCache.get(userId);
   if (cached && cached.rolesKey === rolesKey && Date.now() - cached.at < USER_TTL_MS) {
-    return { buttonCodes: snap.all, menuPerms: cached.menuPerms };
+    return {
+      buttonCodes: snap.all,
+      menuPerms: cached.menuPerms,
+      pageCodes: snap.pageCodes,
+      pagesOfCode: snap.pagesOfCodeOf,
+      pageGrants: new Set(cached.pageGrants),
+      hasPageGrant: cached.hasPageGrant
+    };
   }
 
   let menuPerms;
+  let hasPageGrant = true; // 超管不看菜单授权，页面闸对它不成立
+  let pageGrants = new Set(snap.active.filter(item => item.type === 'menu').map(item => item.id));
   if (isSuperViewer(user)) {
     menuPerms = [...new Set(snap.active.map(item => item.permission))];
   } else {
@@ -122,10 +167,27 @@ async function resolveButtonGate(user) {
       for (const menuId of await menuDao.getRoleMenuIds(role.id)) grantedMenuIds.add(Number(menuId));
     }
     menuPerms = [...new Set(snap.active.filter(item => grantedMenuIds.has(item.id)).map(item => item.permission))];
+    pageGrants = new Set(
+      snap.active.filter(item => item.type === 'menu' && grantedMenuIds.has(item.id)).map(item => item.id)
+    );
+    /*
+     * 该用户是否配过页面授权（现在只用于诊断/日志，**不再参与判定**）。
+     *
+     * 历史上它是页面闸的安全网：存量角色只有按钮授权时不让页面码拦。
+     * 存量已补齐（`scripts/backfill-role-menus.mjs`），页面闸已是硬闸。
+     */
+    hasPageGrant = snap.active.some(item => item.type === 'menu' && grantedMenuIds.has(item.id));
   }
 
-  userCache.set(userId, { at: Date.now(), rolesKey, menuPerms });
-  return { buttonCodes: snap.all, menuPerms };
+  userCache.set(userId, { at: Date.now(), rolesKey, menuPerms, hasPageGrant, pageGrants: [...pageGrants] });
+  return {
+    buttonCodes: snap.all,
+    menuPerms,
+    pageCodes: snap.pageCodes,
+    pagesOfCode: snap.pagesOfCodeOf,
+    pageGrants,
+    hasPageGrant
+  };
 }
 
 /**
@@ -141,7 +203,34 @@ async function resolveButtonGate(user) {
  */
 function stripBlockedButtons(allows, gate, allCodes) {
   const granted = new Set(gate.menuPerms);
-  const blocked = new Set(gate.buttonCodes.filter(code => !granted.has(code)));
+  const pageCodes = new Set(gate.pageCodes ?? []);
+  const blocked = new Set(
+    gate.buttonCodes.filter(code => {
+      /*
+       * ① 页面闸（祖先溯源）：该码所属的页面**全部**被取消 ⇒ 码作废。
+       *
+       * 顺序必须在前：页面删了、按钮还勾着是**矛盾状态**（真实现场），
+       * 以页面为准 —— 这就是"页面关了，页面下所有接口一起关"。
+       * 多页面归属用 OR：`admin:log:remove` 属于两个日志页，剩一个就该继续能用。
+       */
+      const pages = gate.pagesOfCode?.get(code);
+      if (pages && pages.size > 0 && gate.pageGrants && gate.hasPageGrant !== false) {
+        const anyGranted = [...pages].some(pageId => gate.pageGrants.has(pageId));
+        if (!anyGranted) return true;
+      }
+      if (granted.has(code)) return false;
+      /*
+       * ② 页面码未授权 ⇒ 拦。
+       *
+       * 曾经这里有条安全网（没配过页面的角色不拦），因为 `admin_operator` 只有按钮、
+       * 没有页面授权，硬拦会让它连列表都打不开。存量已由
+       * `scripts/backfill-role-menus.mjs` 按 policy 补齐（只补"一个页面都没配过"的角色，
+       * 不覆盖管理员的显式取消），所以这里收口成硬闸 —— 否则删光页面授权就等于绕过。
+       */
+      void pageCodes;
+      return true;
+    })
+  );
   if (blocked.size === 0) return allows;
 
   const out = [];

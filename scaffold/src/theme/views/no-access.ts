@@ -10,12 +10,20 @@
  * @author yijiu2025
  * @since 2026-11-15
  */
+import type { ComputedRef } from 'vue';
 import { defineThemePage } from 'skinsuite/vue';
 
 /** 无权限页版式上下文（版式只读它） */
 export interface NoAccessViewContext {
   /** 回工作台 */
   goDashboard: () => void;
+  /**
+   * 被拦下的页面名（路由 `meta.title`）。
+   *
+   * 权限被管理员撤销后，用户点收藏/刷新旧链接会落到本页 —— 只说"没有权限"会让人
+   * 以为是系统坏了；点明是哪个页面，用户才知道该找谁开。
+   */
+  pageLabel: ComputedRef<string>;
 }
 
 /** 页面域声明（`<ThemeView page="no-access">` 依赖它） */

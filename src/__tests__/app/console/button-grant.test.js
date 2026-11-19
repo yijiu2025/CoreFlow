@@ -83,3 +83,94 @@ describe('stripBlockedButtons —— 下发前把"按钮没授权"的码摘掉',
     expect(stripBlockedButtons(['posecraft:*'], gate, ALL)).toEqual(['posecraft:*']);
   });
 });
+
+describe('页面级码（type=menu）也进闸', () => {
+  const PAGE_GATE = {
+    buttonCodes: ['admin:user:read', 'admin:user:export', 'admin:user:create'],
+    menuPerms: ['admin:user:export', 'admin:user:create'],
+    pageCodes: ['admin:user:read'],
+    hasPageGrant: true
+  };
+
+  it('取消整个页面 → 页面码被摘掉（接口随之 403，不只是侧栏消失）', () => {
+    const out = stripBlockedButtons(['admin:user:read', 'admin:user:export'], PAGE_GATE, [
+      'admin:user:read',
+      'admin:user:export'
+    ]);
+    expect(out).toEqual(['admin:user:export']);
+  });
+
+  it('页面仍授权时页面码保留', () => {
+    const gate = { ...PAGE_GATE, menuPerms: ['admin:user:read', 'admin:user:export'] };
+    const out = stripBlockedButtons(['admin:user:read', 'admin:user:export'], gate, [
+      'admin:user:read',
+      'admin:user:export'
+    ]);
+    expect(out).toEqual(['admin:user:read', 'admin:user:export']);
+  });
+
+  it('硬闸：即使该角色从没配过页面授权，页面码照样拦（存量已补齐）', () => {
+    const gate = { ...PAGE_GATE, hasPageGrant: false };
+    const out = stripBlockedButtons(['admin:user:read'], gate, ['admin:user:read']);
+    expect(out).toEqual([]);
+  });
+
+  it('旧形状的 gate（没有 pageCodes）行为不变', () => {
+    const gate = { buttonCodes: ['admin:user:read'], menuPerms: [] };
+    expect(stripBlockedButtons(['admin:user:read'], gate, ['admin:user:read'])).toEqual([]);
+  });
+});
+
+describe('祖先溯源：页面关了，页内按钮码一起作废', () => {
+  /** 页面 #3 下有 read/export；log:remove 同时属于 #11 与 #12 两个页面 */
+  const PAGES = new Map([
+    ['admin:user:read', new Set([3])],
+    ['admin:user:export', new Set([3])],
+    ['admin:log:remove', new Set([11, 12])]
+  ]);
+  const ALL = ['admin:user:read', 'admin:user:export', 'admin:log:remove'];
+
+  it('页面被取消时，即使按钮本身还勾着，它的码也作废', () => {
+    const gate = {
+      buttonCodes: ALL,
+      menuPerms: ['admin:user:export', 'admin:log:remove'], // 按钮都授权
+      pageCodes: ['admin:user:read'],
+      pagesOfCode: PAGES,
+      pageGrants: new Set([11, 12]), // 只取消了用户管理页
+      hasPageGrant: true
+    };
+    const out = stripBlockedButtons(ALL, gate, ALL);
+    expect(out).toEqual(['admin:log:remove']); // read 未授权、export 页面被取消
+  });
+
+  it('多页面归属用 OR：还剩一个页面授权就继续可用', () => {
+    const gate = {
+      buttonCodes: ALL,
+      menuPerms: ['admin:log:remove'],
+      pageCodes: ['admin:user:read'],
+      pagesOfCode: PAGES,
+      pageGrants: new Set([12]), // 只剩登录日志
+      hasPageGrant: true
+    };
+    const out = stripBlockedButtons(['admin:log:remove'], gate, ALL);
+    expect(out).toEqual(['admin:log:remove']);
+  });
+
+  it('两个所属页面都被取消 ⇒ 作废', () => {
+    const gate = {
+      buttonCodes: ALL,
+      menuPerms: ['admin:log:remove'],
+      pageCodes: ['admin:user:read'],
+      pagesOfCode: PAGES,
+      pageGrants: new Set([]),
+      hasPageGrant: true
+    };
+    const out = stripBlockedButtons(['admin:log:remove'], gate, ALL);
+    expect(out).toEqual([]);
+  });
+
+  it('没有 pagesOfCode 的旧形状行为不变', () => {
+    const gate = { buttonCodes: ['admin:user:export'], menuPerms: ['admin:user:export'] };
+    expect(stripBlockedButtons(['admin:user:export'], gate, ['admin:user:export'])).toEqual(['admin:user:export']);
+  });
+});

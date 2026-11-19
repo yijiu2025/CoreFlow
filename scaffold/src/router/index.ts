@@ -236,7 +236,11 @@ router.beforeEach(async to => {
 
   const permission = to.meta?.permission as string | undefined;
   if (permission && !auth.hasPermission(permission)) {
-    return { path: '/no-access' };
+    /*
+     * 带上页面名：权限被撤销后，用户刷新旧链接/点收藏都会落到这里。
+     * 只说"没有权限"会让人以为是系统坏了 —— 点明是哪个页面才知道该找谁开。
+     */
+    return { path: '/no-access', query: { page: String(to.meta?.title || to.path) } };
   }
   return true;
 });
