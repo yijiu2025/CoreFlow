@@ -63,10 +63,16 @@ class DashboardService {
    * 工作台概览
    *
    * @param {object} [options] 选项
-   * @param {boolean} [options.includeRecentLogins=true] 是否下发明细（默认给，供脚本/内部调用）
+   * @param {boolean} [options.includeLogData=true] 是否下发**日志派生**的数据（默认给，供脚本/内部调用）
    * @returns {Promise<object>} 概览数据
+   *
+   * 🔴 `includeLogData = false` 时，所有"从日志算出来的"字段一律归零 / 空数组：
+   *    今日登录、失败数、今日操作、成功率、活跃账号、7 日趋势、最近登录明细。
+   *    理由不是"数字也敏感"，而是**工作台内部要自洽** —— 摘要显示"今日操作 12 次"、
+   *    下面的趋势图却说"需要日志权限"，比两者都不显示更让人困惑。
+   *    系统读数（用户/角色/菜单/部门）与在线数不走日志，因此不受影响。
    */
-  async summary({ includeRecentLogins = true } = {}) {
+  async summary({ includeLogData = true } = {}) {
     /*
      * 直接取连接，不借某个模型的 `.sequelize`：那是"顺手拿到的句柄"，
      * 会让读者以为这段在读 User 表，实际只跑聚合 SQL。
@@ -118,31 +124,37 @@ class DashboardService {
     );
     const failedOps = Number(todayFailed[0]?.c || 0);
 
-    const trend = await logDao.operStats('7d');
+    const trend = includeLogData ? await logDao.operStats('7d') : { series: [] };
     /*
      * 最近登录是**明细**（含 IP / UA / 时间），清过就是清过了 —— 归档只保留计数与
      * 账号存在性，补不出"谁在几点从哪登录"。这是清除日志的应有之义，不再伪造。
      */
-    const recentLogins = includeRecentLogins ? await logDao.recentLogins(5) : [];
+    const recentLogins = includeLogData ? await logDao.recentLogins(5) : [];
 
     return {
       users: Number(counts.users || 0),
       roles: Number(counts.roles || 0),
       menus: Number(counts.menus || 0),
       depts: Number(counts.depts || 0),
-      todayLogins: Number(counts.today_logins || 0),
-      failedLogins: Number(counts.failed_logins || 0),
-      todayOps,
-      successRate: todayOps > 0 ? Number((((todayOps - failedOps) / todayOps) * 100).toFixed(2)) : 100,
+      todayLogins: includeLogData ? Number(counts.today_logins || 0) : 0,
+      failedLogins: includeLogData ? Number(counts.failed_logins || 0) : 0,
+      todayOps: includeLogData ? todayOps : 0,
+      successRate: includeLogData
+        ? todayOps > 0
+          ? Number((((todayOps - failedOps) / todayOps) * 100).toFixed(2))
+          : 100
+        : 0,
       /*
        * 活跃账号数必须走 dao：它是「明细 ∪ 归档」的精确去重，
        * 把两边人数相加会把同一账号算成两个人。
        */
-      activeUsers: await logDao.activeLoginUsers(24),
+      activeUsers: includeLogData ? await logDao.activeLoginUsers(24) : 0,
       /** 当前在线（有有效会话）；Redis 不可用时为 null，前端回落到 activeUsers */
       onlineUsers: await countOnlineUsers(),
       trend: trend.series,
-      recentLogins
+      recentLogins,
+      /** 日志派生数据被按权限隐去（前端据此显示"需要日志权限"而不是"0 / 暂无"） */
+      logDataLocked: !includeLogData
     };
   }
 }

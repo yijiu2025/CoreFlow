@@ -95,10 +95,12 @@ const {
           <span class="side__label">今日操作</span>
           <span class="side__ico"><Activity :size="16" /></span>
         </div>
-        <p class="side__value mono"><Odometer :value="data.todayOps" /><small> 次</small></p>
+        <!-- 锁定时不显示 0：0 会被读成"今天没人操作"，实际是"没权限看" -->
+        <p v-if="data.logDataLocked" class="side__value mono">—<small> 无权限</small></p>
+        <p v-else class="side__value mono"><Odometer :value="data.todayOps" /><small> 次</small></p>
         <div class="side__foot">
-          <span class="side__hint">成功率</span>
-          <span class="side__hint is-ok mono">{{ data.successRate }}%</span>
+          <span class="side__hint">{{ data.logDataLocked ? '需要日志权限' : '成功率' }}</span>
+          <span class="side__hint is-ok mono">{{ data.logDataLocked ? '—' : `${data.successRate}%` }}</span>
         </div>
       </section>
 
@@ -138,7 +140,9 @@ const {
             </span>
           </div>
         </div>
-        <div v-else class="empty">近 7 天没有操作记录</div>
+        <div v-else class="empty">
+          {{ data?.logDataLocked ? '需要「日志查看」权限才能看到操作趋势' : '近 7 天没有操作记录' }}
+        </div>
       </section>
 
       <!-- ④ 操作成功率：刻度环 -->
@@ -213,7 +217,7 @@ const {
         </ul>
         <!-- 「没权限」与「确实没有」必须分开说，否则用户会反复刷新等记录出现 -->
         <div v-else class="empty">
-          {{ data?.recentLoginsLocked ? '需要「日志查看」权限才能看到登录明细' : '暂无登录记录' }}
+          {{ data?.logDataLocked ? '需要「日志查看」权限才能看到登录明细' : '暂无登录记录' }}
         </div>
       </section>
 

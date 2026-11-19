@@ -450,12 +450,13 @@ export interface DashboardSummary {
   trend: Array<{ bucket: string; total: number; failed: number }>;
   recentLogins: Array<{ id: number; username: string | null; ip: string; location: string | null; created_at: string }>;
   /**
-   * 明细已按权限隐藏（账号没有日志读权限）
+   * 日志派生数据已按权限隐去（账号没有 `admin:log:read`）
    *
-   * 与"确实没有登录记录"是两件事：前者要提示去找管理员授权，
-   * 后者只说"暂无"。混在一起会让人反复刷新等记录出现。
+   * 影响：今日登录 / 失败数 / 今日操作 / 成功率 / 活跃账号 / 7 日趋势 / 最近登录明细。
+   * 与"确实没有数据"是两件事：前者要提示去找管理员授权，后者只说"暂无"；
+   * 混在一起会让人反复刷新等数字出现。
    */
-  recentLoginsLocked?: boolean;
+  logDataLocked?: boolean;
 }
 
 /** 操作日志行 */
