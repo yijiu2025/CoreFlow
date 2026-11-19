@@ -449,6 +449,13 @@ export interface DashboardSummary {
   onlineUsers?: number | null;
   trend: Array<{ bucket: string; total: number; failed: number }>;
   recentLogins: Array<{ id: number; username: string | null; ip: string; location: string | null; created_at: string }>;
+  /**
+   * 明细已按权限隐藏（账号没有日志读权限）
+   *
+   * 与"确实没有登录记录"是两件事：前者要提示去找管理员授权，
+   * 后者只说"暂无"。混在一起会让人反复刷新等记录出现。
+   */
+  recentLoginsLocked?: boolean;
 }
 
 /** 操作日志行 */

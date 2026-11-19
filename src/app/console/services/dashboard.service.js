@@ -62,9 +62,11 @@ class DashboardService {
   /**
    * 工作台概览
    *
+   * @param {object} [options] 选项
+   * @param {boolean} [options.includeRecentLogins=true] 是否下发明细（默认给，供脚本/内部调用）
    * @returns {Promise<object>} 概览数据
    */
-  async summary() {
+  async summary({ includeRecentLogins = true } = {}) {
     /*
      * 直接取连接，不借某个模型的 `.sequelize`：那是"顺手拿到的句柄"，
      * 会让读者以为这段在读 User 表，实际只跑聚合 SQL。
@@ -121,7 +123,7 @@ class DashboardService {
      * 最近登录是**明细**（含 IP / UA / 时间），清过就是清过了 —— 归档只保留计数与
      * 账号存在性，补不出"谁在几点从哪登录"。这是清除日志的应有之义，不再伪造。
      */
-    const recentLogins = await logDao.recentLogins(5);
+    const recentLogins = includeRecentLogins ? await logDao.recentLogins(5) : [];
 
     return {
       users: Number(counts.users || 0),

@@ -211,7 +211,10 @@ const {
             </span>
           </li>
         </ul>
-        <div v-else class="empty">暂无登录记录</div>
+        <!-- 「没权限」与「确实没有」必须分开说，否则用户会反复刷新等记录出现 -->
+        <div v-else class="empty">
+          {{ data?.recentLoginsLocked ? '需要「日志查看」权限才能看到登录明细' : '暂无登录记录' }}
+        </div>
       </section>
 
       <!-- ⑤ 常用入口 -->
