@@ -12,7 +12,7 @@
  * @author yijiu2025
  * @since 2026-11-17
  */
-import { getModel } from '../../../framework/persistence/db/index.js';
+import roleDao from '../dao/role.dao.js';
 import { logAuditEvent } from '../../../framework/security/auth/index.js';
 import Logger from '../../../framework/support/log/index.js';
 
@@ -130,11 +130,7 @@ async function roleNamesOf(roleIds) {
   const ids = Array.from(new Set((Array.isArray(roleIds) ? roleIds : []).map(Number).filter(n => n > 0)));
   if (ids.length === 0) return [];
   try {
-    const Role = getModel('Role');
-    if (!Role) return ids.map(id => `#${id}`);
-    const rows = await Role.findAll({ where: { id: ids }, attributes: ['id', 'name'], raw: true });
-    const nameOf = new Map(rows.map(row => [Number(row.id), row.name]));
-    return ids.map(id => nameOf.get(id) || `#${id}`);
+    return await roleDao.findNames(ids);
   } catch (err) {
     // 名字只是可读性，查不到不能拖垮业务；ID 仍然留在 details 里
     Logger.warn(`[UserAudit] 角色名解析失败: ${err?.message}`);

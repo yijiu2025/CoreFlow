@@ -63,6 +63,11 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
   ],
   ['conventions/terminal-colors.test.js', '读 colors.js 源码文本，校验输出用 IS_TTY 判断而非直读 stdout'],
   [
+    'conventions/model-access-boundary.test.js',
+    '扫描 src/app 与 src/api 的源码文本，统计每个文件的 getModel( 次数并与基线比对 ——' +
+      '断言对象是"有没有直接取模型"，import 模块只会拿到导出，看不到这个区别'
+  ],
+  [
     'conventions/user-admin-routes-permission.test.js',
     '读 5 个管理端用户域路由文件（admin/bans/deactivation/device-accounts/sessions）的源码文本，' +
       '断言没有 allowRoles 且每条路由都带 requirePermission —— 断言对象是"用了哪种鉴权写法"，' +

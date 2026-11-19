@@ -45,7 +45,19 @@ jest.unstable_mockModule('../../../app/console/dao/user.dao.js', () => ({
   }
 }));
 jest.unstable_mockModule('../../../app/console/dao/role.dao.js', () => ({
-  default: { hasAdminCapability: jest.fn(async () => true) }
+  default: {
+    hasAdminCapability: jest.fn(async () => true),
+    /*
+     * 名字解析已从业务层收进 role.dao.findNames（原先 users.js 与 user-audit
+     * 各写一份）。桩转发到同一个 roleFindAll，断言的仍是"取了哪些角色、名字对不对"。
+     */
+    findNames: async ids => {
+      const rows = await roleFindAll();
+      const nameOf = new Map(rows.map(row => [Number(row.id), row.name]));
+      return ids.map(id => nameOf.get(Number(id)) || `#${id}`);
+    },
+    listBrief: () => roleFindAll()
+  }
 }));
 jest.unstable_mockModule('../../../app/console/dao/grant.dao.js', () => ({ default: {} }));
 

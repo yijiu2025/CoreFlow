@@ -469,11 +469,15 @@ async function registerUserRoutes(fastify) {
         const removed = beforeRoleIds.filter(id => !afterRoleIds.includes(id));
         if (added.length > 0 || removed.length > 0) {
           const changed = [...added, ...removed];
-          const [rows, targetUser] = await Promise.all([
-            getModel('Role').findAll({ where: { id: changed }, attributes: ['id', 'name'], raw: true }),
+          /*
+           * 名字解析走 `roleDao.findNames`：与「批量授权」「新建用户」的审计同源。
+           * 原来这里自己 findAll 再拼 Map，和 `user-audit.roleNamesOf` 是两份实现。
+           */
+          const [names, targetUser] = await Promise.all([
+            roleDao.findNames(changed),
             userDao.findBrief(targetId, ['id', 'uid', 'username'])
           ]);
-          const nameOf = new Map(rows.map(row => [Number(row.id), row.name]));
+          const nameOf = new Map(changed.map((id, index) => [Number(id), names[index]]));
           await logAuditEvent({
             type: 'ROLE_ASSIGNED',
             userId: operatorId || null,
@@ -722,7 +726,7 @@ async function registerUserRoutes(fastify) {
        */
       const [depts, roles] = await Promise.all([
         getModel('console.SysDept').findAll({ attributes: ['id', 'name'], raw: true }),
-        getModel('Role').findAll({ attributes: ['id', 'code', 'name'], raw: true })
+        roleDao.listBrief()
       ]);
       const deptMap = new Map(depts.map(d => [String(d.name).trim(), Number(d.id)]));
       // 重名（三个应用的"普通用户"）会让按名称匹配变得不确定，交给 lookup 报出来

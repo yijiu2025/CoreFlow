@@ -335,6 +335,46 @@ class RoleDao {
   }
 
   /**
+   * 按 ID 集合取角色名（**保持输入顺序**）
+   *
+   * 审计、操作日志、变更历史都要"把 id 翻成人看得懂的名字"，这段逻辑原来在
+   * `user-audit.roleNamesOf` 和 users.js 的 `ROLE_ASSIGNED` 里各写了一遍 ——
+   * 两处都在 map 上做同样的 name 兜底，口径随时会漂。
+   *
+   * 兜底成 `#id` 而不是跳过：名字只是可读性，**ID 才是判据**。查不到名字时
+   * 至少还能看出动的是哪个角色，丢掉 id 就等于把审计信息也丢了。
+   *
+   * @param {number[]} ids 角色 ID
+   * @returns {Promise<string[]>} 与输入等长、顺序一致的名字数组
+   */
+  async findNames(ids) {
+    const list = Array.from(
+      new Set((Array.isArray(ids) ? ids : []).map(Number).filter(id => Number.isInteger(id) && id > 0))
+    );
+    if (list.length === 0) return [];
+    const rows = await getModel('Role').findAll({
+      where: { id: list },
+      attributes: ['id', 'name'],
+      raw: true
+    });
+    const nameOf = new Map(rows.map(row => [Number(row.id), row.name]));
+    return list.map(id => nameOf.get(id) || `#${id}`);
+  }
+
+  /**
+   * 全量角色的轻量列表（id / code / name）
+   *
+   * 导入、下拉映射这类"要先建一张参照表"的场景用。返回原始行，
+   * 由调用方决定按名称还是按编码匹配 —— 同名角色（三个应用的"普通用户"）
+   * 的歧义要由业务层报出来，DAO 不该替它选一个。
+   *
+   * @returns {Promise<Array<{id: number, code: string, name: string}>>} 角色参照表
+   */
+  async listBrief() {
+    return getModel('Role').findAll({ attributes: ['id', 'code', 'name'], raw: true });
+  }
+
+  /**
    * 角色编码是否已存在
    *
    * @param {string} code 角色编码
