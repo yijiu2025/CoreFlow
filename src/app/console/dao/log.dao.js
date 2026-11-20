@@ -756,8 +756,9 @@ class LogDao {
       successRate: total > 0 ? Number((((total - failed) / total) * 100).toFixed(2)) : 100,
       prevTotal: Number(prev[0]?.total || 0) + archived.prevTotal,
       prevFailed: Number(prev[0]?.failed || 0) + archived.prevFailed,
-      users: Number(row.users || 0),
-      ips: Number(row.ips || 0),
+      /* 明细 ∪ 归档后重新去重：清理过的那段账号/IP 仍要算进去，且不能重复计 */
+      users: await this.unionDistinct('user', spec),
+      ips: await this.unionDistinct('ip', spec),
       archivedTotal: archTotal,
       series: fillSeries(mergeBuckets(series, archived.series), ladder)
     };
@@ -786,10 +787,14 @@ class LogDao {
       { type: QueryTypes.SELECT }
     );
 
+    /* 已清理的时段由归档补上：归档就是小时桶，WEEKDAY/HOUR 直接算，与明细同口径 */
+    const archivedHeat = await this.archivedHeat('oper', span, offset);
+    const cellsWithArchive = mergeHeatCells(cells, archivedHeat);
+
     return {
       days: span,
       offset: Math.max(0, Math.trunc(Number(offset) || 0)),
-      cells: cells.map(c => ({
+      cells: cellsWithArchive.map(c => ({
         dow: Number(c.dow),
         hour: Number(c.hour),
         total: Number(c.total),
@@ -819,11 +824,20 @@ class LogDao {
         GROUP BY d ORDER BY d ASC`,
       { type: QueryTypes.SELECT }
     );
+    /*
+     * 已清理的日子由归档补上：日历按天聚合，归档的小时桶按天折叠即可，不会有精度损失。
+     * 不合并的话，清过一次日志，年度热力就是一整片空白（2026-11-17 反馈）。
+     */
+    const archived = await this.archivedDaily('oper', span, offset);
+    const merged = mergeBuckets(
+      rows.map(r => ({ bucket: toDateStr(r.d), total: r.total, failed: r.failed })),
+      archived.map(r => ({ bucket: r.d, total: r.total, failed: r.failed }))
+    ).map(r => ({ d: r.bucket, total: r.total, failed: r.failed }));
 
     return {
       days: span,
       offset: Math.max(0, Math.trunc(Number(offset) || 0)),
-      series: await fillDailySeries(sequelize, rows, span, offset)
+      series: await fillDailySeries(sequelize, merged, span, offset)
     };
   }
 
@@ -848,25 +862,11 @@ class LogDao {
       { type: QueryTypes.SELECT }
     );
 
-    const ipAnomalies = await sequelize.query(
-      `SELECT l.ip AS \`key\`, SUM(${LOGIN_FAILED_SQL}) AS failed, COUNT(*) AS total,
-              COUNT(DISTINCT l.user_id) AS spread,
-              MIN(l.created_at) AS first_time, MAX(l.created_at) AS last_time
-         FROM session_logs l
-        WHERE ${window}
-        GROUP BY l.ip HAVING failed >= :threshold ORDER BY failed DESC LIMIT 20`,
-      { type: QueryTypes.SELECT, replacements: { threshold } }
-    );
+    /* 已清理的时段由归档补上：归档就是小时桶，WEEKDAY/HOUR 直接算，与明细同口径 */
+    const archivedHeat = await this.archivedHeat('login', span, offset);
+    const cellsWithArchive = mergeHeatCells(cells, archivedHeat);
 
-    const userAnomalies = await sequelize.query(
-      `SELECT u.username AS \`key\`, SUM(${LOGIN_FAILED_SQL}) AS failed, COUNT(*) AS total,
-              COUNT(DISTINCT l.ip) AS spread,
-              MIN(l.created_at) AS first_time, MAX(l.created_at) AS last_time
-         FROM session_logs l JOIN user_user u ON u.id = l.user_id
-        WHERE l.created_at >= NOW() - INTERVAL ${span} DAY
-        GROUP BY u.username HAVING failed >= :threshold ORDER BY failed DESC LIMIT 20`,
-      { type: QueryTypes.SELECT, replacements: { threshold } }
-    );
+    const { ip: ipAnomalies, user: userAnomalies } = await loginAnomalies(sequelize, span, offset, threshold);
 
     const shift = Math.max(0, Math.trunc(Number(offset) || 0));
 
@@ -876,7 +876,7 @@ class LogDao {
       threshold,
       // since 跟着窗口走：翻到上一周时，"起点"也应该是上一周，不能还报最近 7 天
       since: new Date(Date.now() - (shift + 1) * span * 86400000).toISOString(),
-      cells: cells.map(c => ({
+      cells: cellsWithArchive.map(c => ({
         dow: Number(c.dow),
         hour: Number(c.hour),
         total: Number(c.total),
@@ -919,11 +919,20 @@ class LogDao {
         GROUP BY d ORDER BY d ASC`,
       { type: QueryTypes.SELECT }
     );
+    /*
+     * 已清理的日子由归档补上：日历按天聚合，归档的小时桶按天折叠即可，不会有精度损失。
+     * 不合并的话，清过一次日志，年度热力就是一整片空白（2026-11-17 反馈）。
+     */
+    const archived = await this.archivedDaily('login', span, offset);
+    const merged = mergeBuckets(
+      rows.map(r => ({ bucket: toDateStr(r.d), total: r.total, failed: r.failed })),
+      archived.map(r => ({ bucket: r.d, total: r.total, failed: r.failed }))
+    ).map(r => ({ d: r.bucket, total: r.total, failed: r.failed }));
 
     return {
       days: span,
       offset: Math.max(0, Math.trunc(Number(offset) || 0)),
-      series: await fillDailySeries(sequelize, rows, span, offset)
+      series: await fillDailySeries(sequelize, merged, span, offset)
     };
   }
 
@@ -1083,13 +1092,48 @@ class LogDao {
       { replacements: built.replacements, transaction }
     );
 
-    // ② 登录账号存在性：只为"成功登录"，供活跃账号数在「明细 ∪ 归档」上重新去重
+    // ② 登录侧的存在性：账号（成功登录）与来源 IP，供「明细 ∪ 归档」上重新去重
     if (isLogin) {
       await sequelize.query(
         `INSERT IGNORE INTO log_stats_users (bucket_start, user_id)
          SELECT DATE_FORMAT(l.created_at, '%Y-%m-%d %H:00:00'), l.user_id
            FROM session_logs l ${LOGIN_JOIN_SQL} ${built.whereSql}
             AND l.event = 'LOGIN' AND l.user_id IS NOT NULL
+          GROUP BY 1, 2`,
+        { replacements: built.replacements, transaction }
+      );
+
+      /*
+       * ③ 异常来源用的立方：(小时, ip, 账号) → 条数 / 失败数 / 首末时间。
+       *
+       * 为什么不能只给 `log_stats_ips` 加个 failed 列就算了：异常面板的两个
+       * spread 都是 COUNT(DISTINCT …)（某 IP 试过多少账号、某账号来自多少 IP），
+       * 清理前后两段各算一次再相加必然把交集算两遍。只有把 (ip, 账号) 这层留下，
+       * 读的时候才能在一个集合上 distinct 出正确答案。
+       *
+       * 同一小时被清两次（先清一半、再清另一半）时靠累加与 LEAST/GREATEST 合并。
+       */
+      await sequelize.query(
+        `INSERT INTO log_stats_login_pairs (bucket_start, ip, user_id, total, failed, first_at, last_at)
+         SELECT DATE_FORMAT(l.created_at, '%Y-%m-%d %H:00:00'),
+                COALESCE(l.ip, ''),
+                COALESCE(l.user_id, 0),
+                COUNT(*), SUM(${LOGIN_FAILED_SQL}),
+                MIN(l.created_at), MAX(l.created_at)
+           FROM session_logs l ${LOGIN_JOIN_SQL} ${built.whereSql}
+          GROUP BY 1, 2, 3
+         ON DUPLICATE KEY UPDATE total = total + VALUES(total),
+                                 failed = failed + VALUES(failed),
+                                 first_at = LEAST(first_at, VALUES(first_at)),
+                                 last_at = GREATEST(last_at, VALUES(last_at))`,
+        { replacements: built.replacements, transaction }
+      );
+
+      await sequelize.query(
+        `INSERT IGNORE INTO log_stats_ips (bucket_start, ip)
+         SELECT DATE_FORMAT(l.created_at, '%Y-%m-%d %H:00:00'), l.ip
+           FROM session_logs l ${LOGIN_JOIN_SQL} ${built.whereSql}
+            AND l.ip IS NOT NULL AND l.ip <> ''
           GROUP BY 1, 2`,
         { replacements: built.replacements, transaction }
       );
@@ -1129,6 +1173,94 @@ class LogDao {
       prevTotal: Number(prev[0]?.total || 0),
       prevFailed: Number(prev[0]?.failed || 0)
     };
+  }
+
+  /**
+   * 窗口内的「独立账号数 / 独立来源 IP 数」（明细 ∪ 归档，精确去重）
+   *
+   * 这两个指标不能用计数相加 —— 同一账号在两段里各出现一次，相加就成了两个人。
+   * 所以归档存的是 user_id / ip 本身，这里 `UNION` 之后统一 `COUNT(DISTINCT)`。
+   *
+   * @param {'user'|'ip'} kind 统计对象
+   * @param {object} spec `resolveRange()` 的结果（决定窗口）
+   * @returns {Promise<number>} 去重后的个数
+   */
+  async unionDistinct(kind, spec) {
+    const isUser = kind === 'user';
+    const rawCol = isUser ? 'l.user_id' : 'l.ip';
+    const archTable = isUser ? 'log_stats_users' : 'log_stats_ips';
+    const archCol = isUser ? 'user_id' : 'ip';
+    const notEmpty = isUser ? 'l.user_id IS NOT NULL' : "l.ip IS NOT NULL AND l.ip <> ''";
+    const archiveWhere = String(spec.whereSql).replace(/a\.created_at/g, 'bucket_start');
+
+    const { sequelize } = getModel('SessionLog');
+    /*
+     * 🔴 字符串列要 `CAST(... AS CHAR)`：`log_stats_ips.ip` 与 `session_logs.ip` 的排序规则
+     *    未必一致（建表时没继承源表），UNION 会直接报 `Illegal mix of collations`。
+     *    两侧都转成连接默认排序规则就齐了。
+     */
+    const rows = await sequelize.query(
+      `SELECT COUNT(DISTINCT v) AS c FROM (
+         SELECT CAST(${rawCol} AS CHAR) AS v FROM session_logs l
+          WHERE ${String(spec.whereSql).replace(/a\.created_at/g, 'l.created_at')} AND ${notEmpty}
+         UNION
+         SELECT CAST(a.${archCol} AS CHAR) AS v FROM ${archTable} a WHERE ${archiveWhere}
+       ) t`,
+      { type: QueryTypes.SELECT }
+    );
+    return Number(rows[0]?.c || 0);
+  }
+
+  /**
+   * 归档部分按**自然日**汇总（日历热力用）
+   *
+   * 归档小时桶按天折叠即可 —— 一天 24 个桶相加就是当天的量，没有精度损失。
+   *
+   * @param {'oper'|'login'} scope 日志类型
+   * @param {number} span 天数
+   * @param {number} offset 向过去翻页的窗口数
+   * @returns {Promise<Array<{d: string, total: number, failed: number}>>} 每日归档量
+   */
+  async archivedDaily(scope, span, offset = 0) {
+    const { sequelize } = getModel(scope === 'login' ? 'SessionLog' : 'AuditLog');
+    const rows = await sequelize.query(
+      `SELECT DATE(bucket_start) AS d, SUM(total) AS total, SUM(failed) AS failed
+         FROM log_stats_hourly
+        WHERE scope = ? AND ${windowSql('bucket_start', span, offset)}
+        GROUP BY d ORDER BY d ASC`,
+      { type: QueryTypes.SELECT, replacements: [scope] }
+    );
+    return rows.map(r => ({ d: toDateStr(r.d), total: Number(r.total || 0), failed: Number(r.failed || 0) }));
+  }
+
+  /**
+   * 归档部分按**星期 × 小时**汇总（7×24 热力用）
+   *
+   * `log_stats_hourly` 本身就是小时桶，`WEEKDAY()` / `HOUR()` 直接对它算即可，与明细同口径。
+   *
+   * @param {'oper'|'login'} scope 日志类型
+   * @param {number} span 天数
+   * @param {number} offset 向过去翻页的窗口数
+   * @returns {Promise<Map<string, {total: number, failed: number}>>} `dow-hour` → 量
+   */
+  async archivedHeat(scope, span, offset = 0) {
+    const { sequelize } = getModel(scope === 'login' ? 'SessionLog' : 'AuditLog');
+    const rows = await sequelize.query(
+      `SELECT WEEKDAY(bucket_start) AS dow, HOUR(bucket_start) AS hour,
+              SUM(total) AS total, SUM(failed) AS failed
+         FROM log_stats_hourly
+        WHERE scope = ? AND ${windowSql('bucket_start', span, offset)}
+        GROUP BY dow, hour`,
+      { type: QueryTypes.SELECT, replacements: [scope] }
+    );
+    const map = new Map();
+    for (const r of rows) {
+      map.set(`${Number(r.dow)}-${Number(r.hour)}`, {
+        total: Number(r.total || 0),
+        failed: Number(r.failed || 0)
+      });
+    }
+    return map;
   }
 
   /**
@@ -1320,7 +1452,111 @@ function normalizeOperRow(row) {
 
 const logDao = new LogDao();
 
+/**
+ * 异常来源（Top IP / Top 账号）—— **明细 ∪ 归档**
+ *
+ * 🔴 两段必须先在 `(ip, user_id)` 这一层预聚合，再在外层合并。
+ *    `spread` 是 `COUNT(DISTINCT …)`（某 IP 试过多少账号 / 某账号来自多少 IP），
+ *    把两段的 spread 相加会把交集算两遍 —— 同一台机器清理前试过 A、清理后又试 A，
+ *    相加就变成 2。`FROM (明细 UNION ALL 归档) t` 才是把集合并起来再 distinct。
+ *
+ * 时间口径：归档侧用 `bucket_start`（整点）做窗口，与明细的 `created_at` 都在
+ *    DB 墙钟上，翻页（offset）时两段同步移动，不会出现"明细是上一周、归档是这一周"。
+ *
+ * 账号维度**排除匿名行**（`user_id = 0`）：老查询是 `JOIN user_user`，用户不存在
+ *    的行本来就不进榜；这类"打不存在的账号"仍然会出现在 IP 维度里，不影响发现爆破。
+ *
+ * @param {import('sequelize').Sequelize} sequelize 连接
+ * @param {number} span 窗口天数
+ * @param {number} offset 向过去翻几页
+ * @param {number} threshold 上榜首阈值（失败次数）
+ * @returns {Promise<{ip: object[], user: object[]}>} 两个维度的异常来源
+ */
+function buildLoginAnomalySql(span, offset) {
+  /* 明细侧：按 (ip, 账号) 收敛成一行 —— 行数从"每次尝试"降到"每种组合" */
+  const detailPairs = `SELECT l.ip AS ip, COALESCE(l.user_id, 0) AS user_id,
+                              SUM(${LOGIN_FAILED_SQL}) AS failed, COUNT(*) AS total,
+                              MIN(l.created_at) AS first_at, MAX(l.created_at) AS last_at
+                         FROM session_logs l
+                        WHERE ${windowSql('l.created_at', span, offset)}
+                        GROUP BY 1, 2`;
+  /* 归档侧：本来就是小时桶，再按 (ip, 账号) 折叠一次，口径与明细完全一致 */
+  const archivePairs = `SELECT p.ip AS ip, p.user_id AS user_id,
+                               SUM(p.failed) AS failed, SUM(p.total) AS total,
+                               MIN(p.first_at) AS first_at, MAX(p.last_at) AS last_at
+                          FROM log_stats_login_pairs p
+                         WHERE ${windowSql('p.bucket_start', span, offset)}
+                         GROUP BY 1, 2`;
+  const pairs = `(${detailPairs} UNION ALL ${archivePairs}) t`;
+
+  const ip = `SELECT t.ip AS \`key\`, SUM(t.failed) AS failed, SUM(t.total) AS total,
+                     COUNT(DISTINCT NULLIF(t.user_id, 0)) AS spread,
+                     MIN(t.first_at) AS first_time, MAX(t.last_at) AS last_time
+                FROM ${pairs}
+               GROUP BY t.ip
+              HAVING failed >= :threshold
+               ORDER BY failed DESC
+               LIMIT 20`;
+
+  const user = `SELECT u.username AS \`key\`, SUM(t.failed) AS failed, SUM(t.total) AS total,
+                       COUNT(DISTINCT t.ip) AS spread,
+                       MIN(t.first_at) AS first_time, MAX(t.last_at) AS last_time
+                  FROM ${pairs} JOIN user_user u ON u.id = t.user_id
+                 GROUP BY t.user_id, u.username
+                HAVING failed >= :threshold
+                 ORDER BY failed DESC
+                 LIMIT 20`;
+
+  return { ip, user };
+}
+
+/**
+ * 执行异常来源的两条查询
+ *
+ * @param {import('sequelize').Sequelize} sequelize 连接
+ * @param {number} span 窗口天数
+ * @param {number} offset 向过去翻几页
+ * @param {number} threshold 上榜首阈值（失败次数）
+ * @returns {Promise<{ip: object[], user: object[]}>} 两个维度的异常来源
+ */
+async function loginAnomalies(sequelize, span, offset, threshold) {
+  const sql = buildLoginAnomalySql(span, offset);
+  const [ip, user] = await Promise.all([
+    sequelize.query(sql.ip, { type: QueryTypes.SELECT, replacements: { threshold } }),
+    sequelize.query(sql.user, { type: QueryTypes.SELECT, replacements: { threshold } })
+  ]);
+  return { ip, user };
+}
+
+/**
+ * 合并 7×24 热力格子（明细 + 归档）
+ *
+ * 键是 `星期-小时`。归档给的是 Map（见 `archivedHeat`），明细给的是行数组 ——
+ * 统一成 Map 相加后再摊平排序，输出的顺序与原来那条 SQL 的 `ORDER BY dow, hour` 一致。
+ *
+ * @param {Array<{dow: unknown, hour: unknown, total: unknown, failed: unknown}>} raw 明细格子
+ * @param {Map<string, {total: number, failed: number}>} archived 归档格子
+ * @returns {Array<{dow: number, hour: number, total: number, failed: number}>} 合并后的格子
+ */
+function mergeHeatCells(raw, archived) {
+  const byKey = new Map();
+  for (const c of raw) {
+    const key = `${Number(c.dow)}-${Number(c.hour)}`;
+    byKey.set(key, { total: Number(c.total || 0), failed: Number(c.failed || 0) });
+  }
+  for (const [key, value] of archived) {
+    const cell = byKey.get(key) || { total: 0, failed: 0 };
+    byKey.set(key, { total: cell.total + value.total, failed: cell.failed + value.failed });
+  }
+  return [...byKey.entries()]
+    .map(([key, value]) => {
+      const [dow, hour] = key.split('-').map(Number);
+      return { dow, hour, total: value.total, failed: value.failed };
+    })
+    .sort((a, b) => a.dow - b.dow || a.hour - b.hour);
+}
+
 // 导出收拢在文件末尾（仓规：定义处不写 export）
-export { OPER_ONLY_SQL, mergeBuckets };
+export { OPER_ONLY_SQL, mergeBuckets, buildLoginAnomalySql };
 
 export default logDao;
