@@ -62,6 +62,48 @@ permission: {
 }
 ```
 
+## Self-service vs admin endpoints {#self-service-boundary}
+
+**Changing "my own" data and changing "someone else's" data must be two endpoints.** A permission
+code says *what* you may do — never *to whom*. Hanging the same `posecraft:user:changename` on
+`PUT /posecraft/v1/profile/:userId` means "anyone allowed to rename themselves can rename anybody".
+
+The boundary is pinned by three statically checkable shapes
+(enforced by `src/__tests__/conventions/user-data-route-boundary.test.js`):
+
+| Rule | Criterion |
+| --- | --- |
+| ① Writes on others are admin-only | target-user URL (`/users/:id`, `/:uid`, `/:userId`) + write method ⇒ permission must live in `ADMIN_PERMISSIONS` |
+| ② Target user travels in the path | the body schema must not declare a singular `userId` / `user_id` / `uid` (batches use `userIds` arrays) |
+| ③ App-level user codes are self-service only | non-admin `*_PERMISSIONS.USER.*` codes may only guard routes **without** a target-user parameter |
+
+Preferred shape for self-service:
+
+```js
+registerSecureRoute(fastify, {
+  name: 'posecraftRenameSelf',
+  method: 'PUT',
+  url: '/posecraft/v1/profile',           // no :id — the target is the caller
+  requireLogin: true,
+  schema: {
+    body: {
+      type: 'object',
+      properties: { nickname: { type: 'string', maxLength: 64 } },
+      additionalProperties: false          // an extra field fails validation instead of slipping a userId through
+    }
+  }
+});
+```
+
+Admin-side writes live under the admin domain, use `ADMIN_PERMISSIONS.*` codes, and reuse
+`assertCanManageUser` to decide whether this actor may touch that user.
+
+::: warning The one allowed exception: writing a relation, not user data
+`POST /posecraft/v1/follow/:userId` carries a target user but mutates **my relationship to them**,
+not their profile. Such exceptions must be listed one by one with a reason in
+`ALLOWED_WRITE_ON_OTHER`; a reverse guard goes red if a whitelisted route disappears.
+:::
+
 ## Response envelope
 
 ```js

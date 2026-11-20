@@ -63,6 +63,53 @@ permission: {
 }
 ```
 
+## 自助接口 vs 管理端接口 {#self-service-boundary}
+
+**改「自己的」数据和改「别人的」数据，必须是两个接口。** 这不是风格问题：权限码表达的是
+「**能做什么**」，不表达「**能对谁做**」。同一个 `posecraft:user:changename` 挂在
+`PUT /posecraft/v1/profile/:userId` 上，等于"凡是有权改自己昵称的人，都能改任何人的昵称"。
+
+边界用三个**静态可查**的形状钉住（`src/__tests__/conventions/user-data-route-boundary.test.js`
+机器检查，违反即红）：
+
+| 规则                   | 判据                                                                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| ① 写他人只走管理端     | URL 带目标用户（`/users/:id`、`/:uid`、`/:userId`）+ 写方法（POST/PUT/PATCH/DELETE） ⇒ 放行权限必须在 `ADMIN_PERMISSIONS` 命名空间 |
+| ② 目标用户只走路径     | 请求体 schema 里不得声明单数 `userId` / `user_id` / `uid`（批量用 `userIds` 数组）                                                 |
+| ③ 应用级用户码只能自助 | `*_PERMISSIONS.USER.*` 这类非 admin 码，只能挂在**不带**目标用户参数的路由上                                                       |
+
+推荐写法（改自己）：
+
+```js
+registerSecureRoute(fastify, {
+  name: 'posecraftRenameSelf',
+  method: 'PUT',
+  url: '/posecraft/v1/profile',           // 不带 :id —— 目标就是登录者本人
+  requireLogin: true,
+  schema: {
+    body: {
+      type: 'object',
+      properties: { nickname: { type: 'string', maxLength: 64 } },
+      additionalProperties: false          // 多一个字段就报错，挡住"顺手传个 userId"
+    }
+  },
+  handler: async (request, reply) => {
+    // 目标用户只能从登录态推导，绝不从 params / body / query 取
+    const me = await userDao.findByUid(request.state.user.uid, ['id']);
+    ...
+  }
+});
+```
+
+改别人则挂在管理端域名下，用 `ADMIN_PERMISSIONS.USER.UPDATE` 之类的码，并复用
+`assertCanManageUser`（见 `app/console/services/access-scope.service.js`）做"能不能动这个人"的判定。
+
+::: warning 唯一允许的例外：写"关系"，不写"用户数据"
+`POST /posecraft/v1/follow/:userId`（关注 / 取关）带目标用户参数，但它改的是**我和他的关系**，
+不是他的资料，所以允许。这类例外必须在测试的 `ALLOWED_WRITE_ON_OTHER` 里**逐条写明理由**，
+并且有"白名单条目必须仍然存在"的反向守卫 —— 删了路由忘删白名单同样会红。
+:::
+
 ## 响应格式
 
 ```js

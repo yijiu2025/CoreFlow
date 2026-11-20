@@ -79,6 +79,12 @@ const STRUCTURAL_GUARD_WHITELIST = new Map([
       '断言对象是路由声明的字段，import 模块只会拿到已注册的路由表，看不到"用了哪种鉴权写法"'
   ],
   [
+    'conventions/user-data-route-boundary.test.js',
+    '扫描 src/api 全部路由文件的路由声明，断言"写他人数据必须是 ADMIN_PERMISSIONS + 目标用户只走路径参数 + ' +
+      '应用级用户码只能自助" —— 断言对象是路由的 URL/权限/body 字段三者组合，import 模块只能拿到注册后的' +
+      '路由表，看不出"这条自助接口有没有被悄悄加上 :userId"'
+  ],
+  [
     'conventions/console-audit-coverage.test.js',
     '按 registerSecureRoute 切块读源码文本，断言"每个写接口的 handler 内是否调用了审计"——' +
       '断言对象是路由块内的调用存在性，import 被测模块不会让「漏记审计」表现为失败（调用了它们也照绿）'
