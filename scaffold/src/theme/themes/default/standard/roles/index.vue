@@ -233,7 +233,8 @@ const {
             <tr>
               <th>名称</th>
               <th>编码</th>
-              <th>职级</th>
+              <!-- 门槛 = 要多大职级的人才能把这个角色授出去（不是持有者的层级） -->
+              <th>授予门槛</th>
               <th>成员</th>
               <th>权限码</th>
               <th>菜单</th>
@@ -276,7 +277,9 @@ const {
                     <span v-if="row.builtin" class="role-name__tag" title="系统内置角色，不可删除">内置</span>
                   </td>
                   <td class="mono" :title="row.code">{{ row.code }}</td>
-                  <td class="mono">{{ row.rank_level }}</td>
+                  <td class="mono" :title="`要 ${row.rank_level} 级以上才能把这个角色授予他人`">
+                    {{ row.rank_level }}
+                  </td>
                   <td class="mono" :class="{ 'cell-zero': !row.user_count }">{{ row.user_count }}</td>
                   <td class="mono" :class="{ 'cell-zero': !row.permissions.length }">
                     {{ row.permissions.length }}
@@ -288,7 +291,7 @@ const {
                       class="btn btn--ghost btn--sm btn--icon"
                       type="button"
                       :disabled="row.manageable === false"
-                      :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '编辑角色'"
+                      :title="row.manageable === false ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）' : '编辑角色'"
                       aria-label="编辑角色"
                       @click="openFormEdit(row)"
                     >
@@ -306,7 +309,7 @@ const {
                         row.menuLocked
                           ? '超级管理员的菜单固定为全部，不可修改'
                           : row.manageable === false
-                            ? '不在你的管理范围（应用域或职级限制）'
+                            ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）'
                             : '菜单授权'
                       "
                       aria-label="菜单授权"
@@ -319,7 +322,7 @@ const {
                       class="btn btn--ghost btn--sm btn--icon role-del"
                       type="button"
                       :disabled="row.manageable === false"
-                      :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '删除角色'"
+                      :title="row.manageable === false ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）' : '删除角色'"
                       aria-label="删除角色"
                       @click="remove(row)"
                     >
@@ -368,7 +371,7 @@ const {
                   </span>
                   <span class="mcard__sub mono">{{ row.code }}</span>
                   <span class="mcard__meta">
-                    <span>职级 <b class="tnum">{{ row.rank_level }}</b></span>
+                    <span>需 <b class="tnum">{{ row.rank_level }}</b> 级授予</span>
                     <span><b class="tnum">{{ row.user_count }}</b> 成员</span>
                     <span><b class="tnum">{{ row.permissions.length }}</b> 权限码</span>
                     <span><b class="tnum">{{ row.menu_ids.length }}</b> 菜单</span>
@@ -381,7 +384,7 @@ const {
                   class="btn btn--sm"
                   type="button"
                   :disabled="row.manageable === false"
-                  :title="row.manageable === false ? '不在你的管理范围（应用域或职级限制）' : '编辑角色'"
+                  :title="row.manageable === false ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）' : '编辑角色'"
                   @click="openFormEdit(row)"
                 >
                   <Pencil :size="13" /> 编辑
@@ -482,12 +485,12 @@ const {
           </label>
           <label class="field">
             <!--
-              职级必须**严格低于**自己（同级也不行）：同级角色在列表里是 manageable=false，
+              授予门槛必须**严格低于**自己的职级（同级也不行）：同级角色在列表里是 manageable=false，
               后端写接口同样拒（`assertRankBelowActor`）。这里写清楚，别让人填完才吃 403。
               上限是 98 而不是 99 —— 99 只属于代码声明的角色（superadmin / poseadmin）。
             -->
             <span class="field__label">
-              职级（0–99，必须低于你自己的最高职级）{{ rankLocked ? '（超管固定，不可修改）' : '' }}
+              授予门槛（0–99，必须低于你自己的最高职级）{{ rankLocked ? '（超管固定，不可修改）' : '' }}
             </span>
             <input
               v-model.number="form.rankLevel"
@@ -496,7 +499,7 @@ const {
               min="0"
               max="98"
               :disabled="rankLocked"
-              title="职级比你高的角色你不能管，所以新职级必须严格低于你自己的最高职级"
+              title="门槛不低于你的职级的角色你不能管，所以新门槛必须严格低于你自己的最高职级"
             />
           </label>
 
@@ -572,7 +575,7 @@ const {
               <span class="field__label">
                 权限码（由代码声明）· 共 <span class="mono">{{ permissionCount }}</span> 项
               </span>
-              <p class="form-hint">内置角色的权限码不可在此修改；名称、职级、说明仍可维护。</p>
+              <p class="form-hint">内置角色的权限码不可在此修改；名称、授予门槛、说明仍可维护。</p>
               <div class="perm-panel perm-panel--static">
                 <div v-if="catalogLoading" class="empty">权限码加载中…</div>
                 <section v-for="group in builtinGroups" :key="group.domain" class="perm-group">

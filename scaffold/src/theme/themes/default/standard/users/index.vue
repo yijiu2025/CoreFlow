@@ -212,6 +212,7 @@ const {
                 <col style="width: 95px" />
                 <col style="width: 122px" />
                 <col style="width: 78px" />
+                <col style="width: 52px" />
                 <col style="width: 110px" />
                 <col style="width: 70px" />
                 <col style="width: 58px" />
@@ -231,6 +232,8 @@ const {
                   <th>账号</th>
                   <th>邮箱</th>
                   <th>部门</th>
+                  <!-- 职级决定"能不能动这一行"（见 manageable），也是灰行的解释 -->
+                  <th>职级</th>
                   <th>角色</th>
                   <th>岗位</th>
                   <th>状态</th>
@@ -257,6 +260,7 @@ const {
                   <td>{{ row.username }}</td>
                   <td>{{ row.email || '—' }}</td>
                   <td>{{ row.dept_name || '—' }}</td>
+                  <td class="mono">{{ row.rank_level ?? 0 }}</td>
                   <td>
                     <!-- 无角色不是"没填"，是"对非超管不存在"：必须显式标出来，否则看着像数据缺失 -->
                     <span
@@ -346,12 +350,12 @@ const {
                   </td>
                 </tr>
                 <tr v-if="!loading && rows.length === 0">
-                  <td colspan="8">
+                  <td colspan="9">
                     <div class="empty">没有符合条件的用户</div>
                   </td>
                 </tr>
                 <tr v-if="loading">
-                  <td colspan="8"><div class="empty">加载中…</div></td>
+                  <td colspan="9"><div class="empty">加载中…</div></td>
                 </tr>
               </tbody>
             </table>

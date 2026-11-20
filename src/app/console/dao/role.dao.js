@@ -5,7 +5,7 @@
  * - **接口放行** = PBAC `policy`（Allow 的 Action 列表），由 `requirePermission` 消费；
  * - **侧栏可见** = `sys_role_menu`，只决定前端菜单树，不参与接口判定。
  *
- * 内置角色（由 `defineRoles` 声明）不可删除、不可降级职级：它们承载着系统自身的
+ * 内置角色（由 `defineRoles` 声明）不可删除、不可降门槛：它们承载着系统自身的
  * 管理入口，删掉等于把后台锁死。
  *
  * @author yijiu2025
@@ -72,11 +72,11 @@ function isProtectedRoleCode(code) {
 }
 
 /**
- * 超管的职级是否锁死（`rank_level` 不可改）
+ * 超管的**授予门槛**是否锁死（`rank_level` 不可改）
  *
- * 职级是「能不能动这个角色」的闸：路由里 `role.rank_level > myRank` 直接拒编辑，
+ * 门槛是「能不能动这个角色」的闸：路由里 `role.rank_level > myRank` 直接拒编辑，
  * 列表的 `manageable` 也按它算。把 superadmin 从 99 降下来，它立刻失去编辑所有
- * 高职级角色的资格 —— 而它往往就是唯一持有 `admin:role:update` 的账号，
+ * 高门槛角色的资格 —— 而它往往就是唯一持有 `admin:role:update` 的账号，
  * 等于自己把自己关在门外，只能直连数据库改回来。
  *
  * 与 `isProtectedRoleCode` 分开：内置角色（代码声明的那批）的**职级是可以调的**，

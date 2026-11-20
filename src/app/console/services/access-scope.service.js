@@ -10,7 +10,8 @@
  *   2. 职级压制：只能改**严格低于**自己最高职级的用户 —— 同级管理员互不可改
  *   3. 应用域：非后台管理员只能管「在自己应用里有角色」的用户，且只能改自己应用的
  *      那部分角色（跨应用的变更既不显示、也不接受）
- *   4. 提权闸：新增的角色职级必须低于自己（超管例外），防止用"授予"绕过 1/2
+ *   4. 提权闸：新增角色的**授予门槛**（`iam_role.rank_level`）必须低于自己的职级
+ *      （超管例外），防止用"授予"绕过 1/2。门槛是角色的属性，不是持有者的层级
  *
  * === 应用域的口径（刻意如此，改动前先读这段）===
  * 持有 `admin` 命名空间角色的人（管理后台自身的角色）视为**跨应用管理员**：这个后台
@@ -354,12 +355,14 @@ function planRoleChangeWithRoles({ actor, target, submittedRoleIds, submittedRol
     }
   }
 
-  // 2. 提权闸：新增的角色职级必须严格低于自己（超管不受限）
+  // 2. 提权闸：新增角色的授予门槛必须严格低于自己的职级（超管不受限）
   if (!actor.isSuper) {
     for (const role of submittedRoles.values()) {
       if (before.has(role.id)) continue;
       if (role.rank >= actor.maxRank) {
-        throw new Error(`FORBIDDEN:不能授予「${role.name}」—— 该角色职级不低于你自己`);
+        throw new Error(
+          `FORBIDDEN:不能授予「${role.name}」—— 该角色的授予门槛是 ${role.rank}，不低于你的职级（${actor.maxRank}）`
+        );
       }
     }
   }
@@ -428,7 +431,9 @@ function assertGrantableRoles(actor, roles) {
       throw new Error(`FORBIDDEN:无权授予其它应用的角色「${role.name}」`);
     }
     if (!actor.isSuper && role.rank >= actor.maxRank) {
-      throw new Error(`FORBIDDEN:不能授予「${role.name}」—— 该角色职级不低于你自己`);
+      throw new Error(
+        `FORBIDDEN:不能授予「${role.name}」—— 该角色的授予门槛是 ${role.rank}，不低于你的职级（${actor.maxRank}）`
+      );
     }
   }
 }

@@ -140,7 +140,7 @@ describe('planRoleChangeWithRoles —— 改哪部分、留哪部分', () => {
         submittedRoleIds: [normalUser.id, fwAdmin.id],
         submittedRoles: rolesOf(normalUser, fwAdmin)
       })
-    ).toThrow(/职级不低于/);
+    ).toThrow(/授予门槛/);
   });
 
   test('超管不受职级限制（可以授予超管角色）', () => {
@@ -174,9 +174,7 @@ describe('assertGrantableRoles —— 新建用户 / 批量追加时能授予什
   });
 
   test('不能授予不低于自己职级的角色', () => {
-    expect(() => assertGrantableRoles(persona([adminOperator]), new Map([[fwAdmin.id, fwAdmin]]))).toThrow(
-      /职级不低于/
-    );
+    expect(() => assertGrantableRoles(persona([adminOperator]), new Map([[fwAdmin.id, fwAdmin]]))).toThrow(/授予门槛/);
   });
 
   test('超管可授予任意角色', () => {

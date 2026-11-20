@@ -39,7 +39,7 @@ const defineRole = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 1,
         validate: { min: 0, max: 99 },
-        comment: '职级权重(0-99)，用于管理权限压制'
+        comment: '授予门槛(0-99)：要多大职级才可把本角色授予他人；不是持有者的职级'
       },
       policy: {
         type: DataTypes.JSON,
