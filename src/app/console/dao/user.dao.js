@@ -78,6 +78,15 @@ class ConsoleUserDao {
      * `null` = 不限制（超管 / 脚本调用），此时所有行都可操作。
      */
     actorRank = null,
+    /** 操作者自己的用户 ID：**自己那行恒可操作**（改自己的资料不该被职级挡住） */
+    operatorId = null,
+    /**
+     * 只看「一个有效角色都没有」的账号
+     *
+     * 判据与全仓一致：`iam_user_role.delete_version = 0` 才算有效关联。
+     * 用子查询而不是 LEFT JOIN：这一层只决定"留哪些行"，与投影无关。
+     */
+    noRole = false,
     dataScope = null
   }) {
     const User = getModel('User');
@@ -261,6 +270,26 @@ class ConsoleUserDao {
       restrictToUserIds(appUserIds);
     }
 
+    /*
+     * 「无角色」筛选：与上一条应用域是两件事。
+     *
+     * 🔴 顺序放在应用域**之后**是对的，但语义上要清楚：应用域会先把"在该应用里没角色"
+     *    的人全部排除，所以这条筛选**只对不受应用域限制的账号有结果**（超管 / 跨应用
+     *    管理员）。换个说法：它本来就是给超管补授权的入口，不是给部门管理员用的。
+     */
+    if (noRole) {
+      /*
+       * 🔴 不能用裸 literal 写 `user_user.id`：Sequelize 会给主表加别名（`FROM user_user AS User`），
+       *    裸表名进子查询直接报 `Unknown column 'user_user.id' in 'IN/ALL/ANY subquery'`。
+       *    写成 `where.id = { Op.notIn: literal(子查询) }`：列名由 ORM 负责限定，
+       *    也不会和前面的 `Op.in`（应用域交集）打架 —— 同一对象里两个操作符会 AND 起来。
+       */
+      const rolelessIds = User.sequelize.literal('(SELECT user_id FROM iam_user_role WHERE delete_version = 0)');
+      if (where.id === undefined) where.id = { [Op.notIn]: rolelessIds };
+      else if (typeof where.id === 'number') where.id = { [Op.eq]: where.id, [Op.notIn]: rolelessIds };
+      else where.id = { ...where.id, [Op.notIn]: rolelessIds };
+    }
+
     const offset = (Number(pageNum) - 1) * Number(pageSize);
     const { rows: users, count } = await User.findAndCountAll({
       where,
@@ -291,7 +320,13 @@ class ConsoleUserDao {
        * `actorRank` 为空 = 超管 / 脚本，全部可操作；否则必须严格高于目标职级。
        * 同职级不能互相管理 —— 与 `assertCanManageUser` 的 `>=` 判据同源。
        */
-      const manageable = actorRank === null || actorRank === undefined || actorRank > rankLevel;
+      /*
+       * 自己的行恒可操作 —— 与 `assertCanManageUser` / 前端 `canManageUser` 的
+       * "`targetUserId === operatorId` 直接放行"同一条规则。漏了这一条，
+       * 管理员会改不了自己的邮箱和昵称（职级与自己相等，严格大于不成立）。
+       */
+      const isSelf = operatorId !== null && operatorId !== undefined && Number(u.id) === Number(operatorId);
+      const manageable = isSelf || actorRank === null || actorRank === undefined || actorRank > rankLevel;
       return {
         ...u,
         rank_level: rankLevel,
@@ -601,7 +636,10 @@ class ConsoleUserDao {
    * @returns {Promise<object>} 新建的用户实例
    * @throws {Error} 参数非法 / 邮箱重复 / 密码强度不足时抛出
    */
-  async create({ username, email, password, deptId = null, status = 1, roleIds = [], postIds = [] }, actor = null) {
+  async create(
+    { username, email, password, deptId = null, status = 1, rankLevel = 0, roleIds = [], postIds = [] },
+    actor = null
+  ) {
     if (!username || !String(username).trim()) throw new Error('INVALID_PARAM:账号不能为空');
     if (!password) throw new Error('INVALID_PARAM:密码不能为空');
 
@@ -636,8 +674,19 @@ class ConsoleUserDao {
 
     const User = getModel('User');
     return User.sequelize.transaction(async t => {
+      /*
+       * 职级先按显式值写；紧接着的 `replaceRoles` 里 `syncRankFromRoles` 只会**往上**抬，
+       * 所以最终值 = max(显式填的, 角色里的最高权重)。
+       * 这正好符合"授角色就是给职级"的直觉：角色是下限，手填可以更高。
+       */
       const user = await User.create(
-        { username: String(username).trim(), email: email || null, dept_id: deptId, status },
+        {
+          username: String(username).trim(),
+          email: email || null,
+          dept_id: deptId,
+          status,
+          rank_level: Number(rankLevel) || 0
+        },
         { transaction: t }
       );
 

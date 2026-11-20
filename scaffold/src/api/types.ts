@@ -182,6 +182,13 @@ export interface DangerConfirm {
 
 /** 用户详情（GET /users/:id/profile） */
 export interface UserProfile {
+  /**
+   * 当前操作者能不能动这个账号（操作者职级 > 目标职级，超管恒真）
+   *
+   * 与列表行的 `manageable` 同一判据。详情页据此把操作区整块灰掉 ——
+   * 列表已经灰了、点进详情按钮却全亮，用户会以为这里能改，点下去才吃 403。
+   */
+  manageable?: boolean;
   user: {
     id: number;
     uid: string;

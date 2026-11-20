@@ -175,7 +175,16 @@ const listQuerySchema = {
     // 子应用筛选：只看在该应用里有角色的人（GLOBAL 角色不参与）
     appId: { type: 'string', maxLength: 64 },
     // -2 = 待注销（发起删除、缓冲期内）：要能作为筛选条件
-    status: { type: 'integer', enum: [-2, -1, 0, 1] }
+    status: { type: 'integer', enum: [-2, -1, 0, 1] },
+    /*
+     * 只看「一个有效角色都没有」的账号
+     *
+     * 为什么需要：用户列表对非超管会自动只留"在他管理的应用里有角色"的人（应用域），
+     * 于是**角色被撤销的账号直接从列表里消失** —— 超管想补授权都找不到入口
+     * （2026-11-20 反馈：某账号只有超管看得见，观察者看不见）。
+     * 这条筛选就是给超管"主动捞出来补授权"用的。
+     */
+    noRole: { type: 'boolean', default: false }
   }
 };
 
@@ -231,6 +240,7 @@ async function registerUserRoutes(fastify) {
         deptId = null,
         appId = null,
         status = null,
+        noRole = false,
         deviceId = ''
       } = request.query;
       const actorId = request.state.user?.userId;
@@ -254,7 +264,10 @@ async function registerUserRoutes(fastify) {
         deviceId,
         dataScope,
         scopeAppIds: scopeAppIdsFrom(actor),
-        actorRank
+        actorRank,
+        // 自己那行恒可操作（改自己的资料不该被职级挡住）
+        operatorId: Number(actorId),
+        noRole
       });
       /*
        * 附上「待执行的注销申请」：删除是缓冲期语义，列表里必须能看出
@@ -334,6 +347,8 @@ async function registerUserRoutes(fastify) {
           password: { type: 'string', minLength: 8, maxLength: 128 },
           deptId: { type: ['integer', 'null'], minimum: 0 },
           status: { type: 'integer', enum: [-1, 0, 1], default: 1 },
+          /** 人员职级（0-99）：角色里的最高权重是**下限**，这里可以更高，不能更低 */
+          rankLevel: { type: 'integer', minimum: 0, maximum: 99, default: 0 },
           roleIds: { type: 'array', items: { type: 'integer', minimum: 1 }, default: [] },
           postIds: { type: 'array', items: { type: 'integer', minimum: 1 }, default: [] }
         }
@@ -343,6 +358,11 @@ async function registerUserRoutes(fastify) {
       // 新建时的角色授予同样受范围约束：否则「建个新号再给它超管」就是一条提权捷径
       const actor = await getActorScope(request.state.user?.userId);
       await assertGrantable(actor, request.body.roleIds);
+      /*
+       * 职级上限：新建时也不能造出一个"不低于自己"的账号 ——
+       * 否则"建个新号再把它提权"就是一条绕过 `assertCanManageUser` 的捷径。
+       */
+      if (request.body.rankLevel) assertCanSetRank(actor, request.body.rankLevel, { action: '创建' });
       /*
        * 部门范围：能看见 != 能往里塞人。
        * 原来只有导入校验部门，创建这条路可以直接往任意部门建号 —— 建完还从自己列表里消失。
@@ -581,7 +601,7 @@ async function registerUserRoutes(fastify) {
     requirePermission: ADMIN_PERMISSIONS.USER.EXPORT,
     schema: { querystring: listQuerySchema },
     handler: withFail(async (request, reply) => {
-      const { keyword = '', deptId = null, appId = null, status = null, deviceId = '' } = request.query;
+      const { keyword = '', deptId = null, appId = null, status = null, deviceId = '', noRole = false } = request.query;
       const actor = await getActorScope(request.state.user?.userId);
       // 导出与列表同一口径：给应用管理员导全表等于把别家应用的用户名单往外带
       const { rows } = await userDao.page({
@@ -596,7 +616,9 @@ async function registerUserRoutes(fastify) {
         // 行级范围同样要带：漏了它，导出就是"列表看两行、CSV 拿全表"
         dataScope: await resolveDataScope(request.state.user?.userId),
         scopeAppIds: scopeAppIdsFrom(actor),
-        actorRank: actor.isSuper ? null : actor.maxRank
+        actorRank: actor.isSuper ? null : actor.maxRank,
+        // 「无角色」也要带：否则筛完只剩一条，导出却是整份名单
+        noRole
       });
       const header = ['ID', '账号', '邮箱', '部门', '角色', '岗位', '状态', '创建时间'];
       const lines = rows.map(r =>

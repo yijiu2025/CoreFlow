@@ -24,6 +24,8 @@ export interface UsersQuery {
   /** 子应用筛选（null = 全部应用） */
   appId: string | null;
   status: number | null;
+  /** 只看无角色账号（超管补授权入口） */
+  noRole: boolean;
 }
 
 /** 左侧部门树展平后的一行 */
@@ -101,6 +103,8 @@ export interface UsersViewContext {
   load: () => Promise<void>;
   search: () => void;
   resetQuery: () => void;
+  /** 切换「只看无角色」并立即查询（超管补授权入口） */
+  toggleNoRole: () => void;
   turnPage: (delta: number) => void;
   toggleSelect: (id: number) => void;
   toggleSelectAll: () => void;

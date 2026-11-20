@@ -32,7 +32,7 @@ const {
   grantAdjustable, canCreate, canUpdate, canExport, canImport, canGrants, canRead,
   canDeleteUser, canTempPassword, canDeactivateApp, canOpenDanger,
   verdictOf, hintOf, deletionHint, initialOf, toggleDept, switchFilterMode, pickDept, openProfile,
-  load, search, resetQuery, turnPage, toggleSelect, toggleSelectAll, openGrants, openDanger,
+  load, search, resetQuery, toggleNoRole, turnPage, toggleSelect, toggleSelectAll, openGrants, openDanger,
   refreshAfterDanger, onImported, adjustFromGrants, onBatchDone, openCreate, openEdit,
   onUserSaved, toggleStatus, exportCsv
 } = props.ctx;
@@ -99,6 +99,17 @@ const {
         <option :value="-2">待注销</option>
         <option :value="-1">注销</option>
       </select>
+      <!-- 无角色：维修入口（见容器 toggleNoRole），不在"日常筛选"的心智里 -->
+      <button
+        class="btn btn--sm"
+        :class="{ 'btn--primary': query.noRole }"
+        type="button"
+        :aria-pressed="query.noRole"
+        title="只看一个有效角色都没有的账号。这类账号对非超管不可见，是补授权的入口"
+        @click="toggleNoRole"
+      >
+        <ShieldAlert :size="15" /> 无角色
+      </button>
       <button class="btn btn--sm" type="button" @click="search"><Search :size="15" /> 查询</button>
       <!-- 清空筛选：与其它页同一形态（ghost 无边框 + 纯文字），不挂图标 -->
       <button class="btn btn--ghost btn--sm" type="button" @click="resetQuery">清空</button>
@@ -246,7 +257,16 @@ const {
                   <td>{{ row.username }}</td>
                   <td>{{ row.email || '—' }}</td>
                   <td>{{ row.dept_name || '—' }}</td>
-                  <td>{{ row.role_names || '—' }}</td>
+                  <td>
+                    <!-- 无角色不是"没填"，是"对非超管不存在"：必须显式标出来，否则看着像数据缺失 -->
+                    <span
+                      v-if="!row.role_names"
+                      class="tag tag--warn"
+                      title="没有任何有效角色：非超管看不到该账号，需要补授权"
+                      >无角色</span
+                    >
+                    <template v-else>{{ row.role_names }}</template>
+                  </td>
                   <td>{{ row.post_names || '—' }}</td>
                   <td>
                     <!-- 待执行删除：必须在列表里看得见，否则管理员会以为没删成功又点一次 -->

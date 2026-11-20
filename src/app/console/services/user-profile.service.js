@@ -153,7 +153,20 @@ class UserProfileService {
       inline.push({ appId: row.app_id, appLabel: appLabel(row.app_id), allow, deny });
     }
 
+    /*
+     * 可操作性：与列表同一个判据（操作者职级 > 目标职级，超管恒真）。
+     * 详情页的操作区据此整块灰掉 —— 列表已经灰了，点进详情却按钮全亮，
+     * 用户会以为是"这里能改"，点下去才吃 403。
+     */
+    const actorScope = await getActorScope(actorId);
+    const targetScope = await getTargetScope(id);
+    // 自己那页恒可操作（改自己的资料不该被职级挡住），与 `assertCanManageUser` 同一规则
+    const isSelf = Number(actorId) === Number(id);
+    const manageable =
+      isSelf || Boolean(actorScope.isSuper) || Number(actorScope.maxRank) > Number(targetScope.maxRank);
+
     return {
+      manageable,
       user: {
         id: Number(user.id),
         uid: user.uid,

@@ -43,6 +43,8 @@ export interface UserQuery {
   /** 子应用过滤：只留在该应用里有角色的人（空 = 全部应用） */
   appId?: string | null;
   status?: number | null;
+  /** 只看「一个有效角色都没有」的账号（供超管补授权；非超管被应用域先过滤成空） */
+  noRole?: boolean;
 }
 
 /** 用户分页 */

@@ -48,7 +48,9 @@ const query = reactive({
   deptId: null as number | null,
   /** 子应用筛选（null = 全部应用） */
   appId: null as string | null,
-  status: null as number | null
+  status: null as number | null,
+  /** 只看无角色账号：给超管一个"补授权"的入口，默认关 */
+  noRole: false
 });
 const options = ref<UserOptions>({ depts: [], roles: [], posts: [] });
 
@@ -315,6 +317,7 @@ function syncQuery(): void {
   if (query.deptId !== null) next.deptId = String(query.deptId);
   if (query.appId) next.appId = query.appId;
   if (query.status !== null) next.status = String(query.status);
+  if (query.noRole) next.noRole = '1';
   if (query.pageNum > 1) next.page = String(query.pageNum);
   // 与当前地址完全一致就别折腾：每次挂载都 replace 一遍会白跑一次导航守卫
   const same =
@@ -345,7 +348,8 @@ async function load(): Promise<void> {
       keyword: query.keyword || undefined,
       deptId: query.deptId ?? undefined,
       appId: query.appId || undefined,
-      status: query.status ?? undefined
+      status: query.status ?? undefined,
+      noRole: query.noRole || undefined
     });
     rows.value = result.rows;
     total.value = result.total;
@@ -362,12 +366,25 @@ function search(): void {
   load();
 }
 
+/**
+ * 切换「只看无角色」并立即查询
+ *
+ * 这条筛选的意义是**补授权**：角色被撤销的账号会从非超管的列表里消失，
+ * 只有不受应用域限制的账号（超管 / 跨应用）能捞出来。所以它是"维修入口"，
+ * 不是日常筛选 —— 点击即生效，不需要再按一次「查询」。
+ */
+function toggleNoRole(): void {
+  query.noRole = !query.noRole;
+  search();
+}
+
 /** 重置查询条件 */
 function resetQuery(): void {
   query.keyword = '';
   query.deptId = null;
   query.appId = null;
   query.status = null;
+  query.noRole = false;
   query.pageNum = 1;
   load();
 }
@@ -592,7 +609,8 @@ async function exportCsv(): Promise<void> {
       keyword: query.keyword || undefined,
       deptId: query.deptId ?? undefined,
       appId: query.appId || undefined,
-      status: query.status ?? undefined
+      status: query.status ?? undefined,
+      noRole: query.noRole || undefined
     });
   } catch (err) {
     notify(err instanceof Error ? err.message : '导出失败');
@@ -621,6 +639,7 @@ function restoreQuery(): void {
   if (typeof q.appId === 'string' && q.appId) query.appId = q.appId;
 
   if (q.status === '0' || q.status === '1') query.status = Number(q.status);
+  if (q.noRole === '1') query.noRole = true;
 
   const page = Number(q.page);
   if (Number.isInteger(page) && page > 0) query.pageNum = page;
@@ -662,7 +681,7 @@ const ctx: UsersViewContext = {
   canRead: auth.hasPermission('admin:user:read'),
   canDeleteUser, canTempPassword, canDeactivateApp, canOpenDanger,
   verdictOf, hintOf, deletionHint, initialOf, toggleDept, switchFilterMode, pickDept, openProfile,
-  load, search, resetQuery, turnPage, toggleSelect, toggleSelectAll, openGrants, openDanger,
+  load, search, resetQuery, toggleNoRole, turnPage, toggleSelect, toggleSelectAll, openGrants, openDanger,
   refreshAfterDanger, onImported, adjustFromGrants, onBatchDone, openCreate, openEdit,
   onUserSaved, toggleStatus, exportCsv
 };

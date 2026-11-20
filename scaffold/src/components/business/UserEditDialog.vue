@@ -392,14 +392,14 @@ async function submit(): Promise<void> {
                 </select>
               </label>
               <!--
-                职级只在编辑态出现：新建时先定角色，职级由「授角色自动抬职级」推出来
-                （后端 `syncRankFromRoles`），不需要人多填一次。
+                新建与编辑都显示：新建时它是"起点"，最终值取 max(填的, 角色里的最高权重)；
+                编辑时改它才是**唯一**能降职级的途径（收回角色不自动降）。
               -->
-              <label v-if="isEdit" class="field">
+              <label class="field">
                 <span class="field__label">职级（0-99）</span>
                 <input v-model.number="form.rankLevel" class="input" type="number" min="0" max="99" />
                 <span class="field__hint">
-                  决定能管理多高的人。授予高职级角色时会自动抬高，收回角色**不会**自动降
+                  决定能管理多高的人。角色里的最高权重是下限（授角色会自动抬高），收起角色不会自动降
                 </span>
               </label>
               <label class="field">

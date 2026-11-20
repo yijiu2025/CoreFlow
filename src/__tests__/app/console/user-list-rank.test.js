@@ -151,6 +151,19 @@ describe('manageable 由「操作者职级 > 目标职级」决定', () => {
     expect(rows[0].rank_level).toBe(42);
   });
 
+  test('自己那行恒可操作（改自己的资料不该被职级挡住）', async () => {
+    userFindAndCountAll.mockResolvedValue({
+      rows: [userRow({ id: 5, username: '我', rank_level: 10 }), userRow({ id: 6, username: '同级', rank_level: 10 })],
+      count: 2
+    });
+
+    // 操作者自己就是 5 号、职级 10：与自己同级 → 严格大于不成立，但自己是例外
+    const { rows } = await userDao.page({ pageNum: 1, pageSize: 10, actorRank: 10, operatorId: 5 });
+
+    expect(rows.find(r => r.id === 5).manageable).toBe(true);
+    expect(rows.find(r => r.id === 6).manageable).toBe(false);
+  });
+
   test('职级缺省按 0 处理（未回填的历史行不会变成"高不可攀"）', async () => {
     userFindAndCountAll.mockResolvedValue({
       rows: [userRow({ id: 1, rank_level: undefined })],

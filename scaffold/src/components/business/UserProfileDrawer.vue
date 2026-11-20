@@ -352,6 +352,13 @@ async function loadOptions(): Promise<void> {
 const manageVerdict = computed(() => {
   const d = data.value;
   if (!d) return { ok: false, reason: '' };
+  /*
+   * 后端 `manageable` 是**一票否决**（操作者职级 > 目标职级，超管恒真）。
+   * 下面那套 `canManageUser` 是拿详情里的角色信息粗算的，只用来补 reason 文案。
+   */
+  if (d.manageable === false) {
+    return { ok: false, reason: '你的职级不高于该账号，无法操作' };
+  }
   const row: UserRow = {
     id: d.user.id,
     uid: d.user.uid,
@@ -378,11 +385,21 @@ const canToggleStatus = computed(() => canEditUser.value && data.value?.user.sta
 /** 能否看授权记录 */
 const canViewGrants = computed(() => auth.hasPermission('admin:user:grants'));
 /** 高危操作的三项能力（与列表页同一判据：超管 + 权限码） */
-const canDeleteUser = computed(() => options.value.scope?.isSuper === true && auth.hasPermission('admin:user:purge'));
-const canTempPassword = computed(
-  () => options.value.scope?.isSuper === true && auth.hasPermission('admin:user:temp-password')
+const canDeleteUser = computed(
+  () =>
+    options.value.scope?.isSuper === true &&
+    auth.hasPermission('admin:user:purge') &&
+    data.value?.manageable !== false
 );
-const canDeactivateApp = computed(() => auth.hasPermission('admin:user:deactivate'));
+const canTempPassword = computed(
+  () =>
+    options.value.scope?.isSuper === true &&
+    auth.hasPermission('admin:user:temp-password') &&
+    data.value?.manageable !== false
+);
+const canDeactivateApp = computed(
+  () => auth.hasPermission('admin:user:deactivate') && data.value?.manageable !== false
+);
 /** 是否有「更多」里的动作可点 */
 const hasMoreActions = computed(
   () => canToggleStatus.value || canViewGrants.value || canDeleteUser.value || canTempPassword.value || canDeactivateApp.value
