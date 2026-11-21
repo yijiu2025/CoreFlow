@@ -57,6 +57,12 @@ beforeAll(async () => {
   });
   /* 权限码数量来自各应用注册的元数据；这里塞一条替身，验证聚合口径 */
   actionMetaRegistry.push({ domain: 'posecraft', actions: [{ code: 'a' }, { code: 'b' }] });
+
+  /*
+   * `admin` 只作为 console 的权限命名空间存在（与线上一致）：它有自己的 config，
+   * 但没有 OAuth 客户端、不承载登录。清单里不该单独成行。
+   */
+  registerAppConfig({ app_id: 'admin', name: '管理后台', description: 'IAM 权限管理' });
 });
 
 describe('normalizeAccess', () => {
@@ -76,6 +82,12 @@ describe('normalizeAccess', () => {
 });
 
 describe('listAppsOverview', () => {
+  it('只作为命名空间的应用不单独成行（否则会出现两行同名、同一组数字）', async () => {
+    const apps = await mod.listAppsOverview();
+    expect(apps.some(a => a.appId === 'admin')).toBe(false);
+    expect(apps.some(a => a.appId === 'console')).toBe(true);
+  });
+
   it('统计按权限命名空间归并：console 显示的是 admin 的角色/菜单数', async () => {
     const apps = await mod.listAppsOverview();
     const consoleApp = apps.find(a => a.appId === 'console');

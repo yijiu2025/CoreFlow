@@ -60,6 +60,31 @@ function normalizeAccess(access) {
 }
 
 /**
+ * 找出「只作为权限命名空间存在」的应用配置
+ *
+ * `src/app/admin/config.js` 不是一个可登录的应用，它只是给 `iam_role.app_id` 一个落点：
+ * 登录应用是 `console`（OAuth 客户端 id），而角色/菜单/权限码住在历史命名空间 `admin`。
+ * 两者都登记在注册表里，于是清单会冒出两行同名"管理后台"，统计数字还一模一样 ——
+ * 读者只会得出"这页算错了"的结论。
+ *
+ * 判据：某个 app_id 被**别的**应用当作 `permission_app_id` 引用，且自己也有配置
+ * ⇒ 它是命名空间，不单独成行（它的数据已经算在引用它的那行里了）。
+ *
+ * @param {object[]} configs 全部应用配置
+ * @returns {Set<string>} 只作为命名空间的应用标识
+ */
+function namespaceOnlyAppIds(configs) {
+  const ids = new Set(configs.map(config => String(config.app_id)));
+  const referenced = new Set();
+  for (const config of configs) {
+    const namespace = resolvePermissionAppId(String(config.app_id));
+    if (namespace && namespace !== String(config.app_id)) referenced.add(namespace);
+  }
+  /* 只有"自己也登记了配置"的命名空间才会被单独列出，否则它本来就不在清单里 */
+  return new Set([...referenced].filter(id => ids.has(id)));
+}
+
+/**
  * 列出全部应用及其授权数据规模
  *
  * @returns {Promise<object[]>} 应用清单（按 app_id 升序，保证刷新时顺序稳定）
@@ -71,8 +96,11 @@ async function listAppsOverview() {
     appOverviewDao.oauthClientIds()
   ]);
   const codeCounts = permissionCodeCounts();
+  const configs = listAppConfigs();
+  const hidden = namespaceOnlyAppIds(configs);
 
-  return listAppConfigs()
+  return configs
+    .filter(config => !hidden.has(String(config.app_id)))
     .map(config => {
       const appId = String(config.app_id);
       /*
@@ -102,4 +130,4 @@ async function listAppsOverview() {
     .sort((a, b) => a.appId.localeCompare(b.appId));
 }
 
-export { listAppsOverview, normalizeAccess, permissionCodeCounts };
+export { listAppsOverview, normalizeAccess, permissionCodeCounts, namespaceOnlyAppIds };

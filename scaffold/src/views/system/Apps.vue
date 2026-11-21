@@ -183,8 +183,8 @@ onMounted(() => {
       </div>
 
       <p v-if="hasNamespaceAlias" class="apps__note">
-        权限命名空间与 appId 不同时（如 console → admin），角色 / 菜单 / 权限码都挂在命名空间下 ——
-        统计按命名空间算，所以两个应用会显示同一组数字，这是预期行为。
+        权限命名空间与 appId 不同时（如 console → admin），角色 / 菜单 / 权限码挂在**命名空间**下，
+        统计已算进这一行；命名空间本身不单独成行（它不是可登录的应用）。
       </p>
     </section>
   </div>
