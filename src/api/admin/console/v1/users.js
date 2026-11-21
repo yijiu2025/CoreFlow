@@ -72,7 +72,6 @@ import userDangerService from '../../../../app/admin/console/services/user-dange
 import stepUpService from '../../../../app/admin/console/services/stepup.service.js';
 import { withFail } from '../../../../app/admin/console/utils/respond.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
-import { listAppIds } from '../../../../framework/config/app-registry.js';
 import {
   USER_EVENTS,
   auditUser,
@@ -289,8 +288,7 @@ async function registerUserRoutes(fastify) {
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.USER.READ,
     handler: withFail(async (request, reply) => {
-      // 角色候选只取已注册应用：已卸载应用的角色不该再出现在下拉里（选了也没接口可用）
-      const data = await userDao.options({ appIds: ['GLOBAL', ...listAppIds()] });
+      const data = await userDao.options();
       /*
        * 选项按「当前操作者能碰到什么」标注，前端据此把不可管的角色灰掉/隐藏。
        *
@@ -299,18 +297,11 @@ async function registerUserRoutes(fastify) {
        * 前端仍然会拿到 `app_label`，用于按应用分组排版。
        */
       const actor = await getActorScope(request.state.user?.userId);
-      /*
-       * 已卸载应用的角色不展示（2026-11-21）：库里保留行，但界面按当前注册的应用过滤 ——
-       * 应用都删了，它的权限就是关闭状态，继续列出来只会让人以为还能授权。
-       */
-      const registeredApps = new Set(['GLOBAL', ...listAppIds()]);
-      const roles = data.roles
-        .filter(role => registeredApps.has(String(role.app_id || 'GLOBAL')))
-        .map(role => ({
-          ...role,
-          app_label: appLabel(role.app_id),
-          manageable: canWriteApp(actor, role.app_id) && (actor.isSuper || Number(role.rank_level) < actor.maxRank)
-        }));
+      const roles = data.roles.map(role => ({
+        ...role,
+        app_label: appLabel(role.app_id),
+        manageable: canWriteApp(actor, role.app_id) && (actor.isSuper || Number(role.rank_level) < actor.maxRank)
+      }));
       /*
        * 下拉候选 = **该账号实际被授权的可见应用**（`dataScope.appIds`）。
        *
@@ -330,8 +321,7 @@ async function registerUserRoutes(fastify) {
         roles,
         apps,
         scope: {
-          // 数据范围里的应用同样只留已注册的：卸载后的应用不再参与筛选
-          appIds: [...actor.apps].filter(id => registeredApps.has(String(id))),
+          appIds: [...actor.apps],
           crossApp: actor.crossApp,
           maxRank: actor.maxRank,
           isSuper: actor.isSuper
@@ -771,11 +761,7 @@ async function registerUserRoutes(fastify) {
        * 部门按名称匹配、角色按"编码或名称"匹配 —— 前端 CSV 里人写的是名字，
        * 不是 id；要求填 id 等于让用户先去查库。
        */
-      const [depts, roles] = await Promise.all([
-        deptDao.listBrief(),
-        // 只用当前已注册应用的角色：已卸载应用的角色不该再被批量授予
-        roleDao.listBrief({ appIds: ['GLOBAL', ...listAppIds()] })
-      ]);
+      const [depts, roles] = await Promise.all([deptDao.listBrief(), roleDao.listBrief()]);
       const deptMap = new Map(depts.map(d => [String(d.name).trim(), Number(d.id)]));
       // 重名（三个应用的"普通用户"）会让按名称匹配变得不确定，交给 lookup 报出来
       const roleLookup = buildRoleLookup(roles);

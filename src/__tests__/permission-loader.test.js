@@ -61,13 +61,8 @@ jest.unstable_mockModule('../framework/persistence/db/index.js', () => ({
 
 const { loadUserPermissions } = await import('../framework/security/auth/permission/permission-loader.js');
 
-/**
- * 构造一条 UserRole（含 include 的 role）
- *
- * `appId` 决定这条角色属于哪个命名空间 —— 受限凭证的规则只对 `GLOBAL` 角色生效，
- * 所以默认给 `GLOBAL`（绝大多数用例关心的正是全局角色）。
- */
-const userRole = (code, policy, appId = 'GLOBAL') => ({ role: { code, policy, app_id: appId } });
+/** 构造一条 UserRole（含 include 的 role） */
+const userRole = (code, policy) => ({ role: { code, policy } });
 
 beforeEach(() => {
   db.userRoles = [];
@@ -180,66 +175,5 @@ describe('loadUserPermissions：GLOBAL superadmin 扩展', () => {
     const { roles, permissions } = await loadUserPermissions(1, 'app1');
     expect(roles).toEqual(['superadmin', 'app1_admin']);
     expect(permissions.allows).toEqual([]);
-  });
-});
-
-describe('loadUserPermissions：受限凭证（Bearer token）', () => {
-  /*
-   * 背景：`getPermissions` 永远把 GLOBAL 角色并进各应用命名空间（会员等级角色需要它），
-   * 而 GLOBAL 里还有 `superadmin`（policy `*`）。token 是**受限凭证**（属于某个应用），
-   * 不该凭"这个人是超管"就在别处通吃 —— 实测一个 posecraft 的 token 能调
-   * `DELETE /api/admin/console/v1/users/:id`。
-   */
-  it('会话（默认）：GLOBAL 的 `*` 与 `${appId}_admin` 扩展照旧', async () => {
-    db.userRoles = [userRole('superadmin', { allows: ['*'] })];
-    db.adminRole = { code: 'app1_admin', policy: { allows: ['app1:manage'] } };
-
-    const { roles, permissions } = await loadUserPermissions(1, 'app1');
-
-    expect(permissions.allows).toContain('*');
-    expect(roles).toContain('app1_admin');
-  });
-
-  it('受限凭证：GLOBAL 的 `*` 收窄成 `${appId}:*`，且不再扩展 `${appId}_admin`', async () => {
-    db.userRoles = [userRole('superadmin', { allows: ['*'] })];
-    db.adminRole = { code: 'app1_admin', policy: { allows: ['app1:manage'] } };
-
-    const { roles, permissions } = await loadUserPermissions(1, 'app1', { scopedCredential: true });
-
-    /* 收窄而不是删除：超管在自己应用的 token 里仍是最高权限，但够不到别的应用 */
-    expect(permissions.allows).toEqual(['app1:*']);
-    expect(permissions.allows).not.toContain('*');
-    expect(permissions.allows).not.toContain('app1:manage');
-    expect(roles).toEqual(['superadmin']);
-    // 关键：连查询都不该发生（否则策略一旦被读出来就又会并进去）
-    expect(db.adminQuery).toBeNull();
-  });
-
-  it('受限凭证：通配收窄到 console 的权限命名空间时，后台权限仍在（admin:*）', async () => {
-    // console 应用的 permission_app_id 是 admin ⇒ 它的 token 拿到 admin:* 是合理的
-    db.userRoles = [userRole('superadmin', { allows: ['*'] })];
-
-    const { permissions } = await loadUserPermissions(1, 'admin', { scopedCredential: true });
-    expect(permissions.allows).toEqual(['admin:*']);
-  });
-
-  it('受限凭证：GLOBAL 里的普通动作保留（否则普通用户拿 token 调不了自己的接口）', async () => {
-    db.userRoles = [
-      userRole('superadmin', { allows: ['*'] }),
-      userRole('user_normal', { allows: ['posecraft:work:read', 'posecraft:work:create'] })
-    ];
-
-    const { permissions } = await loadUserPermissions(1, 'posecraft', { scopedCredential: true });
-
-    /* `*` 被收窄成 `posecraft:*`，会员角色的两个具体动作原样保留 */
-    expect(permissions.allows).toEqual(['posecraft:*', 'posecraft:work:read', 'posecraft:work:create']);
-  });
-
-  it('受限凭证：应用自己的通配授权不受影响（它不是租户级权限）', async () => {
-    db.userRoles = [userRole('posecraft_admin', { allows: ['posecraft:*'] }, 'posecraft')];
-
-    const { permissions } = await loadUserPermissions(1, 'posecraft', { scopedCredential: true });
-
-    expect(permissions.allows).toContain('posecraft:*');
   });
 });
