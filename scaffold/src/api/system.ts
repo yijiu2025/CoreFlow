@@ -461,6 +461,9 @@ export interface AppApiNode {
   allowRoles?: string[];
   /** 保护性接口：不允许关闭（登录/授权、应用管理与会话自身） */
   critical?: boolean;
+  /** 代码级只读：HTTP 方法与挂载路径（用于列表展示 `GET /apps`） */
+  method?: string;
+  url?: string;
   /**
    * 被哪个祖先"挂空"：`system` = 系统总开关已关，`group` = 模块开关已关
    *

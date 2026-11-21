@@ -945,8 +945,15 @@ onBeforeUnmount(() => {
                         </span>
                       </td>
                       <td class="api-table__path">
-                        <!-- 长路径必须能看清全名：截断 + title 是唯一不撑破表格的折中 -->
-                        <code :title="api.key">{{ api.key }}</code>
+                        <!-- 路径列显示真正的「方法 + 路径」，路由名放 title：否则这列读起来像标识符 -->
+                        <span
+                          v-if="api.method"
+                          class="api-method"
+                          :class="`api-method--${String(api.method).toLowerCase()}`"
+                        >
+                          {{ api.method }}
+                        </span>
+                        <code :title="api.key">{{ api.url || api.key }}</code>
                       </td>
                       <td class="api-table__perm">
                         <span
@@ -956,7 +963,7 @@ onBeforeUnmount(() => {
                           >{{ api.requirePermission }}</span
                         >
                         <span v-else-if="!api.requirePermission" class="api-row__muted">—</span>
-                        <span v-else class="api-row__same" title="与本组其他接口相同">同上</span>
+                        <span v-else class="api-row__same" title="与本组其他接口相同" />
                       </td>
                       <td class="api-table__switch">
                         <span v-if="api.critical" class="lock" title="保护性接口：关闭后无法登录或无法管理，不允许关闭">
@@ -1433,12 +1440,16 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.api-table__name {
+  width: 30%;
+}
+
 .api-table__path {
-  width: 40%;
+  width: 44%;
 }
 
 .api-table__perm {
-  width: 22%;
+  width: 20%;
 }
 
 .api-table__switch {
@@ -1453,7 +1464,7 @@ onBeforeUnmount(() => {
 }
 
 .api-row td {
-  padding: 6px 10px;
+  padding: 5px 10px;
   border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 62%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1468,33 +1479,28 @@ onBeforeUnmount(() => {
   font-size: 11.5px;
 }
 
-/* 层级用"缩进 + 左侧竖线"表达：比只靠箭头更容易一眼看出谁属于谁 */
+/*
+ * 层级用"缩进 + 左侧竖线"表达：比只靠箭头更容易一眼看出谁属于谁。
+ *
+ * 🔴 用 `background-image` 画线，不用 `::before` + absolute：td 上 `overflow: hidden`
+ *    与 `position: relative` 在真实表格里并不保证生效（上一版就是这样"线不显示"的）。
+ *    背景图不依赖定位，hover 时只改 `background-color` 也不会把它盖掉。
+ */
+.api-row--group .api-table__name,
+.api-row--api .api-table__name {
+  background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.12));
+  background-repeat: no-repeat;
+  background-size: 1px 100%;
+}
+
 .api-row--group .api-table__name {
-  padding-left: 18px;
-  position: relative;
+  padding-left: 20px;
+  background-position: 10px 0;
 }
 
 .api-row--api .api-table__name {
-  padding-left: 34px;
-  position: relative;
-}
-
-.api-row--group .api-table__name::before,
-.api-row--api .api-table__name::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: color-mix(in srgb, var(--mauth-border) 80%, transparent);
-}
-
-.api-row--group .api-table__name::before {
-  left: 10px;
-}
-
-.api-row--api .api-table__name::before {
-  left: 26px;
+  padding-left: 38px;
+  background-position: 26px 0;
 }
 
 /* 名称列右侧的小锁：表示"这条要求登录"，hover 有说明 */
@@ -1507,7 +1513,7 @@ onBeforeUnmount(() => {
 
 .api-row--system {
   cursor: pointer;
-  background: color-mix(in srgb, var(--mauth-surface-2) 60%, var(--mauth-surface));
+  background-color: color-mix(in srgb, var(--mauth-surface-2) 60%, var(--mauth-surface));
 }
 
 .api-row--group {
@@ -1515,7 +1521,8 @@ onBeforeUnmount(() => {
 }
 
 .api-row--group td {
-  background: color-mix(in srgb, var(--mauth-surface-2) 28%, var(--mauth-surface));
+  /* 只改底色：`background` 简写会把名称列的导引线（background-image）一起清掉 */
+  background-color: color-mix(in srgb, var(--mauth-surface-2) 28%, var(--mauth-surface));
 }
 
 .api-row--api.is-blocked {
@@ -1537,7 +1544,7 @@ onBeforeUnmount(() => {
 }
 
 .api-row--api:hover td {
-  background: var(--mauth-hover);
+  background-color: var(--mauth-hover);
 }
 
 .api-row__caret {

@@ -36,7 +36,10 @@ const PUBLIC_FIELDS = [
   'allowIps',
   'allowRoles',
   'critical',
-  'blockedBy'
+  'blockedBy',
+  /* 代码级只读信息：列表里要显示 `GET /apps`，否则"路径"列只能放路由名，读起来像标识符 */
+  'method',
+  'url'
 ];
 
 /**
