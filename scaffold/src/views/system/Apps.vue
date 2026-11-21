@@ -19,7 +19,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { LayoutGrid, RefreshCw, Search } from 'lucide-vue-next';
 import { listApps, type AppOverview } from '@/api/system';
-import AppApiPanel from '@/components/business/AppApiPanel.vue';
+import { useRouter } from 'vue-router';
 
 /** 清单（接口不带分页：应用数量是个位数到十几个，前端过滤足够） */
 const apps = ref<AppOverview[]>([]);
@@ -29,8 +29,13 @@ const loading = ref(false);
 const error = ref('');
 /** 搜索词：命中 appId / 名称 */
 const keyword = ref('');
-/** 接口开关抽屉（null = 关闭）：记录当前编辑哪个应用 */
-const apiPanel = ref<{ appId: string; name: string } | null>(null);
+/**
+ * 接口开关改成真路由页（`system-app-apis`）
+ *
+ * 原来是在这里弹一个 680px 的抽屉，一百多个接口只能贴着边滚。整页之后宽度不再是瓶颈，
+ * 也能深链/返回。列表页只管"有哪些应用、各自多少接口"。
+ */
+const router = useRouter();
 
 /** 过滤后的清单 */
 const filtered = computed(() => {
@@ -183,7 +188,12 @@ onMounted(() => {
                 <span v-else class="apps__mut">未声明</span>
               </td>
               <td>
-                <button class="apps__apis" type="button" @click="apiPanel = { appId: app.appId, name: app.name }">
+                <button
+                  class="apps__apis"
+                  type="button"
+                  :title="`打开 ${app.name} 的接口开关`"
+                  @click="router.push({ name: 'system-app-apis', params: { appId: app.appId } })"
+                >
                   {{ app.apis?.total ?? 0 }} 个
                   <span v-if="app.apis?.disabled" class="apps__apis-off">{{ app.apis.disabled }} 关</span>
                 </button>
@@ -192,14 +202,6 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
-
-      <AppApiPanel
-        v-if="apiPanel"
-        :app-id="apiPanel.appId"
-        :app-name="apiPanel.name"
-        @close="apiPanel = null"
-        @changed="load"
-      />
 
       <p v-if="hasNamespaceAlias" class="apps__note">
         权限命名空间与 appId 不同时（如 console → admin），角色 / 菜单 / 权限码挂在**命名空间**下，

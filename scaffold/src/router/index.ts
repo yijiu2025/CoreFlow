@@ -113,6 +113,21 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '应用管理', permission: 'admin:app:read' }
       },
       {
+        /*
+         * 应用接口开关（整页，不是抽屉）
+         *
+         * 为什么单独成页：一个应用可以有一百多个接口（管理后台 101 个），抽屉宽度
+         * 只够把路径截成 `console:app:listP...`。整页之后表头可吸顶、路径能看全、
+         * 搜索与筛选有地方放；顺带能深链、能按返回键回列表（`meta.stack`）。
+         *
+         * 权限码与列表页相同：能看应用就能看它的接口开关，接口本身仍由后端 PBAC 判定。
+         */
+        path: 'system/app/:appId/apis',
+        name: 'system-app-apis',
+        component: () => import('@/views/system/AppApis.vue'),
+        meta: { title: '接口开关', permission: 'admin:app:read', stack: true }
+      },
+      {
         path: 'system/dept',
         name: 'system-dept',
         component: () => import('@/views/system/Depts.vue'),
