@@ -2,13 +2,13 @@
  * 归档统计合并的守卫
  *
  * 「清除日志」会把明细删掉，统计改由「明细 + 归档」相加得到（见
- * `src/app/console/dao/log.dao.js` 的 archiveStats / mergeBuckets）。
+ * `src/app/admin/console/dao/log.dao.js` 的 archiveStats / mergeBuckets）。
  * 这里钉住三条容易写错的性质：同名桶相加、时间序、脏值不放大。
  *
  * 不连库：被测的是一条纯函数，加载的是真实实现（不是手抄一份）。
  */
 import { describe, it, expect } from '@jest/globals';
-import { mergeBuckets, buildLoginAnomalySql } from '../app/console/dao/log.dao.js';
+import { mergeBuckets, buildLoginAnomalySql } from '../app/admin/console/dao/log.dao.js';
 
 describe('mergeBuckets 明细 + 归档', () => {
   it('同名时间桶相加，不同桶各自保留', () => {

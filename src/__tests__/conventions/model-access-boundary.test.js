@@ -41,45 +41,33 @@ const BASELINE = {
     max: 2,
     why: 'SessionToken + include User 的关联查询：DAO 化需要先给两张表挂 association，属于模型层的改动，不在收敛范围'
   },
-  'app/console/services/access-scope.service.js': {
+  'app/admin/console/services/access-scope.service.js': {
     max: 4,
     why: '**权限判据本身**（User / Role / UserRole）：查询与判定必须在一起，拆进 DAO 会把判据拆成两半，可读性反而更差'
   },
-  'app/console/services/button-grant.service.js': {
+  'app/admin/console/services/button-grant.service.js': {
     max: 1,
     why: "菜单快照扫描 `getModel('console.SysMenu')`：这是一次性全量读，且要按 id 建祖先映射，menu.dao 的 tree 形态不适合"
   },
-  'app/console/services/data-scope.service.js': {
+  'app/admin/console/services/data-scope.service.js': {
     max: 6,
     why: '**数据范围判据本身**（UserRole / Role / User / RoleDept / RoleApp）：与 access-scope 同理，判据不拆'
   },
-  'app/console/services/stepup.service.js': {
+  'app/admin/console/services/stepup.service.js': {
     max: 2,
     why: '二次验证要读 User + UserIdentity 的实时状态（锁定次数 / 锁定截止）。与 guard 那份**不是重复**：本份把挑战绑定到 `action + targetId` 并一次性消费，guard 那份绑定 `patchHash` 并签发票据 —— 二者语义不同，合并会破坏"一次授权只用于那一次操作"'
   },
-  'app/console/services/user-danger.service.js': {
+  'app/admin/console/services/user-danger.service.js': {
     max: 1,
     why: '只剩 `safeFindAll(modelName)` 的通用容错查询：模型可能按部署裁剪掉，缺表时降级成空数组而不是整页 500 —— 这是刻意的动态取模型，不是越界'
   },
-  'app/console/services/user-profile.service.js': {
+  'app/admin/console/services/user-profile.service.js': {
     max: 5,
     why: 'InlinePolicy 的读写、SysUserPost / SysPost 关联表、AuditLog / SessionLog 的原生聚合 SQL —— 都是各自域的附属表，console 侧没有对应 DAO'
   },
   'app/guard/services/stepup.service.js': {
     max: 2,
     why: '同 console 那份读的是同一对模型（User / UserIdentity），但挑战绑定的是 `patchHash`（一次授权只能用于被批准的那次变更）。guard 属框架侧目录，也不能反向依赖 app 的 DAO'
-  },
-  'app/posecraft/services/profile.service.js': {
-    max: 4,
-    why: '跨应用读用户公开资料 + 作品/收藏/推荐计数：posecraft 域自己的表有 DAO，但 User 是共享模型'
-  },
-  'app/posecraft/utils/preview.js': {
-    max: 1,
-    why: '预览渲染时要按 id 取模板，处在一个纯函数工具里，引入 DAO 会把它变成有状态模块'
-  },
-  'app/retroweb/services/quota.service.js': {
-    max: 1,
-    why: '配额统计要对 retroweb.Task 做聚合，任务 DAO 目前只有列表查询'
   },
   'app/user/permission/seeder.js': {
     max: 1,

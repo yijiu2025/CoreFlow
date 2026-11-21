@@ -84,7 +84,10 @@ describe('依赖方向契约：src/ 不得 import scripts/', () => {
   it('扫描范围有效（防路径写错导致空扫描假通过）', () => {
     expect(FILES.length).toBeGreaterThan(200);
     expect(FILES.map(rel)).toContain('src/framework/support/cli/index.js');
-    expect(FILES.map(rel)).toContain('src/app/firewall/cli/blocks.js');
+    // 第二个取样点必须在 app/ 下：防火墙等第三方应用移出本仓后，原先的
+    // `src/app/firewall/cli/blocks.js` 已不存在 —— 取样点要跟着仓库形状走，
+    // 否则守卫会以"路径写错"的形式红（而不是真的发现了违规 import）。
+    expect(FILES.map(rel)).toContain('src/app/admin/console/dao/user.dao.js');
   });
 
   it('扫描器确实能识别出 import（防解析口径写错导致假通过）', () => {
