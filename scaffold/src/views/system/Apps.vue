@@ -137,12 +137,12 @@ onMounted(() => {
       <div v-else class="table-wrap">
         <table class="table apps__table">
           <colgroup>
-            <col style="width: 268px" />
-            <col style="width: 132px" />
-            <col style="width: 196px" />
-            <col />
-            <col style="width: 124px" />
-            <col style="width: 112px" />
+            <col style="width: 25%" />
+            <col style="width: 13%" />
+            <col style="width: 17%" />
+            <col style="width: 25%" />
+            <col style="width: 10%" />
+            <col style="width: 10%" />
           </colgroup>
           <thead>
             <tr>
@@ -352,8 +352,9 @@ onMounted(() => {
 .apps__ident {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
   min-width: 0;
+  line-height: 1.25;
 }
 
 .apps__name {
@@ -417,9 +418,10 @@ onMounted(() => {
  * 两列网格无论宽度多少都是整齐的 2×2，数字还能靠右对齐形成一列。
  */
 .apps__stats {
+  line-height: 1.35;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, max-content));
-  gap: 2px 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
   color: var(--mauth-text-soft);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -447,6 +449,7 @@ onMounted(() => {
   display: inline-flex;
   gap: 4px;
   align-items: center;
+  white-space: nowrap;
   padding: 2px 8px;
   border: 1px solid var(--mauth-border);
   border-radius: 999px;
