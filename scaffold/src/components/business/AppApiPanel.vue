@@ -936,13 +936,6 @@ onBeforeUnmount(() => {
                           {{ api.name || api.key }}
                         </span>
                         <Lock v-if="api.requireLogin" :size="11" class="api-row__login" title="要求登录" />
-                        <span
-                          v-if="isDangerous(api.key)"
-                          class="chip chip--danger"
-                          title="写操作：关闭后相关功能会直接 403"
-                        >
-                          写
-                        </span>
                       </td>
                       <td class="api-table__path">
                         <!-- 路径列显示真正的「方法 + 路径」，路由名放 title：否则这列读起来像标识符 -->
@@ -1434,8 +1427,8 @@ onBeforeUnmount(() => {
   text-align: left;
   font-weight: 500;
   font-size: 11.5px;
-  color: var(--mauth-text-faint);
-  background: var(--mauth-surface);
+  color: var(--mauth-text-mid);
+  background: var(--mauth-surface-2);
   border-bottom: 1px solid var(--mauth-border);
   white-space: nowrap;
 }
@@ -1488,7 +1481,7 @@ onBeforeUnmount(() => {
  */
 .api-row--group .api-table__name,
 .api-row--api .api-table__name {
-  background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.12));
+  background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.24), rgba(15, 23, 42, 0.24));
   background-repeat: no-repeat;
   background-size: 1px 100%;
 }
@@ -1513,7 +1506,7 @@ onBeforeUnmount(() => {
 
 .api-row--system {
   cursor: pointer;
-  background-color: color-mix(in srgb, var(--mauth-surface-2) 60%, var(--mauth-surface));
+  background-color: color-mix(in srgb, var(--mauth-surface-2) 85%, var(--mauth-surface));
 }
 
 .api-row--group {
@@ -1522,7 +1515,7 @@ onBeforeUnmount(() => {
 
 .api-row--group td {
   /* 只改底色：`background` 简写会把名称列的导引线（background-image）一起清掉 */
-  background-color: color-mix(in srgb, var(--mauth-surface-2) 28%, var(--mauth-surface));
+  background-color: color-mix(in srgb, var(--mauth-surface-2) 55%, var(--mauth-surface));
 }
 
 .api-row--api.is-blocked {
@@ -1659,6 +1652,72 @@ onBeforeUnmount(() => {
 .api-row__name.is-danger {
   color: var(--mauth-text);
   font-weight: 550;
+}
+
+/* ── 徽标（权限码 / 方法 / 计数） ────────────────────────────
+ *
+ * 🔴 这一组样式在表格重构时被整块删掉过：`.chip` / `.chip--perm` 没了，
+ *    模板里的 class 仍在，于是权限码变成"裸文本"——不报错、只是看着不像后台。
+ *    删样式与删模板必须成对，这条注释就是留给下次的人。
+ */
+.chip {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-soft);
+  font-size: 11px;
+  line-height: 18px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+.chip--perm {
+  background: var(--mauth-primary-soft, color-mix(in srgb, var(--mauth-primary) 12%, transparent));
+  color: var(--mauth-primary);
+}
+
+.chip--muted {
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-faint);
+}
+
+/* 方法徽标：等宽字母 + 描边，读起来像"HTTP 方法"而不是普通单词 */
+.api-method {
+  display: inline-block;
+  min-width: 42px;
+  margin-right: 8px;
+  padding: 0 5px;
+  border: 1px solid var(--mauth-border);
+  border-radius: 4px;
+  background: var(--mauth-surface);
+  color: var(--mauth-text-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 16px;
+  text-align: center;
+  vertical-align: 1px;
+}
+
+.api-method--post {
+  border-color: color-mix(in srgb, var(--mauth-primary) 35%, transparent);
+  background: color-mix(in srgb, var(--mauth-primary) 10%, transparent);
+  color: var(--mauth-primary);
+}
+
+.api-method--put,
+.api-method--patch {
+  border-color: rgba(217, 150, 40, 0.4);
+  background: rgba(217, 150, 40, 0.1);
+  color: #9a6a0d;
+}
+
+.api-method--delete {
+  border-color: color-mix(in srgb, var(--mauth-danger, #d9534f) 35%, transparent);
+  background: color-mix(in srgb, var(--mauth-danger, #d9534f) 10%, transparent);
+  color: var(--mauth-danger, #d9534f);
 }
 
 .chip--danger {
