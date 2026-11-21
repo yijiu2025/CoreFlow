@@ -37,8 +37,18 @@ export async function up({ queryInterface, Sequelize }) {
   const [exists] = await queryInterface.sequelize.query('SHOW TABLES LIKE "sys_menu"');
   if (exists.length === 0) return;
 
+  /*
+   * 🔴 同名根目录可能不止一个：线上库实测有两个「系统管理」（其中一个 path=''、
+   *    零子节点，是历史脏数据）。直接 `LIMIT 1` 有概率选中那个空壳 —— 菜单照插不报错，
+   *    但挂在了用户看不到的分支上，表现就是"加完功能还是找不到入口"。
+   *    所以按"子节点多者优先、其次 id 小者"选真正在用的那棵树。
+   */
   const [parents] = await queryInterface.sequelize.query(
-    'SELECT id FROM sys_menu WHERE parent_id = 0 AND name = :name LIMIT 1',
+    `SELECT m.id, (SELECT COUNT(*) FROM sys_menu c WHERE c.parent_id = m.id) AS kids
+       FROM sys_menu m
+      WHERE m.parent_id = 0 AND m.name = :name
+      ORDER BY kids DESC, m.id ASC
+      LIMIT 1`,
     { replacements: { name: PARENT_NAME } }
   );
   if (parents.length === 0) return;
@@ -76,8 +86,13 @@ export async function up({ queryInterface, Sequelize }) {
  * @returns {Promise<void>}
  */
 export async function down({ queryInterface }) {
+  /* 与 up 同一套选择逻辑：只删"真正在用的那棵树"下的同名菜单 */
   const [parents] = await queryInterface.sequelize.query(
-    'SELECT id FROM sys_menu WHERE parent_id = 0 AND name = :name LIMIT 1',
+    `SELECT m.id, (SELECT COUNT(*) FROM sys_menu c WHERE c.parent_id = m.id) AS kids
+       FROM sys_menu m
+      WHERE m.parent_id = 0 AND m.name = :name
+      ORDER BY kids DESC, m.id ASC
+      LIMIT 1`,
     { replacements: { name: PARENT_NAME } }
   );
   if (parents.length === 0) return;
