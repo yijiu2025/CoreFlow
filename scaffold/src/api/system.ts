@@ -436,9 +436,78 @@ export interface AppOverview {
   hosts: string[];
   /** 授权数据规模 */
   counts: { roles: number; menus: number; permissionCodes: number; oauthClients: number };
+  /** 接口开关规模（`disabled` = 已关闭的节点数，含系统与模块级） */
+  apis: { total: number; disabled: number };
 }
 
 /** 应用清单（只读） */
 export function listApps(): Promise<{ apps: AppOverview[]; total: number }> {
   return get(`${BASE}/apps`);
+}
+
+/* ── 应用接口开关 ───────────────────────────────────────────── */
+
+/** 接口树节点（系统 / 模块 / 接口同构） */
+export interface AppApiNode {
+  key: string;
+  id?: string;
+  name?: string;
+  description?: string;
+  prefix?: string;
+  enabled: boolean;
+  requireLogin?: boolean;
+  requirePermission?: string | null;
+  allowIps?: string[];
+  allowRoles?: string[];
+}
+
+/** 模块节点 */
+export interface AppApiGroup extends AppApiNode {
+  apis: AppApiNode[];
+}
+
+/** 系统节点 */
+export interface AppApiSystem extends AppApiNode {
+  groups: AppApiGroup[];
+}
+
+/** 某应用的接口树 */
+export function listAppApis(appId: string): Promise<{ appId: string; systems: AppApiSystem[]; total: number }> {
+  return get(`${BASE}/apps/${appId}/apis`);
+}
+
+/** 切换接口开关的入参 */
+export interface AppApiToggleBody {
+  systemKey: string;
+  groupKey?: string;
+  apiKey?: string;
+  stepupToken?: string;
+}
+
+/** 切换接口开关（系统 / 模块 / 接口） */
+export function toggleAppApi(appId: string, body: AppApiToggleBody): Promise<{ enabled: boolean }> {
+  return post(`${BASE}/apps/${appId}/apis/toggle`, body);
+}
+
+/** 申请接口开关的二次认证（返回 challengeId 与打码后的目标） */
+export function appApiStepUpChallenge(
+  appId: string,
+  body: {
+    systemKey: string;
+    groupKey?: string;
+    apiKey?: string;
+    action: 'toggle' | 'patch';
+    patch?: Record<string, unknown>;
+    method?: 'email' | 'password';
+  }
+): Promise<{ challengeId: string; method: string; maskedTarget: string; expiresIn: number }> {
+  return post(`${BASE}/apps/${appId}/apis/stepup/challenge`, body);
+}
+
+/** 核验二次认证，换回票据 */
+export function appApiStepUpVerify(
+  appId: string,
+  body: { challengeId: string; code?: string; password?: string }
+): Promise<{ ticket: string; expiresIn: number; method: string }> {
+  return post(`${BASE}/apps/${appId}/apis/stepup/verify`, body);
 }

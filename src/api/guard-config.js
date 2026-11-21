@@ -607,6 +607,12 @@ function registerSystemMetadata(systemKey, metadata) {
 
   Object.assign(configs[systemKey], {
     id: systemKey,
+    /*
+     * 归属应用（`system.json` 的 `app_id`）：只有声明了归属的系统才属于某个应用，
+     * 共享系统（Auth / verify / notice / files）不声明，于是永远不会被"应用管理"看到。
+     * 这一列只用于**按应用收口**，不参与鉴权判定。
+     */
+    appId: metadata.app_id || null,
     name: metadata.alias || metadata.name || systemKey,
     description: metadata.description || '',
     prefix: metadata.prefix || '',
