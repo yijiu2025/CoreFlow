@@ -24,7 +24,7 @@
  * @since 2026-11-21
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ChevronDown, ChevronRight, Loader2, Lock, MailCheck, Search, X } from 'lucide-vue-next';
+import { ChevronDown, ChevronRight, Loader2, Lock, MailCheck, Pencil, Search, X } from 'lucide-vue-next';
 import {
   appApiStepUpChallenge,
   appApiStepUpVerify,
@@ -189,6 +189,27 @@ function permissionKinds(group: AppApiGroup): number {
 }
 
 /** 某个模块的启用计数（组头显示 `3/5`） */
+/**
+ * 系统行右侧的规模摘要：`3 组 / 42 个 · 5 关`
+ *
+ * 系统行是"要不要展开"的决策点 —— 只写应用名的话，运维得逐个展开才知道哪块有问题。
+ *
+ * @param system 系统节点
+ * @returns {string} 摘要文案
+ */
+function systemScale(system: AppApiSystem): string {
+  let total = 0;
+  let off = 0;
+  for (const g of system.groups) {
+    for (const a of g.apis) {
+      total += 1;
+      if (!a.enabled) off += 1;
+    }
+  }
+  const base = `${system.groups.length} 组 / ${total} 个`;
+  return off > 0 ? `${base} · ${off} 关` : base;
+}
+
 function enabledText(group: AppApiGroup): string {
   const on = group.apis.filter(a => a.enabled).length;
   return `${on}/${group.apis.length}`;
@@ -638,6 +659,12 @@ function applyEdited(e: { systemKey: string; groupKey?: string; apiKey?: string 
   });
 }
 
+/** 清空筛选：搜索词与"只看已关闭"一起复位 */
+function clearFilters(): void {
+  keyword.value = '';
+  onlyDisabled.value = false;
+}
+
 /** 读策略（失败不阻断面板：默认按"要二次验证"渲染） */
 async function loadPolicy(): Promise<void> {
   try {
@@ -705,7 +732,8 @@ onBeforeUnmount(() => {
     <div v-if="mode === 'drawer'" class="api-panel__mask" @click="emit('close')" />
 
     <section class="api-panel__sheet" :aria-label="`${appName} 接口开关`">
-      <header class="api-panel__head">
+      <!-- 整页形态的标题与说明由页面外壳给（`AppApis.vue`），这里只保留抽屉形态的 -->
+      <header v-if="mode === 'drawer'" class="api-panel__head">
         <div class="api-panel__titles">
           <h2 class="api-panel__title">接口开关 · {{ appName }}</h2>
           <p class="api-panel__sub">关闭后该接口直接拒绝请求（403 前置拦截）。变更需二次认证并留审计。</p>
@@ -774,6 +802,7 @@ onBeforeUnmount(() => {
                 </td>
                 <td class="api-table__path">
                   <code>{{ system.prefix || '—' }}</code>
+                  <span class="api-row__count">{{ systemScale(system) }}</span>
                 </td>
                 <td class="api-table__perm" />
                 <td class="api-table__login" />
@@ -834,7 +863,12 @@ onBeforeUnmount(() => {
                   </tr>
 
                   <template v-if="groupOpen(system.key, group.key)">
-                    <tr v-for="api in group.apis" :key="api.key" class="api-row api-row--api">
+                    <tr
+                      v-for="api in group.apis"
+                      :key="api.key"
+                      class="api-row api-row--api"
+                      :class="{ 'is-off': !api.enabled }"
+                    >
                       <td class="api-table__name">
                         <span class="api-row__name" :class="{ 'is-danger': isDangerous(api.key) }">
                           {{ api.name || api.key }}
@@ -880,13 +914,13 @@ onBeforeUnmount(() => {
                           <span class="switch__track" />
                         </label>
                         <button
-                          class="btn btn--ghost btn--sm api-edit"
+                          class="api-edit"
                           type="button"
-                          :aria-label="`编辑 ${api.name || api.key}`"
+                          :aria-label="`编辑 ${api.name || api.key} 的描述与白名单`"
                           title="编辑描述 / 登录要求 / 白名单"
                           @click.stop="openEdit(system, group, api)"
                         >
-                          编辑
+                          <Pencil :size="13" />
                         </button>
                       </td>
                     </tr>
@@ -899,22 +933,34 @@ onBeforeUnmount(() => {
               <td colspan="5" class="api-empty"><Loader2 :size="14" class="is-spin" /> 加载中…</td>
             </tr>
             <tr v-else-if="view.length === 0">
-              <td colspan="5" class="api-empty">没有匹配的接口</td>
+              <td colspan="5" class="api-empty">
+                <template v-if="filtering">
+                  没有匹配的接口
+                  <button class="api-empty__clear" type="button" @click="clearFilters">清除筛选</button>
+                </template>
+                <template v-else>
+                  这个应用还没有声明归属的接口系统 —— 在 <code>src/api/&lt;system&gt;/system.json</code> 里写上
+                  <code>app_id</code> 或 <code>owner_app_id</code> 即可接入。
+                </template>
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
 
+      <!--
+        页脚把"规模统计"和"二次验证策略"收在一条里：
+        两条细横杠叠在一起时，眼睛会把它们当成同一个区的两半，反而更难扫。
+      -->
       <footer class="api-panel__foot">
         <span>共 {{ totalCount }} 个接口</span>
         <span v-if="disabledCount > 0" class="api-panel__warn">{{ disabledCount }} 个节点已关闭</span>
-      </footer>
-
-      <!-- 二次验证策略：只有超管能改，其他人只读 -->
-      <div class="policy">
-        <span class="policy__label"><Lock :size="13" /> 变更二次验证</span>
-        <span class="policy__state">{{ policy.requireStepUp ? '已启用' : '已关闭' }}</span>
-        <label v-if="policy.canEdit" class="switch" :title="'仅超级管理员可调整'">
+        <span class="api-panel__foot-spacer" />
+        <span class="policy__label"><Lock :size="12" /> 变更二次验证</span>
+        <span class="policy__state" :class="{ 'is-off': !policy.requireStepUp }">
+          {{ policy.requireStepUp ? '已启用' : '已关闭' }}
+        </span>
+        <label v-if="policy.canEdit" class="switch" title="仅超级管理员可调整">
           <input
             type="checkbox"
             :checked="policy.requireStepUp"
@@ -924,7 +970,8 @@ onBeforeUnmount(() => {
           />
           <span class="switch__track" />
         </label>
-      </div>
+        <span v-else class="policy__hint">仅超管可调整</span>
+      </footer>
 
       <!-- 二次认证：内联展开，不走弹窗（弹窗会盖住"到底要关哪个接口"） -->
       <div v-if="stepup" class="stepup">
@@ -1278,6 +1325,12 @@ onBeforeUnmount(() => {
   opacity: 0.5;
 }
 
+/* checkbox 本体是隐藏的：焦点环必须画在轨道上，否则键盘用户看不出焦点在哪 */
+.switch input:focus-visible + .switch__track {
+  outline: 2px solid var(--mauth-primary);
+  outline-offset: 2px;
+}
+
 /* ── 表格 ───────────────────────────────────────────────── */
 
 .api-panel__scroll {
@@ -1326,8 +1379,14 @@ onBeforeUnmount(() => {
 }
 
 .api-table__switch {
-  width: 60px;
+  width: 104px;
   text-align: right;
+  white-space: nowrap;
+}
+
+/* 行内动作（锁 / 开关 / 编辑）靠右成组，避免三件事各按各的间距走 */
+.api-row .api-table__switch > * {
+  vertical-align: middle;
 }
 
 .api-row td {
@@ -1337,6 +1396,12 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+.api-row__count {
+  margin-left: 8px;
+  color: var(--mauth-text-faint);
+  font-size: 11.5px;
 }
 
 .api-row--system {
@@ -1350,6 +1415,15 @@ onBeforeUnmount(() => {
 
 .api-row--group td {
   background: color-mix(in srgb, var(--mauth-surface-2) 28%, var(--mauth-surface));
+}
+
+.api-row--api.is-off .api-row__name {
+  color: var(--mauth-text-faint);
+}
+
+.api-row--api.is-off .api-table__path code,
+.api-row--api.is-off .api-table__perm {
+  opacity: 0.7;
 }
 
 .api-row--api:hover td {
@@ -1397,6 +1471,35 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: var(--mauth-text-faint);
   cursor: help;
+}
+
+.api-empty__clear {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--mauth-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--mauth-primary);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* 窄屏：先保"名字 + 开关"，路径与权限码可以靠 title 看 */
+@media (max-width: 760px) {
+  .api-table__path,
+  .api-table__perm,
+  .api-table__login {
+    display: none;
+  }
+
+  .api-table__switch {
+    width: 96px;
+  }
+
+  .api-row td {
+    padding: 7px 8px;
+  }
 }
 
 .api-empty {
@@ -1449,7 +1552,7 @@ onBeforeUnmount(() => {
 .api-panel__foot {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 8px 18px;
   border-top: 1px solid var(--mauth-border);
   font-size: 12px;
@@ -1469,20 +1572,23 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.policy {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-top: 1px solid var(--mauth-border);
-  font-size: 12px;
-  color: var(--mauth-text-soft);
-}
-
 .policy__label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.api-panel__foot-spacer {
+  flex: 1;
+}
+
+.policy__state.is-off {
+  color: var(--mauth-danger, #d9534f);
+}
+
+.policy__hint {
+  color: var(--mauth-text-faint);
+  font-size: 11.5px;
 }
 
 .policy__state {
@@ -1499,10 +1605,40 @@ onBeforeUnmount(() => {
 }
 
 .api-edit {
-  margin-left: 6px;
-  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
   height: 22px;
-  font-size: 11.5px;
+  margin-left: 6px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--mauth-text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.api-row--api:hover .api-edit,
+.api-edit:focus-visible {
+  opacity: 1;
+}
+
+.api-edit:hover {
+  border-color: var(--mauth-border);
+  color: var(--mauth-primary);
+}
+
+/* 触屏没有 hover：常显，否则等于没有这个功能 */
+@media (hover: none) {
+  .api-edit {
+    opacity: 0.7;
+  }
 }
 
 .editor {
