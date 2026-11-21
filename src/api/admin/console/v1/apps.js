@@ -12,6 +12,10 @@
  * 所以这一版只回答"系统里有哪些应用、各自配了多少东西"，写操作留给代码。
  * 以后要放开，先有 `data/*.json` 覆盖层与审计，再谈编辑。
  *
+ * 🔴 按应用授权：页面入口是 `admin:app:read`，但**每个应用各自一个管理码**
+ *    （`admin:app:<appId>:manage`）。没有该码的应用整行不返回 —— 后续要在这里加
+ *    "接口开关 / 应用级配置"，权限粒度正好复用这一层，不用再发明新码。
+ *
  * @author yijiu2025
  * @since 2026-11-21
  */
@@ -38,7 +42,11 @@ async function registerAppRoutes(fastify) {
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
     handler: withFail(async (request, reply) => {
-      const apps = await listAppsOverview();
+      /*
+       * 把操作者传进服务层：只返回**他有管理码**的应用（`admin:app:<appId>:manage`）。
+       * 过滤放在数据源这一侧，前端拿到的就是"你能管的那些"，不需要再判一次。
+       */
+      const apps = await listAppsOverview(request.state.user);
       return reply.result.success('获取成功', { apps, total: apps.length });
     })
   });

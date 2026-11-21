@@ -119,3 +119,43 @@ describe('listAppsOverview', () => {
     expect(posecraft.access).toBeNull();
   });
 });
+
+describe('按应用授权：没管理码的应用整行不出现', () => {
+  /** 只持有 posecraft 管理码的操作者 */
+  const posecraftOnly = {
+    roles: ['admin_operator'],
+    permissions: { allows: ['admin:app:read', 'admin:app:posecraft:manage'], denies: [] }
+  };
+
+  it('只返回有 admin:app:<appId>:manage 的应用', async () => {
+    const apps = await mod.listAppsOverview(posecraftOnly);
+    expect(apps.map(a => a.appId)).toEqual(['posecraft']);
+  });
+
+  it('超管 / admin:* / admin:app:* 不受限（与"授予上限"同一判据）', async () => {
+    for (const actor of [
+      { roles: ['superadmin'], permissions: { allows: [], denies: [] } },
+      { roles: [], permissions: { allows: ['admin:*'], denies: [] } },
+      { roles: [], permissions: { allows: ['admin:app:*'], denies: [] } }
+    ]) {
+      const apps = await mod.listAppsOverview(actor);
+      expect(apps.map(a => a.appId)).toContain('posecraft');
+      expect(apps.map(a => a.appId)).toContain('console');
+    }
+  });
+
+  it('deny 压过 allow：被显式拒绝的应用不出现', async () => {
+    const denied = {
+      roles: [],
+      permissions: { allows: ['admin:*'], denies: ['admin:app:posecraft:manage'] }
+    };
+    const apps = await mod.listAppsOverview(denied);
+    expect(apps.some(a => a.appId === 'posecraft')).toBe(false);
+  });
+
+  it('管理码按应用拼，不用静态注册表（新增应用不会漏授权）', () => {
+    expect(mod.appManageCode('retroweb')).toBe('admin:app:retroweb:manage');
+    expect(mod.canManageApp(posecraftOnly, 'posecraft')).toBe(true);
+    expect(mod.canManageApp(posecraftOnly, 'retroweb')).toBe(false);
+  });
+});

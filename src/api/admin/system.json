@@ -1,5 +1,6 @@
 {
   "name": "Admin",
+  "app_id": "admin",
   "alias": "认证服务",
   "prefix": "/admin",
   "description": "用户管理",

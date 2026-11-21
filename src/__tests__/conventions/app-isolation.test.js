@@ -11,6 +11,12 @@
  * 本文件是**结构守卫**：只读源文件文本做静态断言，不 import 任何被测模块
  * （已登记进 test-effectiveness 的 STRUCTURAL_GUARD_WHITELIST）。
  *
+ * 2026-11-21：`console` 已并入 `admin` 成为**同一个应用**（见 `app/admin/config.js`
+ * 的合并说明）。代码目录暂时保留两个（`app/admin/` 放 IAM 与权限声明、`app/console/`
+ * 放控制台业务实现），所以这里用 `MERGED_APPS` 把它们当成一个应用来看：
+ * 两者之间的 import 不算跨应用耦合，真正的跨应用约束（admin ≠ posecraft 等）不受影响。
+ * 目录合并完成后这张表可以删掉。
+ *
  * @author yijiu2025
  * @since 2026-09-19
  */
@@ -74,6 +80,25 @@ function extractImportSpecs(src) {
 const relFromApp = f => path.relative(APP_DIR, f).replace(/\\/g, '/');
 
 /**
+ * 已合并的应用：几个代码目录 = 一个应用
+ *
+ * key 是被并入的目录名，value 是它现在归属的应用名。判边时两侧都归一到应用名，
+ * 于是 `admin/init.js -> console/services/x.js` 这类 import 视为**应用内**引用。
+ */
+const MERGED_APPS = new Map([['console', 'admin']]);
+
+/**
+ * 相对路径 → 所属应用名（合并后）
+ *
+ * @param {string} rel 相对 `src/app` 的路径
+ * @returns {string} 应用名
+ */
+function appOfPath(rel) {
+  const dir = rel.split('/')[0];
+  return MERGED_APPS.get(dir) || dir;
+}
+
+/**
  * 解析一个 import 说明符，若指向「另一个应用」则返回跨应用边
  *
  * @param {string} srcFile 源文件绝对路径
@@ -85,9 +110,8 @@ function resolveCrossAppEdge(srcFile, spec, apps) {
   if (!spec.startsWith('.')) return null;
   const resolved = path.resolve(path.dirname(srcFile), spec);
   const rel = relFromApp(resolved);
-  const [fromApp] = relFromApp(srcFile).split('/');
   const [toApp] = rel.split('/');
-  if (!apps.has(toApp) || toApp === fromApp) return null;
+  if (!apps.has(toApp) || appOfPath(rel) === appOfPath(relFromApp(srcFile))) return null;
   return `${relFromApp(srcFile)} -> ${rel}`;
 }
 

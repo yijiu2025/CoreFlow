@@ -23,7 +23,7 @@ import deactivationService from '../../user/services/deactivation.service.js';
 import tempPasswordService from '../../user/services/temp-password.service.js';
 import userDao from '../dao/user.dao.js';
 import { getActorScope, getTargetScope, assertCanManageUser, appLabel } from './access-scope.service.js';
-import consoleConfig from '../config.js';
+import adminConfig from '../../admin/config.js';
 
 /** 审计事件名（列表页据此筛选，别散落成字面量） */
 const DANGER_EVENTS = {
@@ -39,7 +39,7 @@ const DANGER_EVENTS = {
  * @returns {number} 天数
  */
 function graceDays() {
-  return Number(consoleConfig?.user_deletion?.grace_days) || 7;
+  return Number(adminConfig?.user_deletion?.grace_days) || 7;
 }
 
 /**

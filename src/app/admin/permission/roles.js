@@ -60,7 +60,7 @@ defineRoles([
     /**
      * 🔴 **不要**标 `is_default: true`（与其他应用的普通角色不同）
      *
-     * 管理后台是封闭应用（`console/config.js` 有 `access.anyPermission: ['admin:*']`），
+     * 管理后台是封闭应用（`admin/config.js` 有 `access.anyPermission: ['admin:*']`），
      * 观察者虽然是最低职级，但它持有全站读权限 —— 一旦"授权即送"，任何注册用户
      * 点一下同意就能看用户、部门、角色与日志。这类角色只能由管理员手工分配，
      * 所以 `config.default_role` 写的是 `null`，这里也不打默认标记。

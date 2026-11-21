@@ -1,5 +1,5 @@
 /**
- * Console 应用启动钩子
+ * 管理后台（admin）应用启动钩子
  *
  * 由 `10-apps` 在启动时调用（`config.init`）。这里只做一件事：把「按钮授权」的
  * 解析器注册给守卫。
@@ -12,7 +12,7 @@
  * @since 2026-11-14
  */
 import { registerButtonGrantProvider } from '../../framework/security/auth/index.js';
-import buttonGrantService from './services/button-grant.service.js';
+import buttonGrantService from '../console/services/button-grant.service.js';
 
 /**
  * 注册按钮授权解析器
@@ -22,9 +22,9 @@ import buttonGrantService from './services/button-grant.service.js';
  *
  * @returns {Promise<void>}
  */
-async function consoleAppInit() {
+async function adminAppInit() {
   registerButtonGrantProvider(buttonGrantService.resolveButtonGate);
 }
 
-export { consoleAppInit };
-export default consoleAppInit;
+export { adminAppInit };
+export default adminAppInit;

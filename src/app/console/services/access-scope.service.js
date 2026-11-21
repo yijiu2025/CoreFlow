@@ -524,6 +524,22 @@ function coversPermissionCode(permissions, code) {
 }
 
 /**
+ * 某个权限码是否被操作者自己的策略**显式拒绝**
+ *
+ * 单独抽出来是为了让"deny 优先"能用在 `coversPermissionCode` 之外的地方：
+ * 例如"能不能看见某个应用"这种判据，除了看 allows 还要看有没有被 deny 压过 ——
+ * 而 `isUnrestrictedGranter` 只回答"是不是最高授权方"，不回答"这个码是否被禁"。
+ *
+ * @param {{allows?: string[], denies?: string[]}} permissions PBAC 权限集
+ * @param {string} code 待判定权限码
+ * @returns {boolean} 是否被显式拒绝
+ */
+function isCodeDenied(permissions, code) {
+  const denies = Array.isArray(permissions?.denies) ? permissions.denies : [];
+  return denies.some(pattern => isWildcardMatch(pattern, code));
+}
+
+/**
  * 操作者是否不受「授予上限」约束
  *
  * 超管与 `admin:*` / `*` 持有者是后台的最高授权方：他们本来就能改任意应用的角色，
@@ -596,5 +612,8 @@ export {
   assertCanManageRole,
   assertRankBelowActor,
   assertRankChangeAllowed,
-  assertCanGrantCodes
+  assertCanGrantCodes,
+  coversPermissionCode,
+  isCodeDenied,
+  isUnrestrictedGranter
 };

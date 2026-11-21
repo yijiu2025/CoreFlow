@@ -22,6 +22,7 @@
 import { listAppConfigs, resolvePermissionAppId } from '../../../framework/config/app-registry.js';
 import { actionMetaRegistry } from '../../../framework/security/pbac/index.js';
 import appOverviewDao from '../dao/app-overview.dao.js';
+import { coversPermissionCode, isCodeDenied, isUnrestrictedGranter } from './access-scope.service.js';
 
 /**
  * 每个权限命名空间下的权限码数量
@@ -85,11 +86,52 @@ function namespaceOnlyAppIds(configs) {
 }
 
 /**
+ * 某应用的「管理码」
+ *
+ * 一个应用一个码：`admin:app:<appId>:manage`。它管的是"这个应用出现在应用管理页、
+ * 并且可以为它开关接口/调整配置"，与业务权限码（`posecraft:work:read` 之类）无关。
+ *
+ * 为什么不给每个应用在 `ADMIN_PERMISSIONS` 里静态声明一条：应用是**代码声明**的，
+ * 新增一个应用就得回来改权限注册表，漏改的表现是"应用列出来了但谁都授不了权"。
+ * 这里用命名空间式的动态码，`admin:app:*` / `admin:*` 天然覆盖它（通配匹配是单一来源）。
+ *
+ * @param {string} appId 应用标识
+ * @returns {string} 权限码
+ */
+function appManageCode(appId) {
+  return `admin:app:${appId}:manage`;
+}
+
+/**
+ * 操作者能否管理某个应用
+ *
+ * 判据与接口鉴权同一套（`coversPermissionCode`：deny 优先 + 通配），
+ * 超管与 `admin:*` / `*` 持有者不受限（`isUnrestrictedGranter`，与"授予上限"同源）。
+ *
+ * @param {object} actor 操作者（`request.state.user`）
+ * @param {string} appId 应用标识
+ * @returns {boolean} 是否可管理
+ */
+function canManageApp(actor, appId) {
+  if (!actor) return true;
+  const code = appManageCode(appId);
+  if (coversPermissionCode(actor.permissions, code)) return true;
+  /* 显式 deny 压过"最高授权方"兜底：能授全量权限 ≠ 这个应用也归他管 */
+  if (isCodeDenied(actor.permissions, code)) return false;
+  return isUnrestrictedGranter(actor);
+}
+
+/**
  * 列出全部应用及其授权数据规模
  *
+ * 🔴 只返回操作者**能管理**的应用：没拿到 `admin:app:<appId>:manage` 的应用整行不出现，
+ *    而不是灰掉 —— 灰掉的列表等于告诉对方"这些应用存在、但你不能碰"，对多租户/多团队
+ *    部署没有必要。
+ *
+ * @param {object} [actor] 操作者（`request.state.user`；缺省视为不受限，供内部/测试调用）
  * @returns {Promise<object[]>} 应用清单（按 app_id 升序，保证刷新时顺序稳定）
  */
-async function listAppsOverview() {
+async function listAppsOverview(actor) {
   const [roleCounts, menuCounts, clientIds] = await Promise.all([
     appOverviewDao.roleCounts(),
     appOverviewDao.menuCounts(),
@@ -127,7 +169,8 @@ async function listAppsOverview() {
         }
       };
     })
+    .filter(app => canManageApp(actor, app.appId))
     .sort((a, b) => a.appId.localeCompare(b.appId));
 }
 
-export { listAppsOverview, normalizeAccess, permissionCodeCounts, namespaceOnlyAppIds };
+export { listAppsOverview, normalizeAccess, permissionCodeCounts, namespaceOnlyAppIds, appManageCode, canManageApp };

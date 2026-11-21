@@ -109,7 +109,7 @@ async function registerSessionRoutes(fastify) {
     handler: withFail(async (request, reply) => {
       const user = request.state.user || {};
 
-      // 🔴 兜底闸门：登录时已由 `bind-session` 判过准入（`app/console/config.js` 的
+      // 🔴 兜底闸门：登录时已由 `bind-session` 判过准入（`app/admin/config.js` 的
       //    `access`），但会话建立之后角色仍可能被撤销 —— 权限每请求实时解析，
       //    这里再判一次，撤销后下一次刷新就进不来，而不是看到一片 403 的空壳。
       if (!hasAnyPermissionIn(user.permissions, 'admin') && !isSuperViewer(user)) {

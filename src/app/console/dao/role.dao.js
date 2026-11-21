@@ -13,6 +13,7 @@
  */
 import { getModel } from '../../../framework/persistence/db/index.js';
 import { roleRegistry, actionMetaRegistry } from '../../../framework/security/pbac/index.js';
+import { listAppConfigs } from '../../../framework/config/app-registry.js';
 
 /**
  * 菜单授权唯一被锁的角色
@@ -161,9 +162,10 @@ class RoleDao {
    * @param {number} [params.pageSize=20] 每页条数
    * @param {string} [params.keyword=''] 名称 / 编码模糊搜索
    * @param {string} [params.appId=''] 应用过滤
+   * @param {string[]|null} [params.appIds=null] 允许的应用白名单（`null` = 不限制）
    * @returns {Promise<{rows: Array<object>, total: number}>} 分页结果
    */
-  async page({ pageNum = 1, pageSize = 20, keyword = '', appId = '' }) {
+  async page({ pageNum = 1, pageSize = 20, keyword = '', appId = '', appIds = null }) {
     const Role = getModel('Role');
     const { Op } = Role.sequelize.Sequelize;
 
@@ -171,7 +173,16 @@ class RoleDao {
     if (keyword) {
       where[Op.or] = [{ name: { [Op.like]: `%${keyword}%` } }, { code: { [Op.like]: `%${keyword}%` } }];
     }
+    /*
+     * 应用可见性（2026-11-21）：`appIds` 是**已注册应用**白名单，由接口层用
+     * `listAppIds()` 现算。应用被卸载后它的角色行仍在库里，但这里会直接过滤掉 ——
+     * 不删库、不迁移，应用装回来时这些角色会自动重新出现。
+     *
+     * 显式 `appId` 过滤优先（用户在筛选器上选定了某个应用）；
+     * 两者同时给出时取交集，避免"筛了 A 应用却拿到别的应用"的越权视图。
+     */
     if (appId) where.app_id = appId;
+    else if (Array.isArray(appIds)) where.app_id = { [Op.in]: appIds };
 
     const offset = (Number(pageNum) - 1) * Number(pageSize);
     const { rows: roles, count } = await Role.findAndCountAll({
@@ -270,6 +281,22 @@ class RoleDao {
       for (const action of meta.actions || []) {
         list.push({ domain: meta.domain, domainName: meta.name, ...action });
       }
+    }
+    /*
+     * 应用管理码是**动态**的：一个应用一个（`admin:app:<appId>:manage`），
+     * 应用数量由代码声明决定，静态注册表写不全。这里按注册表补进目录，
+     * 否则角色表单里根本勾不到 —— 表现为"应用管理页永远只有一个管理员能看"。
+     */
+    for (const app of listAppConfigs()) {
+      const appId = String(app?.app_id || '').trim();
+      if (!appId) continue;
+      list.push({
+        domain: 'admin',
+        domainName: '管理后台',
+        code: `admin:app:${appId}:manage`,
+        label: `管理「${app.name || appId}」应用`,
+        type: 'write'
+      });
     }
     return list;
   }
@@ -390,10 +417,17 @@ class RoleDao {
    * 由调用方决定按名称还是按编码匹配 —— 同名角色（三个应用的"普通用户"）
    * 的歧义要由业务层报出来，DAO 不该替它选一个。
    *
+   * @param {object} [params] 过滤参数
+   * @param {string[]|null} [params.appIds=null] 允许的应用白名单（`null` = 不限制）
    * @returns {Promise<Array<{id: number, code: string, name: string}>>} 角色参照表
    */
-  async listBrief() {
-    return getModel('Role').findAll({ attributes: ['id', 'code', 'name'], raw: true });
+  async listBrief({ appIds = null } = {}) {
+    const options = { attributes: ['id', 'code', 'name'], raw: true };
+    if (Array.isArray(appIds)) {
+      const { Op } = getModel('Role').sequelize.Sequelize;
+      options.where = { app_id: { [Op.in]: appIds } };
+    }
+    return getModel('Role').findAll(options);
   }
 
   /**
@@ -543,11 +577,19 @@ class RoleDao {
    * 权限关系图（用户 → 角色 → 菜单）
    *
    * @param {boolean} [includeUsers=true] 是否包含用户节点（无用户读权限时传 false）
+   * @param {string[]|null} [appIds=null] 允许的应用白名单（`null` = 不限制；
+   *   已卸载应用的角色不该出现在图里，否则矩阵会画出永远没有路由的列）
    * @returns {Promise<object>} 图数据
    */
-  async graph(includeUsers = true) {
+  async graph(includeUsers = true, appIds = null) {
+    const where = {};
+    if (Array.isArray(appIds)) {
+      const { Op } = getModel('Role').sequelize.Sequelize;
+      where.app_id = { [Op.in]: appIds };
+    }
     const [roles, menus, roleMenus] = await Promise.all([
       getModel('Role').findAll({
+        where,
         attributes: ['id', 'name', 'code', 'app_id', 'rank_level', 'policy'],
         order: [
           ['rank_level', 'DESC'],

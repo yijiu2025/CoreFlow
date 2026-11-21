@@ -65,7 +65,7 @@ const SSO_ORIGIN = (() => {
  */
 export function buildSsoLoginUrl(nonce: string = Math.random().toString()): string {
   const params = new URLSearchParams({
-    appName: 'console',
+    appName: 'admin',
     appEntrance: 'web',
     lang: 'zh_cn',
     styleType: 'horizontal',
