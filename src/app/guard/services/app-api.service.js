@@ -52,8 +52,11 @@ function pickFields(node) {
 /**
  * 某个应用占有哪些接口系统
  *
- * 判据是 `system.json` 里的 `app_id` —— 只有声明了归属的系统才归某个应用管；
- * 共享系统（Auth / verify / notice / files …）不声明，因此在任何应用下都不出现。
+ * 判据是 `system.json` 里的归属声明，两级语义不同（详见 `api/guard-config.js` 的 `appId`）：
+ *   · `app_id`       —— **会话归属**（私有 API）：这个前缀属于哪个应用
+ *   · `owner_app_id` —— **管理归属**（共享 API 也能有）：开关归哪个应用的管理员管
+ * 只声明 `owner_app_id` 的系统（如 `/oauth2.1` 登录授权、`/notice` 通知）会出现在
+ * 对应应用的抽屉里，但**不会**参与会话归属校验 —— 否则别的应用的会话调登录接口会被 401。
  *
  * @param {string} appId 应用标识
  * @returns {object[]} 系统节点（含分组与接口）

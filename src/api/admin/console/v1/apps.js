@@ -22,6 +22,10 @@
  * 🔴 按应用授权：页面入口 `admin:app:read`；每个应用一个管理码
  *    `admin:app:<appId>:manage`。清单、接口树、开关三处都按它收口。
  *
+ * 🔴 接口树的"归属"有两级：`app_id`（会话归属，私有 API 才写）与 `owner_app_id`
+ *    （管理归属，共享 API 也写）。只写后者时，系统能在本页开关，但不参与
+ *    `SESSION_APP_MISMATCH` 校验 —— 登录/授权类接口必须这样处理。
+ *
  * @author yijiu2025
  * @since 2026-11-21
  */

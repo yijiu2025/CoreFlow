@@ -239,7 +239,8 @@ onMounted(() => {
         <Lock :size="18" />
         <p>这个应用还没有声明归属的接口系统。</p>
         <p class="api-drawer__hint">
-          在 <code>src/api/&lt;system&gt;/system.json</code> 里写上 <code>"app_id": "{{ appId }}"</code> 即可接入。
+          私有 API 写 <code>"app_id": "{{ appId }}"</code>；共享 API（登录/通知这类，会被别的应用调用） 写
+          <code>"owner_app_id": "{{ appId }}"</code> —— 只登记管理归属，不参与会话归属校验。
         </p>
       </div>
 

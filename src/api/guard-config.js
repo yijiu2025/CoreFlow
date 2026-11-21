@@ -608,11 +608,18 @@ function registerSystemMetadata(systemKey, metadata) {
   Object.assign(configs[systemKey], {
     id: systemKey,
     /*
-     * 归属应用（`system.json` 的 `app_id`）：只有声明了归属的系统才属于某个应用，
-     * 共享系统（Auth / verify / notice / files）不声明，于是永远不会被"应用管理"看到。
-     * 这一列只用于**按应用收口**，不参与鉴权判定。
+     * 归属应用 —— **只用于「应用管理」的分组**，不参与任何鉴权判定。
+     *
+     * 两个来源，语义不同（`system.json` 里分别声明）：
+     *   · `app_id`        —— 会话归属：请求路径属于哪个应用，用于 `SESSION_APP_MISMATCH`
+     *                        校验。**共享系统绝不能声明它**（登录/通知被别的应用调用时会 401）。
+     *   · `owner_app_id`  —— 管理归属：这个系统的开关由哪个应用的管理员来管。
+     *                        共享系统也声明它，于是它能在「应用管理」里被开关，
+     *                        但不会因为"会话不属于本应用"而拒绝请求。
+     *
+     * 私有 API 只需写 `app_id`（两个语义天然重合）；共享但需要运维的系统写 `owner_app_id`。
      */
-    appId: metadata.app_id || null,
+    appId: metadata.owner_app_id || metadata.app_id || null,
     name: metadata.alias || metadata.name || systemKey,
     description: metadata.description || '',
     prefix: metadata.prefix || '',
