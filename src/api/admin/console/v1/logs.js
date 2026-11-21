@@ -26,10 +26,10 @@
 import crypto from 'node:crypto';
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import logDao from '../../../../app/console/dao/log.dao.js';
-import stepUpService from '../../../../app/console/services/stepup.service.js';
-import { withFail } from '../../../../app/console/utils/respond.js';
-import { resolveDataScope, logScopeSql } from '../../../../app/console/services/data-scope.service.js';
+import logDao from '../../../../app/admin/console/dao/log.dao.js';
+import stepUpService from '../../../../app/admin/console/services/stepup.service.js';
+import { withFail } from '../../../../app/admin/console/utils/respond.js';
+import { resolveDataScope, logScopeSql } from '../../../../app/admin/console/services/data-scope.service.js';
 
 /** 日志查询参数 schema */
 const listQuerySchema = {

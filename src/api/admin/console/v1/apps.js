@@ -21,8 +21,8 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import { listAppsOverview } from '../../../../app/console/services/app-overview.service.js';
-import { withFail } from '../../../../app/console/utils/respond.js';
+import { listAppsOverview } from '../../../../app/admin/console/services/app-overview.service.js';
+import { withFail } from '../../../../app/admin/console/utils/respond.js';
 
 async function registerAppRoutes(fastify) {
   registerGroupMetadata({

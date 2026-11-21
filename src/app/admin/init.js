@@ -12,7 +12,7 @@
  * @since 2026-11-14
  */
 import { registerButtonGrantProvider } from '../../framework/security/auth/index.js';
-import buttonGrantService from '../console/services/button-grant.service.js';
+import buttonGrantService from './console/services/button-grant.service.js';
 
 /**
  * 注册按钮授权解析器

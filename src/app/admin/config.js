@@ -2,7 +2,7 @@
  * 管理后台（admin）应用配置 —— **唯一来源**
  *
  * 2026-11-21 合并：此前这里是"空壳"（只声明 app_id 给角色一个落点），真正的应用
- * 声明在 `src/app/console/config.js`（登录应用 `console`），两者靠
+ * 声明在 `src/app/admin/console/config.js`（登录应用 `console`），两者靠
  * `permission_app_id: 'admin'` 相连。结果是同一个后台在注册表里登记了两次：
  * 应用清单出现两行同名"管理后台"、会话 appId 一个叫 console 一个叫 admin，
  * 每写一处权限判断都要先问"这是登录应用还是命名空间"。
@@ -10,8 +10,8 @@
  * 现在只有**一个**应用标识 `admin`：
  *   · 会话 `appId`、OAuth 客户端 id、`iam_role.app_id`、`sys_menu.app_id` 全部是 `admin`；
  *   · `permission_app_id` 已删除（它就是自己，留着只会让 `resolvePermissionAppId` 多绕一层）；
- *   · 代码仍分布在 `app/admin/`（IAM 与权限声明）与 `app/console/`（控制台业务实现），
- *     那只是**目录归属**，不再代表两个应用 —— 启动期只有本文件会被扫描成应用。
+ *   · 代码统一在 `app/admin/` 下：IAM 与权限声明在根层，控制台业务实现在
+ *     `app/admin/console/`（2026-11-21 从 `app/console/` 整体搬入）。
  *
  * @author yijiu2025
  * @since 2026-08-17（2026-11-21 合并 console → admin）

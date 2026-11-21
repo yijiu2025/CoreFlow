@@ -13,10 +13,10 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import deptDao, { DEPT_AUDIT_TYPES } from '../../../../app/console/dao/dept.dao.js';
+import deptDao, { DEPT_AUDIT_TYPES } from '../../../../app/admin/console/dao/dept.dao.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
-import { withFail } from '../../../../app/console/utils/respond.js';
-import { resolveDataScope, filterDeptTree } from '../../../../app/console/services/data-scope.service.js';
+import { withFail } from '../../../../app/admin/console/utils/respond.js';
+import { resolveDataScope, filterDeptTree } from '../../../../app/admin/console/services/data-scope.service.js';
 
 /** 参与 diff 的字段与中文名（历史里"改了什么"必须能读懂，不能是一串列名） */
 const TRACKED_FIELDS = [

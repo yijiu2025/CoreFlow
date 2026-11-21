@@ -12,8 +12,8 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import postDao from '../../../../app/console/dao/post.dao.js';
-import { withFail } from '../../../../app/console/utils/respond.js';
+import postDao from '../../../../app/admin/console/dao/post.dao.js';
+import { withFail } from '../../../../app/admin/console/utils/respond.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 
 /** 岗位写入字段 schema */

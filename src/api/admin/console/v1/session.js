@@ -19,15 +19,15 @@ import {
   verifyPassword,
   validatePasswordStrength
 } from '../../../../framework/security/auth/index.js';
-import menuDao from '../../../../app/console/dao/menu.dao.js';
-import userDao from '../../../../app/console/dao/user.dao.js';
-import roleDao from '../../../../app/console/dao/role.dao.js';
-import deptDao from '../../../../app/console/dao/dept.dao.js';
-import profileDao from '../../../../app/console/dao/profile.dao.js';
-import { isSuperViewer, effectiveCodes } from '../../../../app/console/services/button-grant.service.js';
-import { withFail } from '../../../../app/console/utils/respond.js';
-import avatarService from '../../../../app/console/services/avatar.service.js';
-import { hasAnyPermissionIn } from '../../../../app/console/utils/permissions.js';
+import menuDao from '../../../../app/admin/console/dao/menu.dao.js';
+import userDao from '../../../../app/admin/console/dao/user.dao.js';
+import roleDao from '../../../../app/admin/console/dao/role.dao.js';
+import deptDao from '../../../../app/admin/console/dao/dept.dao.js';
+import profileDao from '../../../../app/admin/console/dao/profile.dao.js';
+import { isSuperViewer, effectiveCodes } from '../../../../app/admin/console/services/button-grant.service.js';
+import { withFail } from '../../../../app/admin/console/utils/respond.js';
+import avatarService from '../../../../app/admin/console/services/avatar.service.js';
+import { hasAnyPermissionIn } from '../../../../app/admin/console/utils/permissions.js';
 
 // `isSuperViewer` 从 button-grant.service 引入（单一来源）：它与"按钮授权闸"共用同一个
 // 判据 —— 超管不看菜单授权。两处各写一份，改一处就会让前端和服务端对不上。

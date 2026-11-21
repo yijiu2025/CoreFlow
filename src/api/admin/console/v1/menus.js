@@ -13,11 +13,11 @@
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import { actionMetaRegistry } from '../../../../framework/security/pbac/index.js';
-import menuDao from '../../../../app/console/dao/menu.dao.js';
-import { getActorScope } from '../../../../app/console/services/access-scope.service.js';
-import { appNameOf, canConfigureApp } from '../../../../app/console/services/menu-scope.service.js';
-import { invalidateButtonGrants } from '../../../../app/console/services/button-grant.service.js';
-import { withFail } from '../../../../app/console/utils/respond.js';
+import menuDao from '../../../../app/admin/console/dao/menu.dao.js';
+import { getActorScope } from '../../../../app/admin/console/services/access-scope.service.js';
+import { appNameOf, canConfigureApp } from '../../../../app/admin/console/services/menu-scope.service.js';
+import { invalidateButtonGrants } from '../../../../app/admin/console/services/button-grant.service.js';
+import { withFail } from '../../../../app/admin/console/utils/respond.js';
 import { logAuditEvent } from '../../../../framework/security/auth/index.js';
 
 /** 菜单写入字段 schema（创建 / 编辑共用） */

@@ -6,5 +6,7 @@
   "enabled": true,
   "requireLogin": true,
   "allowIps": [],
-  "allowRoles": ["admin"]
+  "allowRoles": [
+    "admin"
+  ]
 }

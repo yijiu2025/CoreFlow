@@ -8,9 +8,9 @@
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import dashboardService from '../../../../app/console/services/dashboard.service.js';
-import { hasPermissionLike } from '../../../../app/console/utils/permissions.js';
-import { withFail } from '../../../../app/console/utils/respond.js';
+import dashboardService from '../../../../app/admin/console/services/dashboard.service.js';
+import { hasPermissionLike } from '../../../../app/admin/console/utils/permissions.js';
+import { withFail } from '../../../../app/admin/console/utils/respond.js';
 
 async function registerDashboardRoutes(fastify) {
   registerGroupMetadata({
