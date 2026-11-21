@@ -628,6 +628,8 @@ function registerSystemMetadata(systemKey, metadata) {
     requirePermission: metadata.requirePermission ?? null,
     allowIps: metadata.allowIps || [],
     allowRoles: metadata.allowRoles || [],
+    /* 保护性接口：不允许被关闭（代码声明，不接受 DB 覆盖） */
+    critical: Boolean(metadata.critical),
     updatedAt: new Date().toISOString()
   });
 
@@ -729,6 +731,8 @@ function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
       allowRoles: metadata.allowRoles || [],
       requirePermission: metadata.requirePermission ?? null,
       freshPermission: metadata.freshPermission === true,
+      /* 保护性接口：不允许被关闭（代码级，不接受 DB 覆盖） */
+      critical: Boolean(metadata.critical),
       url: metadata.url,
       method: metadata.method,
       updatedAt: new Date().toISOString()
@@ -743,6 +747,8 @@ function registerApiMetadata(systemKey, groupKey, apiKey, metadata) {
       method: metadata.method,
       requirePermission: metadata.requirePermission ?? null,
       freshPermission: metadata.freshPermission === true,
+      /* 与 requirePermission 同类：代码级，每次启动刷新（改了代码要生效） */
+      critical: Boolean(metadata.critical),
       updatedAt: new Date().toISOString()
     });
   }

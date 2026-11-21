@@ -34,7 +34,8 @@ const PUBLIC_FIELDS = [
   'requireLogin',
   'requirePermission',
   'allowIps',
-  'allowRoles'
+  'allowRoles',
+  'critical'
 ];
 
 /**
@@ -73,11 +74,12 @@ function listAppSystems(appId) {
     for (const [groupKey, group] of Object.entries(system.groups || {})) {
       const apis = [];
       for (const [apiKey, api] of Object.entries(group.apis || {})) {
-        apis.push({ key: apiKey, ...pickFields(api) });
+        /* 系统级声明了 critical 时，整棵树都是保护性的（如 oauth21 整个授权域） */
+        apis.push({ key: apiKey, ...pickFields(api), critical: Boolean(api.critical || system.critical) });
       }
       // 组内按 key 排序：注册顺序取决于文件扫描顺序，每次重启可能变
       apis.sort((a, b) => String(a.key).localeCompare(String(b.key)));
-      groups.push({ key: groupKey, ...pickFields(group), apis });
+      groups.push({ key: groupKey, ...pickFields(group), critical: Boolean(group.critical || system.critical), apis });
     }
     groups.sort((a, b) => String(a.key).localeCompare(String(b.key)));
     systems.push({ key: systemKey, ...pickFields(system), groups });
@@ -117,6 +119,26 @@ function ownsSystem(appId, systemKey) {
 async function toggleAppNode({ appId, systemKey, groupKey, apiKey, request, stepupToken }) {
   if (!ownsSystem(appId, systemKey)) {
     return { ok: false, statusCode: 403, message: '该系统不属于当前应用' };
+  }
+
+  /*
+   * 保护性接口：**任何身份都不允许关闭**（包括超管）。
+   * 这类接口一关就是"管理后台进不去 / 谁都登不进来"，恢复只能改库或改代码 ——
+   * 给超管开的口子等于把恢复手段也一起关掉。编辑其它字段（白名单等）不受影响。
+   */
+  const guardTree = getAllGuardConfigs()[systemKey];
+  const targetNode = !groupKey
+    ? guardTree
+    : apiKey
+      ? guardTree?.groups?.[groupKey]?.apis?.[apiKey]
+      : guardTree?.groups?.[groupKey];
+  if (!targetNode) return { ok: false, statusCode: 404, message: '未找到指定配置路径' };
+  if (targetNode.enabled && (targetNode.critical || guardTree?.critical)) {
+    return {
+      ok: false,
+      statusCode: 403,
+      message: '该接口是保护性接口（关闭会导致无法登录或无法管理），不允许关闭'
+    };
   }
 
   /*

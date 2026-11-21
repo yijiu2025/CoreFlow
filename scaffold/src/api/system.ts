@@ -6,7 +6,7 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { del, download, get, post, put } from './http';
+import { del, download, get, patch, post, put } from './http';
 import type {
   DangerConfirm,
   DeptHistoryRow,
@@ -459,6 +459,8 @@ export interface AppApiNode {
   requirePermission?: string | null;
   allowIps?: string[];
   allowRoles?: string[];
+  /** 保护性接口：不允许关闭（登录/授权、应用管理与会话自身） */
+  critical?: boolean;
 }
 
 /** 模块节点 */
@@ -535,4 +537,25 @@ export function getAppSwitchPolicy(): Promise<AppSwitchPolicy> {
 /** 改策略（仅超管；后端会再判一次） */
 export function setAppSwitchPolicy(requireStepUp: boolean): Promise<{ requireStepUp: boolean }> {
   return put(`${BASE}/apps/switch-policy`, { requireStepUp });
+}
+
+/** 编辑某个接口节点的可写字段 */
+export interface AppApiPatch {
+  description?: string;
+  requireLogin?: boolean;
+  allowIps?: string[];
+  allowRoles?: string[];
+}
+
+export function updateAppApi(
+  appId: string,
+  body: {
+    systemKey: string;
+    groupKey?: string;
+    apiKey?: string;
+    patch: AppApiPatch;
+    stepupToken?: string;
+  }
+): Promise<{ node: AppApiNode | null }> {
+  return patch(`${BASE}/apps/${appId}/apis`, body);
 }

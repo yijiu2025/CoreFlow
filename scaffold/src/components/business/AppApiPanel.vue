@@ -31,9 +31,10 @@ import {
   getAppSwitchPolicy,
   listAppApis,
   setAppSwitchPolicy,
-  toggleAppApi
+  toggleAppApi,
+  updateAppApi
 } from '@/api/system';
-import type { AppApiGroup, AppApiSystem } from '@/api/system';
+import type { AppApiGroup, AppApiNode, AppApiSystem } from '@/api/system';
 import { useToastStore } from '@/stores/toast';
 
 const props = withDefaults(
@@ -431,6 +432,185 @@ const disabledCount = computed(() => {
   return n;
 });
 
+/**
+ * 正在编辑的节点（`null` = 关闭）
+ *
+ * 编辑与开关走**同一套二次验证**：都是运行时字段变更，都绑 `path + patchHash`。
+ * 只是编辑的 patch 由这里构造（只提交改过的字段），而开关的 patch 由服务端算。
+ */
+const editing = ref<{
+  systemKey: string;
+  groupKey?: string;
+  apiKey?: string;
+  name: string;
+  description: string;
+  requireLogin: boolean;
+  ips: string;
+  roles: string;
+  reason: string;
+  challengeId: string;
+  maskedTarget: string;
+  code: string;
+  busy: boolean;
+} | null>(null);
+
+/**
+ * 打开编辑（只对接口级开放：组/系统级没有"权限码"这类字段可改）
+ *
+ * @param system 系统节点
+ * @param group 模块节点
+ * @param api 接口节点
+ */
+function openEdit(system: AppApiSystem, group: { key: string }, api: AppApiNode): void {
+  editing.value = {
+    systemKey: system.key,
+    groupKey: group.key,
+    apiKey: String(api.key),
+    name: String(api.name || api.key),
+    description: String(api.description || ''),
+    requireLogin: Boolean(api.requireLogin),
+    ips: (Array.isArray(api.allowIps) ? api.allowIps : []).join(', '),
+    roles: (Array.isArray(api.allowRoles) ? api.allowRoles : []).join(', '),
+    reason: '',
+    challengeId: '',
+    maskedTarget: '',
+    code: '',
+    busy: false
+  };
+}
+
+/** 从表单构造 patch（只带改过的字段；白名单按逗号/空白切分） */
+function buildEditPatch(): {
+  patch: Record<string, unknown>;
+  description: string;
+  requireLogin: boolean;
+  ips: string[];
+  roles: string[];
+} {
+  const e = editing.value;
+  const split = (text: string): string[] =>
+    text
+      .split(/[,，\s]+/)
+      .map(x => x.trim())
+      .filter(Boolean);
+  return {
+    patch: {},
+    description: e ? e.description.trim() : '',
+    requireLogin: e ? e.requireLogin : false,
+    ips: e ? split(e.ips) : [],
+    roles: e ? split(e.roles) : []
+  };
+}
+
+/** 保存编辑：先直连，遇到 428/409 再走"发码 → 输码 → 重试" */
+async function saveEdit(): Promise<void> {
+  const e = editing.value;
+  if (!e) return;
+  const built = buildEditPatch();
+
+  /* 描述变化才提交：避免把没动过的字段一起写（PATCH 语义） */
+  const patch: Record<string, unknown> = {
+    requireLogin: built.requireLogin,
+    allowIps: built.ips,
+    allowRoles: built.roles
+  };
+  if (built.description) patch.description = built.description;
+
+  e.busy = true;
+  try {
+    const res = await updateAppApi(props.appId, {
+      systemKey: e.systemKey,
+      groupKey: e.groupKey,
+      apiKey: e.apiKey,
+      patch
+    });
+    applyEdited(e, res.node);
+    toast.push('已保存');
+    editing.value = null;
+  } catch (err) {
+    const code = (err as { code?: number }).code;
+    if (code === 428 || code === 409) {
+      await issueEditChallenge(patch);
+    } else {
+      toast.pushError(err, '保存失败');
+    }
+  } finally {
+    e.busy = false;
+  }
+}
+
+/** 发起编辑的二次认证（原因 4-200 字） */
+async function issueEditChallenge(patch: Record<string, unknown>): Promise<void> {
+  const e = editing.value;
+  if (!e) return;
+  if (e.reason.trim().length < 4) {
+    toast.push('请先填写变更原因（至少 4 个字）', 'info');
+    return;
+  }
+  try {
+    const res = await appApiStepUpChallenge(props.appId, {
+      systemKey: e.systemKey,
+      groupKey: e.groupKey,
+      apiKey: e.apiKey,
+      action: 'patch',
+      patch,
+      reason: e.reason.trim()
+    });
+    e.challengeId = res.challengeId;
+    e.maskedTarget = res.maskedTarget;
+    toast.push(`验证码已发送至 ${res.maskedTarget}`, 'info');
+  } catch (err) {
+    toast.pushError(err, '发起认证失败');
+  }
+}
+
+/** 核验并重试保存 */
+async function confirmEditStepUp(): Promise<void> {
+  const e = editing.value;
+  if (!e || !e.challengeId || !e.code.trim()) return;
+  const built = buildEditPatch();
+  const patch: Record<string, unknown> = {
+    requireLogin: built.requireLogin,
+    allowIps: built.ips,
+    allowRoles: built.roles
+  };
+  if (built.description) patch.description = built.description;
+
+  e.busy = true;
+  try {
+    const { ticket } = await appApiStepUpVerify(props.appId, { challengeId: e.challengeId, code: e.code.trim() });
+    const res = await updateAppApi(props.appId, {
+      systemKey: e.systemKey,
+      groupKey: e.groupKey,
+      apiKey: e.apiKey,
+      patch,
+      stepupToken: ticket
+    });
+    applyEdited(e, res.node);
+    toast.push('已保存');
+    editing.value = null;
+  } catch (err) {
+    toast.pushError(err, '保存失败');
+  } finally {
+    e.busy = false;
+  }
+}
+
+/** 保存成功后把结果写回本地树（不整树重拉，避免丢展开状态） */
+function applyEdited(e: { systemKey: string; groupKey?: string; apiKey?: string }, node: AppApiNode | null): void {
+  if (!node) return;
+  const system = systems.value.find(s => s.key === e.systemKey);
+  const group = system?.groups.find(g => g.key === e.groupKey);
+  const api = group?.apis.find(a => a.key === e.apiKey);
+  if (!api) return;
+  Object.assign(api, {
+    description: node.description,
+    requireLogin: node.requireLogin,
+    allowIps: node.allowIps,
+    allowRoles: node.allowRoles
+  });
+}
+
 /** 读策略（失败不阻断面板：默认按"要二次验证"渲染） */
 async function loadPolicy(): Promise<void> {
   try {
@@ -473,7 +653,13 @@ onMounted(() => {
           <h2 class="api-panel__title">接口开关 · {{ appName }}</h2>
           <p class="api-panel__sub">关闭后该接口直接拒绝请求（403 前置拦截）。变更需二次认证并留审计。</p>
         </div>
-        <button v-if="mode === 'drawer'" class="api-panel__close" type="button" aria-label="关闭" @click="emit('close')">
+        <button
+          v-if="mode === 'drawer'"
+          class="api-panel__close"
+          type="button"
+          aria-label="关闭"
+          @click="emit('close')"
+        >
           <X :size="16" />
         </button>
       </header>
@@ -500,8 +686,7 @@ onMounted(() => {
       <!-- 关闭前的影响面确认：一次误点会让整块接口 403，而恢复要再来一遍二次验证 -->
       <div v-if="pendingOff" class="api-confirm" role="alert">
         <span class="api-confirm__text">
-          关闭「{{ pendingOff.label }}」将影响
-          <b>{{ pendingOff.total }}</b> 个接口<template v-if="pendingOff.writes"
+          关闭「{{ pendingOff.label }}」将影响 <b>{{ pendingOff.total }}</b> 个接口<template v-if="pendingOff.writes"
             >，其中 <b>{{ pendingOff.writes }}</b> 个是写操作</template
           >
         </span>
@@ -530,15 +715,20 @@ onMounted(() => {
                   <ChevronRight v-else :size="14" class="api-row__caret" />
                   <span class="api-row__strong">{{ system.name || system.key }}</span>
                 </td>
-                <td class="api-table__path"><code>{{ system.prefix || '—' }}</code></td>
+                <td class="api-table__path">
+                  <code>{{ system.prefix || '—' }}</code>
+                </td>
                 <td class="api-table__perm" />
                 <td class="api-table__login" />
                 <td class="api-table__switch">
+                  <span v-if="system.critical" class="lock" title="保护性接口：关闭后无法登录或无法管理，不允许关闭">
+                    <Lock :size="13" />
+                  </span>
                   <label class="switch" :title="system.enabled ? '已启用' : '已关闭'">
                     <input
                       type="checkbox"
                       :checked="system.enabled"
-                      :disabled="busyKey === nodeKey(system.key)"
+                      :disabled="system.critical || busyKey === nodeKey(system.key)"
                       :aria-label="`${system.name || system.key} 开关`"
                       @click.stop
                       @change="onNodeChange($event, system.key)"
@@ -557,7 +747,9 @@ onMounted(() => {
                       <span class="api-row__group">{{ group.name || group.key }}</span>
                       <span class="api-row__count">{{ enabledText(group) }}</span>
                     </td>
-                    <td class="api-table__path"><code>{{ group.prefix || '—' }}</code></td>
+                    <td class="api-table__path">
+                      <code>{{ group.prefix || '—' }}</code>
+                    </td>
                     <td class="api-table__perm">
                       <!-- 组头只给"共同权限码"：几十行重复同一个码是噪音，不是信息 -->
                       <span v-if="commonPermission(group)" class="chip chip--perm">{{ commonPermission(group) }}</span>
@@ -567,11 +759,14 @@ onMounted(() => {
                     </td>
                     <td class="api-table__login" />
                     <td class="api-table__switch">
+                      <span v-if="group.critical" class="lock" title="保护性接口：关闭后无法登录或无法管理，不允许关闭">
+                        <Lock :size="13" />
+                      </span>
                       <label class="switch" :title="group.enabled ? '已启用' : '已关闭'">
                         <input
                           type="checkbox"
                           :checked="group.enabled"
-                          :disabled="busyKey === nodeKey(system.key, group.key)"
+                          :disabled="group.critical || busyKey === nodeKey(system.key, group.key)"
                           :aria-label="`${group.name || group.key} 开关`"
                           @click.stop
                           @change="onNodeChange($event, system.key, group.key)"
@@ -587,7 +782,11 @@ onMounted(() => {
                         <span class="api-row__name" :class="{ 'is-danger': isDangerous(api.key) }">
                           {{ api.name || api.key }}
                         </span>
-                        <span v-if="isDangerous(api.key)" class="chip chip--danger" title="写操作：关闭后相关功能会直接 403">
+                        <span
+                          v-if="isDangerous(api.key)"
+                          class="chip chip--danger"
+                          title="写操作：关闭后相关功能会直接 403"
+                        >
                           写
                         </span>
                       </td>
@@ -610,16 +809,28 @@ onMounted(() => {
                         <span v-else class="api-row__muted">—</span>
                       </td>
                       <td class="api-table__switch">
+                        <span v-if="api.critical" class="lock" title="保护性接口：关闭后无法登录或无法管理，不允许关闭">
+                          <Lock :size="13" />
+                        </span>
                         <label class="switch" :title="api.enabled ? '已启用' : '已关闭'">
                           <input
                             type="checkbox"
                             :checked="api.enabled"
-                            :disabled="busyKey === nodeKey(system.key, group.key, api.key)"
+                            :disabled="api.critical || busyKey === nodeKey(system.key, group.key, api.key)"
                             :aria-label="`${api.name || api.key} 开关`"
                             @change="doToggle(system.key, group.key, api.key)"
                           />
                           <span class="switch__track" />
                         </label>
+                        <button
+                          class="btn btn--ghost btn--sm api-edit"
+                          type="button"
+                          :aria-label="`编辑 ${api.name || api.key}`"
+                          title="编辑描述 / 登录要求 / 白名单"
+                          @click.stop="openEdit(system, group, api)"
+                        >
+                          编辑
+                        </button>
                       </td>
                     </tr>
                   </template>
@@ -699,6 +910,97 @@ onMounted(() => {
             <span class="stepup__hint">已发送至 {{ stepup.maskedTarget }}</span>
           </div>
         </template>
+      </div>
+
+      <!-- 编辑节点：描述 / 登录要求 / 白名单。保存同样要二次验证（原因 4-200 字） -->
+      <div v-if="editing" class="editor" role="dialog" aria-modal="true" aria-label="编辑接口配置">
+        <div class="editor__mask" @click="editing = null" />
+        <div class="editor__panel">
+          <header class="editor__head">
+            <h4 class="editor__title">编辑「{{ editing.name }}」</h4>
+            <button class="editor__close" type="button" aria-label="关闭" @click="editing = null">×</button>
+          </header>
+
+          <div class="editor__body">
+            <label class="editor__field">
+              <span class="editor__label">描述</span>
+              <input
+                v-model="editing.description"
+                class="editor__input"
+                maxlength="200"
+                placeholder="会显示在接口列表里"
+              />
+            </label>
+
+            <label class="editor__field editor__field--row">
+              <span class="editor__label">要求登录</span>
+              <label class="switch">
+                <input v-model="editing.requireLogin" type="checkbox" />
+                <span class="switch__track" />
+              </label>
+              <span class="editor__hint">关掉后匿名可访问（危险，谨慎）</span>
+            </label>
+
+            <label class="editor__field">
+              <span class="editor__label">IP 白名单</span>
+              <input
+                v-model="editing.ips"
+                class="editor__input"
+                placeholder="逗号分隔，如 10.0.0.1, 192.168.1.0/24；留空 = 不限制"
+              />
+            </label>
+
+            <label class="editor__field">
+              <span class="editor__label">角色白名单</span>
+              <input v-model="editing.roles" class="editor__input" placeholder="逗号分隔角色编码；留空 = 不限制" />
+            </label>
+
+            <label class="editor__field">
+              <span class="editor__label">变更原因</span>
+              <input
+                v-model="editing.reason"
+                class="editor__input"
+                maxlength="200"
+                placeholder="至少 4 个字，写进审计（保存需要二次验证时必填）"
+              />
+            </label>
+
+            <div v-if="editing.challengeId" class="editor__field">
+              <span class="editor__label">验证码（已发送至 {{ editing.maskedTarget }}）</span>
+              <input
+                v-model="editing.code"
+                class="editor__input"
+                inputmode="numeric"
+                maxlength="8"
+                placeholder="输入验证码"
+              />
+            </div>
+          </div>
+
+          <footer class="editor__foot">
+            <button class="btn btn--sm" type="button" :disabled="editing.busy" @click="editing = null">取消</button>
+            <button
+              v-if="!editing.challengeId"
+              class="btn btn--primary btn--sm"
+              type="button"
+              :disabled="editing.busy"
+              @click="saveEdit"
+            >
+              <Loader2 v-if="editing.busy" :size="14" class="is-spin" />
+              保存
+            </button>
+            <button
+              v-else
+              class="btn btn--primary btn--sm"
+              type="button"
+              :disabled="editing.busy || !editing.code.trim()"
+              @click="confirmEditStepUp"
+            >
+              <Loader2 v-if="editing.busy" :size="14" class="is-spin" />
+              核验并保存
+            </button>
+          </footer>
+        </div>
       </div>
     </section>
   </div>
@@ -1120,6 +1422,120 @@ onMounted(() => {
 }
 
 /* ── 二次认证（内联） ───────────────────────────────────── */
+
+.lock {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 4px;
+  color: var(--mauth-text-faint);
+}
+
+.api-edit {
+  margin-left: 6px;
+  padding: 0 6px;
+  height: 22px;
+  font-size: 11.5px;
+}
+
+.editor {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor__mask {
+  position: absolute;
+  inset: 0;
+  background: rgb(16 20 24 / 36%);
+}
+
+.editor__panel {
+  position: relative;
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: var(--mauth-surface);
+  box-shadow: 0 12px 40px rgb(16 20 24 / 22%);
+  overflow: hidden;
+}
+
+.editor__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--mauth-border);
+}
+
+.editor__title {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 620;
+}
+
+.editor__close {
+  border: 0;
+  background: none;
+  color: var(--mauth-text-soft);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 16px;
+  overflow: auto;
+}
+
+.editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor__field--row {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor__label {
+  color: var(--mauth-text-mid);
+  font-size: 12px;
+}
+
+.editor__hint {
+  color: var(--mauth-text-faint);
+  font-size: 11.5px;
+}
+
+.editor__input {
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--mauth-border);
+  border-radius: 8px;
+  background: var(--mauth-surface);
+  color: var(--mauth-text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.editor__foot {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--mauth-border);
+}
 
 .stepup {
   border-top: 1px solid var(--mauth-border);

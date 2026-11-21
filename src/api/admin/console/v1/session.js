@@ -106,6 +106,8 @@ async function registerSessionRoutes(fastify) {
     method: 'GET',
     url: '/session/me',
     requireLogin: true,
+    /* 保护性接口：会话与菜单关掉后后台整页不可用 */
+    critical: true,
     handler: withFail(async (request, reply) => {
       const user = request.state.user || {};
 
@@ -162,6 +164,8 @@ async function registerSessionRoutes(fastify) {
     method: 'GET',
     url: '/session/routes',
     requireLogin: true,
+    /* 保护性接口：会话与菜单关掉后后台整页不可用 */
+    critical: true,
     handler: withFail(async (request, reply) => {
       const user = request.state.user || {};
       /*
@@ -223,6 +227,8 @@ async function registerSessionRoutes(fastify) {
     method: 'PUT',
     url: '/session/preferences',
     requireLogin: true,
+    /* 保护性接口：会话与菜单关掉后后台整页不可用 */
+    critical: true,
     schema: {
       body: {
         type: 'object',
@@ -290,6 +296,8 @@ async function registerSessionRoutes(fastify) {
     method: 'PUT',
     url: '/session/profile',
     requireLogin: true,
+    /* 保护性接口：会话与菜单关掉后后台整页不可用 */
+    critical: true,
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -331,6 +339,8 @@ async function registerSessionRoutes(fastify) {
     method: 'POST',
     url: '/session/avatar',
     requireLogin: true,
+    /* 保护性接口：会话与菜单关掉后后台整页不可用 */
+    critical: true,
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     handler: withFail(async (request, reply) => {
       const file = await request.file();
@@ -355,6 +365,8 @@ async function registerSessionRoutes(fastify) {
     method: 'PUT',
     url: '/session/password',
     requireLogin: true,
+    /* 保护性接口：会话与菜单关掉后后台整页不可用 */
+    critical: true,
     schema: {
       body: {
         type: 'object',
@@ -390,6 +402,8 @@ async function registerSessionRoutes(fastify) {
     method: 'POST',
     url: '/session/logout',
     requireLogin: true,
+    /* 保护性接口：会话与菜单关掉后后台整页不可用 */
+    critical: true,
     handler: withFail(async (request, reply) => {
       await clearAuthCookies(reply);
       return reply.result.success('已退出登录', null);

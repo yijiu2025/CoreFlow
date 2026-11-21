@@ -92,6 +92,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps/switch-policy',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     handler: withFail(async (request, reply) => {
       const policy = getApiSwitchPolicy();
       /* `canEdit` 决定前端要不要渲染那个开关：只有超管能改，普通应用管理员只读 */
@@ -106,6 +108,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps/switch-policy',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -137,6 +141,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     handler: withFail(async (request, reply) => {
       /*
        * 把操作者传进服务层：只返回**他有管理码**的应用（`admin:app:<appId>:manage`）。
@@ -161,6 +167,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps/:appId/apis',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     handler: withFail(async (request, reply) => {
       const appId = String(request.params.appId || '');
       assertCanManageApp(request.state.user, appId);
@@ -190,6 +198,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps/:appId/apis/toggle',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -246,6 +256,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps/:appId/apis',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     schema: {
       body: {
@@ -301,6 +313,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps/:appId/apis/stepup/challenge',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     // 发码有外部副作用，单独限频
     config: { rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'adminAppStepupChallenge' } },
     schema: {
@@ -379,6 +393,8 @@ async function registerAppRoutes(fastify) {
     url: '/apps/:appId/apis/stepup/verify',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    /* 保护性接口：关掉它，应用管理与接口开关本身就打不开了 */
+    critical: true,
     config: { rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'adminAppStepupVerify' } },
     schema: {
       body: {

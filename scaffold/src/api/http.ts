@@ -489,6 +489,20 @@ export async function put<T>(url: string, body?: unknown): Promise<T> {
 }
 
 /**
+ * PATCH 请求（局部更新）
+ *
+ * 与 `put` 分开是因为语义不同：`put` 是整资源替换，`patch` 是"只改这几个字段"。
+ * 接口开关的节点编辑只提交变动的字段，用 PATCH 才不会把未提交的字段一起覆盖。
+ *
+ * @param url 路径
+ * @param body 请求体
+ * @returns 解包后的数据
+ */
+export async function patch<T>(url: string, body?: unknown): Promise<T> {
+  return unwrap<T>(await http.patch<Envelope<T>>(url, body));
+}
+
+/**
  * DELETE 请求（不带 body，避免 Content-Type 空体报错）
  *
  * @param url 路径

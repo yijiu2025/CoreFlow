@@ -683,7 +683,12 @@ function registerSecureRoute(fastify, options) {
     requirePermission: perm,
     freshPermission,
     safe,
-    riskExempt
+    riskExempt,
+    /*
+     * 保护性接口：**不允许被关闭**（`app-api.service` 会拒绝），仅用于"关掉就再也进不来"
+     * 的那几条（登录/授权、应用管理自身、会话与菜单）。它不是鉴权判据，只是运维栏杆。
+     */
+    critical: Boolean(options.critical)
   });
 
   // 需要登录的路由自动标记需要签名验证；requireSignature 可单独开启（公开端点防爬）
