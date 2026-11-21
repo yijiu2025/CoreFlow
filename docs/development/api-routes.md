@@ -102,7 +102,7 @@ registerSecureRoute(fastify, {
 ```
 
 改别人则挂在管理端域名下，用 `ADMIN_PERMISSIONS.USER.UPDATE` 之类的码，并复用
-`assertCanManageUser`（见 `app/console/services/access-scope.service.js`）做"能不能动这个人"的判定。
+`assertCanManageUser`（见 `app/admin/console/services/access-scope.service.js`）做"能不能动这个人"的判定。
 
 ::: warning 唯一允许的例外：写"关系"，不写"用户数据"
 `POST /posecraft/v1/follow/:userId`（关注 / 取关）带目标用户参数，但它改的是**我和他的关系**，

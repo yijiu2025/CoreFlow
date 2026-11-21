@@ -42,7 +42,9 @@ onResponse ── 登录结果观测 + 扫描陷阱
 > 就被消费，因为挑战态在第一阶段就要放行。探针另有 `defense.probePaths` 配置兜底，
 > 两者取并集（部署方可能探一个没有路由的路径）。
 > 路由在 `onResponse` 阶段已匹配，所以读的是 `request.routeOptions.config`。
-> 用声明而不用路径正则的原因见 `src/app/firewall/README.md` 的「路由级防火墙声明」。
+> 用声明而不用路径正则的原因见
+> `src/framework/ingress/firewall/engine/pipeline.js` 里 `isChallengeApiUrl` /
+> `isProbeUrl` 的注释（挑战接口由路由自己声明，改名不会静默失效）。
 
 ## 详细流程
 

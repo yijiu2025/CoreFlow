@@ -75,6 +75,51 @@ npm run dev
 - 后端 API：`http://localhost:3000`
 - 前端面板：已不在本仓（见各前端仓的 README）
 
+## 多应用本地联调（会话隔离）
+
+**cookie 只按 host 划分，端口不参与**（RFC 6265）。所以下面这种"同一台机器、换端口"的联调方式
+会出问题：
+
+| 访问方式 | 结果 |
+| --- | --- |
+| `console.localhost:5173` + `oauth.localhost:5174` | ✅ 各自一份 `sid`，互不干扰 |
+| `localhost:5173` + `localhost:5174` | ❌ 共享同一个 `sid`：登录 B 会覆盖 A 的凭证，A 表现为掉线 |
+
+两个前端仓的 Vite 配置都已放行 `*.localhost` 域名（`server.allowedHosts: ['.localhost']`），
+所以本地联调请**用不同 hostname，不要用不同端口**。这两个域名都解析到 `127.0.0.1`，不需要改 hosts。
+
+### 同 host 多应用部署怎么办
+
+如果生产必须共享同一个 host（或本地只能用 `localhost:端口`），打开按应用分名的 sid：
+
+```js
+// src/config/auth_config.js（或热改 data/auth_config.json）
+session: {
+  cookieScopedByApp: true
+}
+```
+
+打开后每个应用各写 `sid_<app>`（`sid_console` / `sid_posecraft`…），A/B 的会话并存、登录 B 不再
+顶掉 A；读取时先找专属名、再回落裸 `sid`，所以升级瞬间不会把人踢下线。当前是 **Session 模式**
+（`jwt.enabled=false`）时生效，与 JWT 无关。
+
+无论开不开这个开关，服务端都会做**会话归属校验**：凭据里的登录应用（会话的 `appId` / token 的
+`aud`）与请求所属应用不一致时返回 **401 `SESSION_APP_MISMATCH`**，前端据此跳登录，而不是拿 A 的
+身份继续访问 B，也不是弹"权限不足"。
+
+### 新增应用要改框架吗？
+
+不需要。只要在自己的一亩三分地里声明两处：
+
+| 声明位置 | 写什么 | 作用 |
+| --- | --- | --- |
+| `src/api/<system>/system.json` | `"app_id": "admin"` | 这个路径前缀属于哪个应用（→ 选 cookie 名、做归属校验） |
+| `src/app/<app>/config.js` | `app_id`（可选 `hosts`） | 应用标识 = 权限命名空间 = OAuth 客户端 id；`permission_app_id` 仅历史映射需要 |
+
+启动期由 `08-api` / `10-apps` 自动登记进 `app-registry`，之后请求期只查表（`resolveRequestApp`）。
+共享系统（`/auth`、`/verify`、`/api/files`）**故意不声明 `app_id`** —— 它们本来就该跨应用可用，
+不参与归属校验。
+
 ## 验证安装
 
 ```bash

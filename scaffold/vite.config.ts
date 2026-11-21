@@ -46,6 +46,15 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port,
       strictPort: true,
+      /*
+       * 允许 `*.localhost` 作为访问域名。
+       *
+       * 为什么需要：cookie 只按 **host** 划分，端口不参与（RFC 6265）。多个应用都用
+       * `localhost:517x` 时它们共享同一个 `sid` —— 登录 B 会覆盖 A，A 表现为掉线。
+       * 本地联调请改用不同 hostname（`console.localhost` / `posecraft.localhost`，
+       * 两者都解析到 127.0.0.1），cookie 立刻按 host 隔离，与生产子域行为一致。
+       */
+      allowedHosts: ['.localhost'],
       proxy: {
         // 后端同源代理：Cookie（sid/sid_r）随请求直达，不需要跨域配置
         '/admin': { target: apiTarget, changeOrigin: true },

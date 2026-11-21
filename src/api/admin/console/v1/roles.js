@@ -45,6 +45,7 @@ import {
   assertCanGrantCodes
 } from '../../../../app/admin/console/services/access-scope.service.js';
 import { invalidateButtonGrants } from '../../../../app/admin/console/services/button-grant.service.js';
+import { listAppIds } from '../../../../framework/config/app-registry.js';
 
 /*
  * 「受保护角色」的判据在 `role.dao.js` 的 `isProtectedRoleCode`（单一来源）。
@@ -104,7 +105,20 @@ async function registerRoleRoutes(fastify) {
     },
     handler: withFail(async (request, reply) => {
       const { pageNum = 1, pageSize = 20, keyword = '', appId = '' } = request.query;
-      const { rows, total } = await roleDao.page({ pageNum, pageSize, keyword, appId });
+      /*
+       * 应用可见性（2026-11-21）：角色天生按应用分家，而 `iam_role` 里会留着
+       * **已卸载应用**的历史行（应用目录删掉后，它的权限码 / 路由 / 页面都不存在了）。
+       * 这些角色不该再出现在管理界面上，也不该被继续分配 —— 但**不删库**：
+       * 白名单由 `listAppIds()` 按当前注册的应用现算，应用重新装回来时角色会自动复现。
+       *
+       * `GLOBAL` 不是业务应用（只有全局角色的账号），永远放行。
+       */
+      const allowedAppIds = ['GLOBAL', ...listAppIds()];
+      if (appId && !allowedAppIds.includes(appId)) {
+        return reply.result.success('获取成功', { rows: [], total: 0, pageNum, pageSize });
+      }
+
+      const { rows, total } = await roleDao.page({ pageNum, pageSize, keyword, appId, appIds: allowedAppIds });
       /*
        * 逐行标 `manageable`：前端据此把编辑/删除按钮置灰，而不是让人填完表单再吃 403。
        * 判据与写接口完全一致：`canWriteApp` + **严格低于**（`rank < maxRank`），
@@ -457,7 +471,8 @@ async function registerRoleRoutes(fastify) {
     handler: withFail(async (request, reply) => {
       const permissions = request.state.user?.permissions;
       const canSeeUsers = hasPermissionLike(permissions, 'admin:user:read');
-      const data = await roleDao.graph(canSeeUsers);
+      // 关系图/矩阵同列表口径：只画当前已注册应用的角色，已卸载应用不再出现
+      const data = await roleDao.graph(canSeeUsers, ['GLOBAL', ...listAppIds()]);
       return reply.result.success('获取成功', data);
     })
   });

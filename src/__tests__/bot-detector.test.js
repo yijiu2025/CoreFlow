@@ -31,7 +31,7 @@ import { describe, test, expect, jest } from '@jest/globals';
 //   旧写法 mock dao.js 已经无效（真身根本不加载它），且接口层会因「读取器未注册」抛错。
 // 这正是接口层刻意设计的失败模式：未注册就炸，而不是静默返回 undefined 让
 // `settings.defense` 变成 TypeError、把失败点推得离根因很远。
-const { DEFAULT_SECURITY_SETTINGS } = await import('../app/firewall/config/config.js');
+const { DEFAULT_SECURITY_SETTINGS } = await import('../framework/ingress/firewall/config/defaults.js');
 
 const settings = {
   ...DEFAULT_SECURITY_SETTINGS,

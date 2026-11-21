@@ -48,14 +48,11 @@ const BODY_TARGET_FIELD = /\b(userId|user_id|uid)\s*:\s*\{/;
  * 允许"带目标用户 + 非 admin 权限"的例外（必须写清理由）
  *
  * key = `相对 src/api 的路径|方法|URL`
+ *
+ * 2026-11-21：`posecraft/v1/follow.js` 两条条目随应用移出本仓一并删除 ——
+ * 白名单条目必须指向真实存在的文件，否则守卫会以为"还有例外没处理"。
  */
-const ALLOWED_WRITE_ON_OTHER = new Map([
-  [
-    'posecraft/v1/follow.js|POST|/follow/:userId',
-    '写的是「我的关注关系」，不是目标用户的数据；body 无任何目标用户字段'
-  ],
-  ['posecraft/v1/follow.js|DELETE|/follow/:userId', '同上（取消关注，改的是关系表）']
-]);
+const ALLOWED_WRITE_ON_OTHER = new Map([]);
 
 /** 递归收集 `src/api` 下的路由文件 */
 function walk(dir, out = []) {
@@ -106,9 +103,10 @@ describe('用户数据路由边界', () => {
     expect(flat.length).toBeGreaterThan(150);
     // admin 命名空间的路由一定存在，否则说明权限表达式没解析出来
     expect(flat.some(r => r.permission.startsWith('ADMIN_PERMISSIONS.'))).toBe(true);
-    // 三个命名空间都要扫到（admin / 防火墙 / 用户域）——少一个就说明解析退化了
+    // 命名空间都要扫到（admin / 用户域）——少一个就说明解析退化了。
+    // 防火墙等第三方应用的命名空间已随应用移出本仓，不再作为取样点。
     const namespaces = new Set(flat.map(r => r.permission.split('.')[0]).filter(Boolean));
-    for (const ns of ['ADMIN_PERMISSIONS', 'FIREWALL_PERMISSIONS', 'USER_PERMISSIONS']) {
+    for (const ns of ['ADMIN_PERMISSIONS', 'USER_PERMISSIONS']) {
       expect({ ns, has: namespaces.has(ns) }).toEqual({ ns, has: true });
     }
   });

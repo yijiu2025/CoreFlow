@@ -6,17 +6,16 @@
  *   默认值 + 取值理由 → src/framework/ingress/firewall/config/defaults.js
  *   运行期热改（面板/JSON）→ data/firewall_config.json
  *
- * 可用键（顶层）：**defense** + **activeIpApi / showTrajectory**
- *   `defense`           防护策略（52 个键），core 与 app 都按它执行。
- *   `activeIpApi`       面板「当前节点 IP」用哪个公网归属 API：
- *                       sohu | ipinfo | ipapi | baidu（默认 ipinfo，见 src/app/firewall/config/panel.js）
- *   `showTrajectory`    面板是否展示访问轨迹（默认 true）
+ * 可用键（顶层）：**defense** + **activeIpApi / showTrajectory**（兼容保留）
+ *   `defense`           防护策略（52 个键），core 按它执行。
+ *   `activeIpApi`       ⚠️ 历史面板键（节点 IP 数据源）。2026-11-21 面板应用移出本仓后
+ *                       **框架内已无消费方**，仅为兼容存量 data/firewall_config.json 继续接受；
+ *                       新部署不必写，写了也不会驱动任何内置页面。
+ *   `showTrajectory`    同上（面板是否展示访问轨迹）。
  *
- *   ⚠️ 这两个面板层键**写在这里就生效**，优先级高于 panel.js 的内置默认值
- *      （规则：用户显式写的一律优先，值不合法才回落默认并打 warn）。
- *      运行期面板改过的值存在 data/firewall_config.json，**那一层优先级更高**
- *      （热改 > 静态配置 > 内置默认）——想让本文件的设置说了算，先删掉
- *      data/firewall_config.json 里对应的键。
+ *   ⚠️ 这两个键现在的语义是「兼容占位」：校验通过、原样保留，但不参与任何判定。
+ *      真正的防护策略只看 `defense`；运行期热改存在 data/firewall_config.json，
+ *      那一层优先级更高（热改 > 静态配置 > 内置默认）。
  *
  * defense 下的键（52 个）—— 分组与顺序和 `defaults.js`、`config/schema.js` 完全一致：
  *   ① 开关    enableFirewall（总开关）/ enableGlobalBlock / enableChallenge
@@ -55,7 +54,7 @@
  *
  * 示例：
  *   const DEFAULT_SECURITY_SETTINGS = {
- *     activeIpApi: 'ipinfo',                                       // 面板层键，写这里即生效
+ *     activeIpApi: 'ipinfo',                                       // 兼容保留（无消费方）
  *     defense: { rateLimitRequests: 1200, enableGeoFilter: true }  // 防护策略
  *   };
  */

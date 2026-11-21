@@ -22,6 +22,7 @@ import fp from 'fastify-plugin';
 import { requestContext } from './context/request-context.js';
 import { getSession } from './session/session.js';
 import { COOKIE_SID } from './context/cookie.js';
+import { resolveRequestApp } from '../../config/app-registry.js';
 import StpUtil from './context/stp-util.js';
 import { authenticateByJwt } from './bearer-auth.js';
 import { detectAndHandleRisk, injectRiskOnSend } from './risk/risk-hooks.js';
@@ -60,12 +61,32 @@ const authPlugin = fp(async app => {
       return;
     }
 
-    // 3. Session Cookie 验证（sid）— 主要认证方式
+    /*
+     * 3. Session Cookie 验证（sid）— 主要认证方式
+     *
+     * 先判"这个请求属于哪个应用"（路由前缀 → Host，见 `resolveRequestApp`）：
+     *   · 开了 `session.cookieScopedByApp` 时，据此选 `sid_<app>` —— A/B 各自一份会话，
+     *     登录 B 不会再覆盖 A；
+     *   · 无论开不开，都把结果挂在 `request.state.requestAppId` 上，供 guard 做
+     *     会话归属校验（凭据不属于本应用 → 401 引导登录，而不是拿 A 的身份继续）。
+     *
+     * 共享系统（/auth、/verify、/api/files…）没有声明 app_id，这里解析为 null，
+     * 于是既不换 cookie 名、也不做归属校验 —— 它们本来就该跨应用可用。
+     */
+    const requestAppId = resolveRequestApp({
+      pathname: String(request.url || '').split('?')[0],
+      host: String(request.headers?.host || '')
+    });
+    request.state.requestAppId = requestAppId;
+
     let sessionData = null;
 
     // 尝试用 sid 获取 session（同时递增访问次数）
-    if (cookies[COOKIE_SID]) {
-      sessionData = await getSession({ cookies, reply });
+    // 只看"有没有可能的凭证 cookie"：裸 sid 或任一 sid_<app>，避免无谓地打 session store
+    const mayHaveSession =
+      Boolean(cookies[COOKIE_SID]) || Object.keys(cookies).some(name => name.startsWith(`${COOKIE_SID}_`));
+    if (mayHaveSession) {
+      sessionData = await getSession({ cookies, reply, appId: requestAppId });
     }
 
     // 写入 request.state.user + 风险检测

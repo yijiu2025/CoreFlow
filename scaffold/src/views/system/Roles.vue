@@ -118,34 +118,29 @@ const appTabs = computed(() => {
 /**
  * 「数据范围 → 应用」候选
  *
- * 优先系统应用清单，退化到已有角色所属应用。
- * 额外固定一项 `GLOBAL`：它不是业务应用，而是"只有全局角色的账号"（会员等级一类）——
- * 这类账号挂在任何具体应用下都搜不到，必须单独给一个开关，否则管理员永远管不到他们。
+ * 只列**当前已注册**的应用（`/menus/apps` 的返回），外加固定一项 `GLOBAL`：
+ * 它不是业务应用，而是"只有全局角色的账号"（会员等级一类）—— 这类账号挂在任何
+ * 具体应用下都搜不到，必须单独给一个开关，否则管理员永远管不到他们。
+ *
+ * 🔴 已卸载应用的旧 `app_ids` **不再出现在候选项里**（2026-11-21 改）。
+ *    旧实现把它们追加成 `xxx（已配置，未在应用清单中）` 的勾选框，理由是"看不见就取消不掉"。
+ *    但那样等于让"卸载 app"永远无法反映到界面：只要某个角色存过旧 id，弹窗里就一直
+ *    有这一项，用户看到的就是"应用清单没更新"。
+ *    现在改为**打开弹窗时静默剔除**（`pruneDataAppIds`）：应用卸载后它的权限直接
+ *    视为关闭、不再展示；旧 id 从表单摘掉，保存时自然从角色上消失。不删库、不提示。
+ *
+ * 清单拉取失败（无菜单读权限 / 接口异常）时退回「已有角色所属应用」：
+ * 这时不剔除任何 id —— 拿不到权威清单就删配置，等于把用户的设置洗掉。
  */
 const scopeAppOptions = computed(() => {
-  const base =
-    appCatalog.value.length > 0
-      ? appCatalog.value
-      : appTabs.value.filter(tab => tab.id !== 'GLOBAL').map(tab => ({ id: tab.id, name: tab.label }));
-  const options: Array<{ id: string; name: string }> = [
+  const base = catalogReady.value
+    ? appCatalog.value
+    : appTabs.value.filter(tab => tab.id !== 'GLOBAL').map(tab => ({ id: tab.id, name: tab.label }));
+
+  return [
     { id: 'GLOBAL', name: '全局角色账号（仅全局角色的用户）' },
     ...base.filter(app => app.id !== 'GLOBAL')
   ];
-
-  /*
-   * 🔴 已配置、但不在系统清单里的应用也必须列出来。
-   *
-   * `/menus/apps` 只返回"注册过权限码"的应用，而 `iam_role_app` 里可能存着更早
-   * （或别的客户端）写进去的标识 —— 那些记录在弹窗里既看不见、也取消不掉，
-   * 却真实参与列表过滤。真实现场：某角色库里 9 条、界面只显示 5 项，
-   * 于是"只勾了两个应用，用户还是能看到全部"永远不会被修好。
-   */
-  const known = new Set(options.map(option => option.id));
-  const orphan = (form.dataAppIds ?? [])
-    .filter(id => id && !known.has(id))
-    .map(id => ({ id, name: `${id}（已配置，未在应用清单中）` }));
-
-  return [...options, ...orphan];
 });
 
 /**
@@ -434,14 +429,36 @@ const form = reactive({
 /**
  * 系统应用清单（「数据范围 → 应用」的候选项）
  *
- * 单独拉一次 `/menus/apps`：它回的是"注册过权限码的应用"，比从角色列表反推更完整。
+ * 单独拉一次 `/menus/apps`：它回的是"注册过权限码的应用"（后端直接由
+ * `actionMetaRegistry` 生成，**每个进程实时反映当前已装的应用**），
+ * 比从角色列表反推更完整，也不会带上已卸载应用的历史行。
  * 拿不到（没有菜单读权限 / 接口失败）就退回「已有角色所属应用」——
  * 配置数据范围不该因为一个辅助接口 403 就整块不可用。
  */
 const appCatalog = ref<Array<{ id: string; name: string }>>([]);
+
+/**
+ * 全部**已注册**应用 id（不管当前账号能不能配置）
+ *
+ * 与 `appCatalog` 分开：`appCatalog` 只放"可配置"的应用给勾选框，而**判断一个旧 id
+ * 是不是已卸载**必须看全量注册表。混用会把「已安装但当前账号无权配置」的应用误判成
+ * 已卸载，从而把角色里合法的 app_id 洗掉。
+ */
+const registeredAppIds = ref<string[]>([]);
+
+/**
+ * 清单是否来自后端（true = 权威）
+ *
+ * 只有拿到权威清单才允许**剔除**表单里的历史 app_id；接口失败时保留原值，
+ * 否则一次 403 就会把角色已有的数据范围洗空。
+ */
+const catalogReady = ref(false);
+
 async function loadAppCatalog(): Promise<void> {
   try {
     const list = await menuApps();
+    // 全量注册表（剔除 GLOBAL 占位）：只用于"是否还存在"的判定
+    registeredAppIds.value = list.filter(item => item.id !== 'GLOBAL').map(item => item.id);
     /*
      * 只留「当前账号可配置」的应用：后端已经给了 writable（与写接口同一判据），
      * 原来把整张表都铺出来，等于让人去配一个自己根本管不着的应用。
@@ -450,9 +467,48 @@ async function loadAppCatalog(): Promise<void> {
     appCatalog.value = list
       .filter(item => item.writable && item.id !== 'GLOBAL')
       .map(item => ({ id: item.id, name: item.name || item.id }));
+    catalogReady.value = true;
   } catch {
     appCatalog.value = [];
+    registeredAppIds.value = [];
+    catalogReady.value = false;
   }
+}
+
+/**
+ * 剔除表单里指向「已卸载应用」的旧 app_id
+ *
+ * 判据是**全量注册表**（`registeredAppIds`），不是可配置清单：
+ * 无权配置 ≠ 已卸载。只在清单权威时执行 —— 拿不到清单就动手等于把用户设置洗掉。
+ *
+ * 静默处理：应用卸载后它的权限视为关闭，界面不展示、也不提示；旧 id 从表单摘掉，
+ * 保存时随 `app_ids` 整表重写自然消失。不删库 —— 应用装回来时角色配置仍可复现。
+ *
+ * @returns {void}
+ */
+function pruneDataAppIds(): void {
+  if (!catalogReady.value) return;
+
+  const known = new Set(['GLOBAL', ...registeredAppIds.value]);
+  const kept = (form.dataAppIds ?? []).filter(id => !id || known.has(id));
+  if (kept.length !== (form.dataAppIds ?? []).length) form.dataAppIds = kept;
+}
+
+/**
+ * 打开弹窗前刷新应用清单，再剔除失效 id
+ *
+ * 每次打开都拉一次而不是只在进页面时拉一次：卸载 / 新装应用后，用户点「编辑」
+ * 就应该看到新清单，不需要刷新整页 —— 这正是"根据注册的应用实时更新"的含义。
+ *
+ * `formId` 用于防止异步返回时表单已经换成另一个角色（快速连续点击编辑）。
+ *
+ * @param {number} formId 打开时的角色 id（新建为 0）
+ * @returns {Promise<void>}
+ */
+async function refreshCatalogAndPrune(formId: number): Promise<void> {
+  await loadAppCatalog();
+  if (!formOpen.value || form.id !== formId) return;
+  pruneDataAppIds();
 }
 
 /** 数据范围选项（文案与参考实现一致，便于运维迁移心智） */
@@ -872,6 +928,8 @@ function openCreate(): void {
   permKeyword.value = '';
   formOpen.value = true;
   void ensureCatalog();
+  // 新建也要刷新清单：上一次打开后可能才卸载/新装了应用
+  void refreshCatalogAndPrune(0);
 }
 
 /**
@@ -899,6 +957,8 @@ function openFormEdit(row: RoleRow): void {
   permKeyword.value = '';
   formOpen.value = true;
   void ensureCatalog();
+  // 刷新清单后剔除已卸载应用的旧 id（只在清单权威时动手）
+  void refreshCatalogAndPrune(row.id);
 }
 
 /**

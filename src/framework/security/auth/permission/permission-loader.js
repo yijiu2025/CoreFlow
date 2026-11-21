@@ -65,12 +65,61 @@ function extractPermissions(policy, allows, denies) {
 }
 
 /**
+ * 合并一组「用户-角色」行的策略
+ *
+ * 纯函数（不碰数据库），便于单测钉住**受限凭证**那条规则。
+ *
+ * 🔴 `scopedCredential = true` 时，GLOBAL 角色的通配 `*` 会**收窄成 `${appId}:*`**。
+ *    原因：`*` 来自 `superadmin` 这类租户级角色，而 token 是**受限凭证** —— 它属于某个
+ *    应用（`aud`）。不收窄的话，一个 posecraft 的 token 能匹配 `admin:user:read` 这种
+ *    别的应用的动作码（权限串本身不带命名空间，`*` 是真正的通配）。
+ *
+ *    收窄而不是删除，是为了不打翻超管：他拿 posecraft 的 token 仍能在 posecraft 里做
+ *    任何事（`posecraft:*`），只是够不到后台。GLOBAL 里的**具体动作**（会员角色写着
+ *    `posecraft:work:read` 之类）原样保留，否则普通用户拿 token 连自己的接口都调不了。
+ *
+ * @param {Array<{role: {code: string, app_id: string, policy: unknown}}>} userRoles 用户角色行
+ * @param {{scopedCredential?: boolean, appId?: string}} [opts] 选项
+ * @returns {{roles: string[], allows: string[], denies: string[]}} 角色码与合并后的权限
+ */
+function collectRolePermissions(userRoles, opts = {}) {
+  const { scopedCredential = false, appId = 'GLOBAL' } = opts;
+  /** 受限凭证下，租户级通配只能覆盖凭证自己的应用 */
+  const scopeWildcard = action => {
+    if (!scopedCredential || action !== '*') return action;
+    return appId && appId !== 'GLOBAL' ? `${appId}:*` : action;
+  };
+  const roles = [];
+  const allows = [];
+  const denies = [];
+
+  for (const ur of userRoles) {
+    const role = ur.role || {};
+    const isGlobal = String(role.app_id || '') === 'GLOBAL';
+
+    const roleAllows = [];
+    const roleDenies = [];
+    extractPermissions(role.policy, roleAllows, roleDenies);
+
+    /* 受限凭证：只把 GLOBAL 角色的 `*` 收窄到本应用，其余动作原样保留 */
+    const effectiveAllows = isGlobal ? roleAllows.map(scopeWildcard) : roleAllows;
+
+    roles.push(role.code);
+    allows.push(...effectiveAllows);
+    denies.push(...roleDenies);
+  }
+
+  return { roles, allows, denies };
+}
+
+/**
  * 加载用户在指定应用的角色和权限
  * @param {number} userId 用户内部 ID
  * @param {string} appId 应用标识
  * @returns {{ roles: string[], permissions: { allows: string[], denies: string[] } }}
  */
-async function loadUserPermissions(userId, appId) {
+async function loadUserPermissions(userId, appId, opts = {}) {
+  const { scopedCredential = false } = opts;
   const Role = getModel('Role');
   const UserRole = getModel('UserRole');
   const InlinePolicy = getModel('InlinePolicy');
@@ -96,18 +145,19 @@ async function loadUserPermissions(userId, appId) {
     ]
   });
 
-  let roles = userRoles.map(ur => ur.role.code);
+  // 2. 合并角色策略（受限凭证的 GLOBAL 通配剔除规则见 collectRolePermissions）
+  const merged = collectRolePermissions(userRoles, { scopedCredential, appId });
+  const roles = merged.roles;
+  const allows = merged.allows;
+  const denies = merged.denies;
 
-  // 2. 合并角色策略
-  const allows = [];
-  const denies = [];
-
-  for (const ur of userRoles) {
-    extractPermissions(ur.role.policy, allows, denies);
-  }
-
-  // 2.5. GLOBAL superadmin 自动获得应用级超管权限
-  if (roles.includes('superadmin') && appId !== 'GLOBAL') {
+  /*
+   * 2.5. GLOBAL superadmin 自动获得应用级超管权限
+   *
+   * 🔴 受限凭证（token）跳过这一步：把 superadmin 展开成 `{appId}_admin` 与"GLOBAL 的 `*`
+   *    不外溢"是同一条规则 —— 两者都是把租户级超管能力塞进单个应用的凭证里。
+   */
+  if (!scopedCredential && roles.includes('superadmin') && appId !== 'GLOBAL') {
     const appAdminRole = `${appId}_admin`;
     if (!roles.includes(appAdminRole)) {
       roles.push(appAdminRole);
@@ -138,4 +188,4 @@ async function loadUserPermissions(userId, appId) {
   };
 }
 
-export { loadUserPermissions };
+export { loadUserPermissions, collectRolePermissions };

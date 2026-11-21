@@ -32,7 +32,6 @@ import registerVerifyChallengeRoutes from '../api/auth/v1/verify-challenge.js';
 import registerLogoutRoutes from '../api/oauth21/v1/logout.js';
 import registerDeactivationRoutes from '../api/user/v1/deactivation.js';
 import registerNoticeConfigRoutes from '../api/notice/v1/config.js';
-import registerMetricsRoutes from '../api/firewall/v1/metrics.js';
 import registerTokenRoutes from '../api/oauth21/v1/token.js';
 
 let app;
@@ -63,7 +62,6 @@ beforeAll(async () => {
   await app.register(registerLogoutRoutes, { prefix: '/oauth2.1' });
   await app.register(registerDeactivationRoutes, { prefix: '/user' });
   await app.register(registerNoticeConfigRoutes, { prefix: '/notice' });
-  await app.register(registerMetricsRoutes, { prefix: '/api/firewall' });
   await app.register(registerTokenRoutes, { prefix: '/oauth2.1' });
 
   await app.ready();
@@ -137,8 +135,7 @@ describe('API 路由（真实驱动）', () => {
       { method: 'GET', url: '/user/v1/profile', label: 'profile' },
       { method: 'GET', url: '/user/v1/sessions', label: 'sessions' },
       { method: 'GET', url: '/user/v1/sessions/devices', label: 'devices' },
-      { method: 'GET', url: '/notice/v1/channels', label: 'notice channels' },
-      { method: 'GET', url: '/api/firewall/v1/metrics', label: 'firewall metrics' }
+      { method: 'GET', url: '/notice/v1/channels', label: 'notice channels' }
     ];
 
     it.each(protectedRoutes)('$label 未登录返回 401 且符合统一契约', async ({ method, url }) => {
@@ -193,7 +190,6 @@ describe('API 路由（真实驱动）', () => {
         'clear-cookie',
         'refresh-session',
         'channels',
-        'metrics',
         'token',
         'revoke'
       ]) {

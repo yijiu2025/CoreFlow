@@ -201,7 +201,7 @@ export default (sequelize, DataTypes) => {
 ### 4. 让 AI 参考现有代码
 
 ```
-参考 src/app/firewall/ 的目录结构和代码风格，
+参考 src/app/admin/console/ 的目录结构和代码风格，
 帮我创建一个类似的应用模块，功能是...
 ```
 

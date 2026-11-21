@@ -15,6 +15,7 @@
 import { verify } from '../jwt/index.js';
 import { findUserByUid } from '../../../shared/user-dao.js';
 import { getPermissions } from './permission/perm-cache.js';
+import { resolvePermissionAppId } from '../../config/app-registry.js';
 import { getStore } from '../../persistence/redis/index.js';
 import { createLogger } from '../../support/log/index.js';
 import { authJwtEnabled } from './session/session-config.js';
@@ -96,7 +97,16 @@ async function getUserFromToken(token) {
     //    所以这里永远从缓存/DB 读实时快照，不读 payload claims。
     //    ⚠️ 必须传数字主键（userData.id）：loadUserPermissions 按数字列 user_id
     //    查询，传 uid 字符串会查空 → JWT 用户权限恒为空。
-    const { roles, permissions } = await getPermissions(userData.id, payload.aud || 'GLOBAL');
+    /*
+     * 🔴 两处都不能省：
+     *   1. `resolvePermissionAppId()`：角色住在**权限命名空间**里（console 是 `admin`），
+     *      而 `aud` 是 OAuth 的 client_id（console）。不做映射 ⇒ 查 `app_id='console'`
+     *      的角色恒为空 ⇒ 管理员用自己的 token 也是 0 权限（实测 15 条 admin:user:* 全丢）。
+     *   2. `scopedCredential`：token 是受限凭证，不随 GLOBAL 角色获得通配 `*`
+     *      （否则超管的一个 posecraft token 等于后台万能钥匙）。
+     */
+    const permAppId = resolvePermissionAppId(payload.aud || 'GLOBAL');
+    const { roles, permissions } = await getPermissions(userData.id, permAppId, { scopedCredential: true });
 
     return {
       sub: userData.uid,
@@ -110,6 +120,15 @@ async function getUserFromToken(token) {
       status: userData.status,
       roles,
       permissions,
+      /*
+       * `appId` 存**登录应用**（aud），与会话路径同口径 —— guard 的会话归属校验要拿它
+       * 跟"请求所属应用"比对，两边必须是同一个空间（否则 console 会话与 admin
+       * 权限命名空间会互相误判）。
+       *
+       * 权限命名空间另走 `resolvePermissionAppId(appId)`，在 freshPermission 里解析，
+       * 所以这里给 aud 不影响第 4 层选对命名空间。
+       */
+      appId: String(payload.aud || 'GLOBAL'),
       tokenType: 'bearer'
     };
   } catch (err) {

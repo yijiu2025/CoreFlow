@@ -11,20 +11,20 @@
  *   bcryptjs 那次的形态就是 RPS 正常、tick gap 774ms、p99 爆炸。
  *
  * === 场景 ===
- *   S1 live      GET  /health/live                —— 管线地板（Fastify + 钩子，无 I/O）
- *   S2 ready     GET  /health/ready               —— I/O 扇出（Redis + DB 就绪检查）
- *   S3 challenge POST /api/firewall/v1/challenge/verify
- *                —— 防火墙热路径（每请求走访问层 Lua 读 + 挑战查询未命中即拒绝）
+ *   S1 live      GET  /v1/health/live             —— 管线地板（Fastify + 钩子，无 I/O）
+ *   S2 ready     GET  /v1/health/ready            —— I/O 扇出（Redis + DB 就绪检查）
+ *
+ * ⚠️ 2026-11-21：原 S3（`POST /api/firewall/v1/challenge/verify`）随防火墙面板应用
+ *    移出本仓而删除。防护热路径仍被 S1/S2 覆盖（两条请求都经过 onRequest 全局封禁检查
+ *    与 onSend 计数），只是不再有"挑战验证"这一独立分支可测。
  *
  * === 与真实流量的差异（读结果前必看）===
  *   ① IP 限流上限被环境变量 FW_RATE_LIMIT_OVERRIDE 上调到 1000000/窗口：
- *      基线量的是服务器容量，不是限流器（否则三个场景共用 127.0.0.1 的
+ *      基线量的是服务器容量，不是限流器（否则所有场景共用 127.0.0.1 的
  *      10000/60s 预算，跑不到一半就全是 429）。限流计数本身的 Redis 开销
  *      仍包含在每个请求里。该变量只在设置了合法正整数时生效，见
  *      first-ratelimit.js 的 resolveRateLimitMax。
- *   ② S3 的挑战 ID 是随机不存在的 → 走的是「查询未命中 → 拒绝」分支，
- *      代表防火墙热路径开销，不代表验证成功分支的成本。
- *   ③ 单机回环、无网络延迟，绝对值只可用于**同机前后对比**，不可跨机器比较。
+ *   ② 单机回环、无网络延迟，绝对值只可用于**同机前后对比**，不可跨机器比较。
  *
  * === 留档 ===
  * 结果写入 scripts/bench/results/baseline-<时间戳>.json（含机器指纹），
@@ -62,25 +62,12 @@ const HOST = `127.0.0.1:${PORT}`;
 
 /** 场景定义（并发与时长在此统一调整）
  *
- * 路径口径：`system.json` 的 prefix 为空 → 健康检查全路径是 `/v1/health/*`（不是 `/health/*`）；
- * firewall 的系统前缀是 `/api/firewall` → 挑战路由是 `/api/firewall/v1/challenge/verify`。
+ * 路径口径：`system.json` 的 prefix 为空 → 健康检查全路径是 `/v1/health/*`（不是 `/health/*`）。
  */
 const SCENARIOS = [
   { id: 'S1-live', method: 'GET', urlPath: '/v1/health/live', concurrency: 50 },
-  { id: 'S2-ready', method: 'GET', urlPath: '/v1/health/ready', concurrency: 20 },
-  {
-    id: 'S3-challenge',
-    method: 'POST',
-    urlPath: '/api/firewall/v1/challenge/verify',
-    concurrency: 20,
-    body: () => JSON.stringify({ challengeId: randomChallengeId(), answer: '0' })
-  }
+  { id: 'S2-ready', method: 'GET', urlPath: '/v1/health/ready', concurrency: 20 }
 ];
-
-function randomChallengeId() {
-  // 32 位 hex，符合路由 schema；内容随机 → 必然未命中
-  return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
-}
 
 const log = (...a) => console.log(...a);
 const sleep = ms => new Promise(r => setTimeout(r, ms));

@@ -392,7 +392,7 @@ const {
               </td>
             </tr>
             <tr v-if="!loading && rows.length === 0">
-              <td colspan="9"><div class="empty">该条件下没有登录记录</div></td>
+              <td colspan="8"><div class="empty">该条件下没有登录记录</div></td>
             </tr>
           </tbody>
         </table>

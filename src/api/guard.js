@@ -351,7 +351,15 @@ async function applyGuardLogic(opts = {}, request, reply) {
     const permAppId = resolvePermissionAppId(appId);
     let fresh;
     try {
-      fresh = await getPermissions(user.userId, permAppId, { fresh: true });
+      /*
+       * 🔴 必须沿用凭证类型：token 是受限凭证（GLOBAL 的 `*` 不生效）。
+       *    这里若不传，超管用 posecraft token 打敏感接口时，回源会把 `*` 重新读回来 ——
+       *    等于在最该收紧的第 4 层上把门重新打开。
+       */
+      fresh = await getPermissions(user.userId, permAppId, {
+        fresh: true,
+        scopedCredential: user.tokenType === 'bearer'
+      });
     } catch (err) {
       // 回源失败 → **拒绝**（fail-closed）。这与"权限读取失败降级放行"不同：
       // 敏感操作的默认答案必须是"不执行"。
@@ -395,6 +403,22 @@ async function applyGuardLogic(opts = {}, request, reply) {
 /**
  * 创建级联守卫 (1 > 2 > 3 权重模型)
  */
+/**
+ * 凭据所属应用是否与"请求所属应用"不一致
+ *
+ * 纯函数，便于单测钉住边界：两边任一为 null 都**不算**不一致 ——
+ * `requestAppId` 为 null 表示共享系统（/auth、/verify、/api/files），
+ * `credentialAppId` 为 null 表示尚未认证（让后面的登录校验去 401）。
+ *
+ * @param {string|null|undefined} requestAppId 请求所属应用
+ * @param {string|null|undefined} credentialAppId 凭据里的登录应用
+ * @returns {boolean} 是否不一致
+ */
+function isSessionAppMismatch(requestAppId, credentialAppId) {
+  if (!requestAppId || !credentialAppId) return false;
+  return String(requestAppId) !== String(credentialAppId);
+}
+
 function createGuard(systemKey, groupKey, apiKey = null) {
   return async function (request, reply) {
     const startTime = performance.now();
@@ -420,6 +444,36 @@ function createGuard(systemKey, groupKey, apiKey = null) {
     if (fwUser && isUserManuallyBlocked(fwUser)) {
       log.warn(`🚫 [Guard] 命中防火墙手动用户黑名单: uid=${fwUser.uid}`);
       return reply.result.forbidden('该账号已被安全策略限制访问');
+    }
+
+    /*
+     * 0.3 级：会话归属校验
+     *
+     * 为什么需要：cookie 只按 host 划分、**端口不参与**。同 host 多应用部署时
+     * （本地 localhost:5173 / :5174 就是典型），A 应用的 sid 会被 B 应用的请求带上。
+     * 之前这里靠"子域名 cookie 隔离"，本地破了假设 ⇒ A 的会话被当成本地身份：
+     * 权限够就直接进 B，权限不够就 403 —— 两种都不对，用户该看到的是"请登录"。
+     *
+     * `requestAppId` 由认证插件在 onRequest 解析（路由前缀 → Host，见
+     * `resolveRequestApp`），**共享系统解析为 null**（/auth、/verify、/api/files…），
+     * 于是不参与校验。`user.appId` 是凭据里的登录应用：会话取 `session.appId`，
+     * token 取 JWT 的 aud —— 两边同一个空间才比得准。
+     */
+    const requestAppId = request.state?.requestAppId;
+    const credentialAppId = request.state?.user?.appId;
+    if (isSessionAppMismatch(requestAppId, credentialAppId)) {
+      log.warn(
+        `🔀 [Guard] 会话不属于本应用: requestApp=${requestAppId}, credentialApp=${credentialAppId}, uid=${request.state?.user?.uid}`
+      );
+      /*
+       * 401 而不是 403：语义是"这份凭证不能用来访问本应用"，前端应该走登录，
+       * 而不是弹"权限不足"。`reason` 供前端区分（SESSION_APP_MISMATCH）。
+       */
+      return reply.code(401).send({
+        code: 401,
+        message: '当前会话不属于本应用，请重新登录',
+        data: { reason: 'SESSION_APP_MISMATCH', appId: requestAppId }
+      });
     }
 
     /*
@@ -847,6 +901,7 @@ function getFullUrl(url) {
 export {
   createGuard,
   setRegistrationContext,
+  isSessionAppMismatch as __test__isSessionAppMismatch,
   getRegistrationContext,
   restoreRegistrationContext,
   registerGroupMetadata,

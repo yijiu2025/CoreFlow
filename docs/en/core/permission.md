@@ -14,18 +14,18 @@
 Codes follow the lowercase `{app}:{resource}:{action}` triple:
 
 ```js
-// src/app/firewall/permission/index.js
-export const FIREWALL_PERMISSIONS = createPermissionRegistry('firewall', 'Firewall module', {
-  MONITOR: {
-    READ: { code: 'fw:monitor:read', label: 'View monitoring data', type: 'read' },
-    LOGS: { code: 'fw:monitor:logs', label: 'View access logs', type: 'read' }
+// src/app/oauth21/permission/index.js
+const OAUTH_PERMISSIONS = createPermissionRegistry('oauth21', 'OAuth 2.1 authorization server', {
+  CLIENT: {
+    READ: { code: 'oauth:client:read', label: 'View clients', type: 'read' },
+    UPDATE: { code: 'oauth:client:update', label: 'Edit clients', type: 'write' }
   },
-  BLOCK: {
-    READ: { code: 'fw:block:read', label: 'View block list', type: 'read' },
-    WRITE: { code: 'fw:block:write', label: 'Add / remove blocks', type: 'write' }
+  TOKEN: {
+    READ: { code: 'oauth:token:read', label: 'View tokens', type: 'read' },
+    REVOKE: { code: 'oauth:token:revoke', label: 'Revoke tokens', type: 'high_risk' }
   },
   ADMIN: {
-    ALL: { code: 'fw:admin:*', label: 'Admin wildcard', type: 'wildcard' }
+    ALL: { code: 'oauth:admin:*', label: 'Admin wildcard', type: 'wildcard' }
   }
 });
 ```
@@ -36,25 +36,26 @@ export const FIREWALL_PERMISSIONS = createPermissionRegistry('firewall', 'Firewa
 
 ```
 superadmin (rank:99) → admin of every app (inherited automatically)
-  ├── fw_admin (rank:90)    → firewall admin
-  ├── fw_operator (rank:50) → firewall operator
-  └── fw_viewer (rank:1)    → observer (granted by default)
+  ├── oauth_admin (rank:80)  → authorization server admin
+  └── oauth_viewer (rank:10) → observer (granted by default)
 ```
 
 ### Definition
 
 ```js
-// src/app/firewall/permission/roles.js
+// src/app/oauth21/permission/roles.js
 defineRoles([
   {
-    code: 'fw_viewer',
-    app_id: 'firewall',
-    name: 'Firewall viewer',
-    rank_level: 1,
+    code: 'oauth_viewer',
+    app_id: 'oauth21',
+    name: 'OAuth viewer',
+    rank_level: 10,
     is_default: true, // granted automatically on authorization (see below)
     policy: {
       Version: '2026-06-06',
-      Statement: [{ Effect: 'Allow', Action: [FIREWALL_PERMISSIONS.MONITOR.READ] }]
+      Statement: [
+        { Effect: 'Allow', Action: [OAUTH_PERMISSIONS.CLIENT.READ, OAUTH_PERMISSIONS.TOKEN.READ] }
+      ]
     }
   }
 ]);
@@ -70,8 +71,8 @@ automatically. It is declared in **two places**, resolved **config first, code s
    so it is hard to forget.
 
 ```js
-// src/app/firewall/config.js
-default_role: 'fw_viewer',
+// src/app/oauth21/config.js
+default_role: 'oauth_viewer',
 ```
 
 Resolution order (`src/app/oauth21/dao/approval.dao.js`):
@@ -112,9 +113,9 @@ The boot-time `auditDefaultRoles` reports an **error** for "gate + default role"
 - `src/__tests__/permission/role-rank-levels.test.js` runs the audit against the real config and the
   real `roles.js`, so a mistake fails the test suite instead of a deployment.
 
-Namespace note: the console login app is `console`, but its roles live in `admin`
-(`config.permission_app_id`). `default_role` must use a code from the `admin` namespace
-(e.g. `admin_viewer`); lookup uses the namespace, not the client id.
+Namespace note: the admin console's app id, OAuth client id and role namespace are **all
+`admin`** (the former `console` app was merged into `admin` on 2026-11-21; `permission_app_id`
+is gone). `default_role` uses a code from the `admin` namespace (e.g. `admin_viewer`).
 :::
 
 ::: warning `rank_level` has a hard ceiling

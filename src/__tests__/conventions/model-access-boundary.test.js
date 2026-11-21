@@ -69,18 +69,6 @@ const BASELINE = {
     max: 2,
     why: '同 console 那份读的是同一对模型（User / UserIdentity），但挑战绑定的是 `patchHash`（一次授权只能用于被批准的那次变更）。guard 属框架侧目录，也不能反向依赖 app 的 DAO'
   },
-  'app/posecraft/services/profile.service.js': {
-    max: 4,
-    why: '跨应用读用户公开资料 + 作品/收藏/推荐计数：posecraft 域自己的表有 DAO，但 User 是共享模型'
-  },
-  'app/posecraft/utils/preview.js': {
-    max: 1,
-    why: '预览渲染时要按 id 取模板，处在一个纯函数工具里，引入 DAO 会把它变成有状态模块'
-  },
-  'app/retroweb/services/quota.service.js': {
-    max: 1,
-    why: '配额统计要对 retroweb.Task 做聚合，任务 DAO 目前只有列表查询'
-  },
   'app/user/permission/seeder.js': {
     max: 1,
     why: '角色种子数据初始化：一次性脚本性质，写死模型名是为了在 seeder 里保持自包含'

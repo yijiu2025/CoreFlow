@@ -17,6 +17,7 @@ import {
   restoreRegistrationContext
 } from '../../../../api/guard.js';
 import { C } from '../../../../utils/index.js';
+import { registerApiBinding } from '../../../config/app-registry.js';
 import { createLogger } from '../../../support/log/index.js';
 
 const log = createLogger('framework.loader.registry.08-api');
@@ -46,6 +47,18 @@ const apiLoader = async app => {
 
           config.prefix = config.prefix || '';
           registerSystemMetadata(systemKey, config);
+          /*
+           * 路由系统 → 登录应用（可选声明）。
+           *
+           * `system.json` 写 `app_id` 就表示"这个路径前缀属于哪个应用"，例如
+           * `src/api/admin/system.json` 声明 `app_id: 'console'`（管理后台）。
+           * 登记后，认证层能判出"这个请求属于哪个应用"，据此决定读哪个 sid、
+           * 以及会话归属是否匹配 —— 共享系统（Auth / verify / notice）不写 app_id，
+           * 就永远不参与归属校验。
+           *
+           * 🔴 新增应用不需要改框架：在自己的 system.json 里写这两行即可。
+           */
+          if (config.app_id) registerApiBinding(config.prefix, config.app_id);
         }
 
         setRegistrationContext(systemKey);

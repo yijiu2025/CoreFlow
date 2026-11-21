@@ -35,6 +35,7 @@ import { startCleanupTask, trackConnection } from './util/connection-tracker.js'
 import { checkGlobalBlock } from './block-manager.js';
 import { readSecuritySettings, hasSettingsReader, registerSettingsReader } from './interface/config-access.js';
 import { DEFAULT_SECURITY_SETTINGS } from './config/defaults.js';
+import { startTelemetry, stopTelemetry } from './telemetry/store.js';
 
 const log = createLogger('framework.firewall.bootstrap');
 
@@ -52,6 +53,13 @@ if (!hasSettingsReader()) {
  * @param {import('fastify').FastifyInstance} app Fastify 实例
  */
 const firewallCorePlugin = fp(async function (app) {
+  // ============== 遥测接收（framework 自带，不依赖任何 app） ==============
+  // 必须在钩子注册之前接上：插件注册期间及之后的每条记录都要能被统计到。
+  // app 层的面板若在场，可以覆盖 sink（registerRecordSink 是覆盖语义），
+  // 但**未注册时这里必须已经有一份**，否则管理后台的监控页恒为 0 且无任何报错。
+  startTelemetry();
+  app.addHook('onClose', async () => stopTelemetry());
+
   // ============== 定时任务（僵尸连接清理） ==============
   startCleanupTask(app);
 

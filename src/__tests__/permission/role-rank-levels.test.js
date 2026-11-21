@@ -124,8 +124,10 @@ beforeAll(async () => {
 
 describe('角色定义守卫：rank_level 必须落在 Role 模型的校验区间内', () => {
   it('确实扫到了各应用的 roles.js（防止路径写错导致守卫空转）', () => {
-    expect(appNamesWithRoles().length).toBeGreaterThanOrEqual(5);
-    expect(roleRegistry.length).toBeGreaterThanOrEqual(15);
+    // 第三方应用（firewall / posecraft / retroweb）移出后剩 4 个带 roles.js 的应用，
+    // 阈值跟着仓库形状下调 —— 仍然要大于 1，空扫描必须变红。
+    expect(appNamesWithRoles().length).toBeGreaterThanOrEqual(4);
+    expect(roleRegistry.length).toBeGreaterThanOrEqual(10);
   });
 
   it('每个已注册角色的 rank_level 都在模型允许的区间内', () => {
@@ -190,8 +192,8 @@ describe('默认角色守卫：每个应用都要有可解析的"授权即送"�
   it('真实 config + 真实 roles.js 过审计：没有 error 也没有"未声明默认角色"的 warn', () => {
     const issues = auditDefaultRoles({ configs: listAppConfigs(), roleDefs: roleRegistry });
 
-    expect(roleRegistry.length).toBeGreaterThanOrEqual(15); // 防止注册表空转
-    expect(listAppConfigs().length).toBeGreaterThanOrEqual(5); // 防止 config 没加载导致"无声明"被静默放过
+    expect(roleRegistry.length).toBeGreaterThanOrEqual(10); // 防止注册表空转
+    expect(listAppConfigs().length).toBeGreaterThanOrEqual(4); // 防止 config 没加载导致"无声明"被静默放过
     expect(issues.map(issue => `[${issue.level}] ${issue.message}`).join('\n')).toBe('');
   });
 });

@@ -66,6 +66,49 @@ const ROTATED_RETENTION = Math.max(60, Number(authSessionConfig().rotatedRetenti
 const COOKIE_SID = 'sid';
 const COOKIE_SID_R = 'sid_r';
 
+/**
+ * sid cookie 是否按应用分名（`session.cookieScopedByApp`，默认 false）
+ *
+ * @returns {boolean} 是否启用按应用分名
+ */
+function cookieScopedByApp() {
+  return authSessionConfig()?.session?.cookieScopedByApp === true;
+}
+
+/**
+ * 某个应用的 sid cookie 名
+ *
+ * 关闭分名时恒为 `sid`（旧行为，零改动）。开启后为 `sid_<app>`，
+ * 于是 A/B 两个应用在同一 host 下**各自保留一份会话**，登录 B 不再覆盖 A。
+ *
+ * appId 只保留字母数字/下划线/短横，`GLOBAL` 与空值一律回落 `sid`。
+ *
+ * @param {string} [appId] 应用标识
+ * @returns {string} cookie 名
+ */
+function sidCookieName(appId) {
+  if (!cookieScopedByApp()) return COOKIE_SID;
+  const key = String(appId || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '');
+  if (!key || key === 'global') return COOKIE_SID;
+  return `${COOKIE_SID}_${key}`;
+}
+
+/**
+ * 读取 sid 时的候选名（按命中顺序）
+ *
+ * 先试该应用专属名，再回落裸 `sid`：开启分名的**迁移期**，用户手里还握着旧 cookie，
+ * 直接只读新名会让所有人瞬间掉线。回落项会在下一次登录写新名后自然淘汰。
+ *
+ * @param {string} [appId] 应用标识
+ * @returns {string[]} 候选 cookie 名
+ */
+function sidCookieCandidates(appId) {
+  const scoped = sidCookieName(appId);
+  return scoped === COOKIE_SID ? [COOKIE_SID] : [scoped, COOKIE_SID];
+}
+
 // ── 2. SESSION_SECRET 校验 ──
 
 // 生产环境必须显式配置 SESSION_SECRET，否则 HMAC 签名可被伪造 sid，直接拒绝启动
@@ -283,6 +326,9 @@ function accountKeyForUid(uid) {
 export {
   signCookie,
   verifyCookie,
+  cookieScopedByApp,
+  sidCookieName,
+  sidCookieCandidates,
   COOKIE_OPTIONS,
   COOKIE_POLICY,
   SHORT_SESSION_TTL,

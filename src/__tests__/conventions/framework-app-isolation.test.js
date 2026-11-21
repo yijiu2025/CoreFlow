@@ -172,9 +172,14 @@ describe('防护执行点接线（引擎 framework 化的配套）', () => {
     expect(src).toMatch(/isUserManuallyBlocked\s*\(/);
   });
 
-  it('遥测 sink：app store 注册接收器、引擎经 sink 产生事件（两层解耦的桥必须双向在位）', () => {
-    expect(readSrc('app/firewall/data/store.js')).toMatch(/registerRecordSink\s*\(\s*pushRecord\s*\)/);
-    expect(readSrc('app/firewall/index.js')).toMatch(/registerEmailAlertSender\s*\(/);
+  it('遥测 sink：framework 自带接收器、引擎经 sink 产生事件（两层解耦的桥必须双向在位）', () => {
+    // 2026-11-21：面板应用（app/firewall）移出本仓后，接收器由 framework 自己注册。
+    // 断言点从「app store 注册」改为「framework 遥测存储在 bootstrap 里被启动」——
+    // 桥的**两端**仍然都要在位：没人注册 = 统计恒 0；没人产生事件 = 注册了也白搭。
+    expect(readSrc('framework/ingress/firewall/telemetry/store.js')).toMatch(
+      /registerRecordSink\s*\(\s*pushRecord\s*\)/
+    );
+    expect(readSrc('framework/ingress/firewall/bootstrap.js')).toMatch(/startTelemetry\s*\(\s*\)/);
     const pipeline = readSrc('framework/ingress/firewall/engine/pipeline.js');
     expect(pipeline).toMatch(/recordFirewallEvent\s*\(/);
     expect(pipeline).not.toMatch(/from\s+'[^']*app\/firewall/);

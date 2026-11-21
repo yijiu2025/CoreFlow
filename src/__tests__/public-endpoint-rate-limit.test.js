@@ -10,7 +10,6 @@
  *   /oauth2.1/token + /revoke        60/min  groupId=oauth-token（同一流程共桶）
  *   /oauth2.1/device_authorization、/device/token、/device、/device/authorize
  *                                    20/min  groupId=oauth-device（同一流程共桶）
- *   /firewall/v1/challenge/verify    20/min  groupId=challenge-verify
  *
  * 两类断言：
  *   ① **源码契约**：这些声明不能被悄悄删掉/改数值（逐路由截取代码块比对）；
@@ -44,9 +43,6 @@ const EXPECTED = {
     deviceToken: { max: 20, groupId: 'oauth-device' },
     devicePage: { max: 20, groupId: 'oauth-device' },
     deviceAuthorize: { max: 20, groupId: 'oauth-device' }
-  },
-  'api/firewall/v1/challenge.js': {
-    verify: { max: 20, groupId: 'challenge-verify' }
   }
 };
 

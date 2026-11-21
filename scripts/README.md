@@ -15,7 +15,7 @@
 
 | 目录          | 职责                                                                                                                                          | 入口 / 说明                                                           |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `verify/`     | **跨进程**行为验收关卡：调度器分布式锁 / 守卫配置跨实例同步 / WS 广播 / 遥测聚合 / 队列原子性（另有独立的文档链接检查 `npm run verify:docs`） | `npm run verify:all`；细节见 [`verify/README.md`](./verify/README.md) |
+| `verify/`     | **跨进程**行为验收关卡：调度器分布式锁 / 守卫配置跨实例同步 / 队列原子性（另有独立的文档链接检查 `npm run verify:docs`） | `npm run verify:all`；细节见 [`verify/README.md`](./verify/README.md) |
 | `bench/`      | 压测基线：RPS / 延迟分位 / **事件循环最长冻结时长**（tick 间隔法）                                                                            | `npm run bench`；细节见 [`bench/README.md`](./bench/README.md)        |
 | `commands/`   | `cli.js` 的内置子命令模块（user / role / admin / database / cache / system）                                                                  | 只被 `cli.js` import，不单独运行                                      |
 | `lib/`        | 内部复用：`plugin.js`（加载 `src/app/<app>/cli/` 插件命令）、`redis.js`（连接与信息查询）、`release/index.js`（发版决策纯函数 + 同名测试）    | 无 CLI 入口                                                           |
@@ -70,7 +70,7 @@
 
 ## 相关文档
 
-- [`verify/README.md`](./verify/README.md) —— 五个跨进程关卡的判据与依赖
+- [`verify/README.md`](./verify/README.md) —— 三个跨进程关卡的判据与依赖
 - [`bench/README.md`](./bench/README.md) —— 压测口径与"为什么量事件循环冻结"
 - `docs/standards/git-release-rules.md` —— 发版判据（`release.mjs` / `release-web.mjs` 的共同来源）
 - `AGENTS.md` 的「常用命令」「Git 提交与发版」两节

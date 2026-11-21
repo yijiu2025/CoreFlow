@@ -30,6 +30,15 @@ const AUTH_SESSION_DEFAULTS = {
   },
 
   session: {
+    /*
+     * sid cookie 是否按应用分名（`sid_console` / `sid_posecraft` …）
+     *
+     * 默认 false = 所有应用共用一个 `sid`。此时**同一 host 下的多应用会互相覆盖会话**
+     * （cookie 只按 host 划分、端口不参与）：登录 B 会顶掉 A 的凭证，A 表现为掉线。
+     * 生产若各应用在不同子域，host-only cookie 天然隔离，不需要开这个开关；
+     * 本地用「同 host 不同端口」（localhost:5173 / :5174）联调时才必须打开。
+     */
+    cookieScopedByApp: false,
     // 旧 refresh token 轮转后「已轮转」标记的保留时长（秒），用于盗用检测。
     // 默认 7 天：足够覆盖「客户端长时间离线后带旧 token 回来」的检测窗口。
     // ⚠️ 消费方兜底最小 60 秒，防 0/负数导致 Redis TTL 异常（永不过期或立即失效）。

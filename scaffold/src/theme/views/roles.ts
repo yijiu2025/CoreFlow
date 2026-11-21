@@ -137,7 +137,7 @@ export interface RolesViewContext {
   /** 超管职级只读（降到 1 会把自己关在门外） */
   rankLocked: ComputedRef<boolean>;
   deptFlat: ComputedRef<DeptFlatItem[]>;
-  /** 「数据范围 → 应用维度」的可选项（系统应用清单，取不到时退回已有角色所属应用） */
+  /** 「数据范围 → 应用维度」的可选项（系统应用清单；清单拉取失败时退回已有角色所属应用） */
   scopeAppOptions: ComputedRef<Array<{ id: string; name: string }>>;
   /** 权限目录 */
   catalogLoading: Ref<boolean>;

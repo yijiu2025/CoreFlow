@@ -7,13 +7,71 @@
 
 ## 未发布（Unreleased）
 
+### 安全
+
+- **同 host 多应用不再互相顶掉会话**：cookie 只按 host 划分、端口不参与（RFC 6265），
+  本地 `localhost:5173` / `:5174` 共享同一个 `sid` —— 登录 B 覆盖 A 的凭证，A 表现为掉线。
+  新增 `session.cookieScopedByApp`（默认关，行为不变）：打开后按应用写 `sid_<app>`，
+  A/B 各持一份会话、多端上限回到"每应用各自算"；读取先找专属名再回落裸 `sid`，升级不掉线。
+- **会话归属校验**：凭据的登录应用（会话 `appId` / token `aud`）与请求所属应用不一致时返回
+  **401 `SESSION_APP_MISMATCH`**，前端跳登录。此前靠"子域 cookie 隔离"这一假设，本地破了假设 ⇒
+  A 的会话被当成 B 的身份：权限够就直接进，不够就 403，两种都不对。
+- **请求 → 应用 的解析全部走注册表**：`system.json` 写 `app_id`、应用 `config.js` 可写 `hosts`，
+  启动期登记（`registerApiBinding` / `registerAppConfig`），请求期只查表。新增应用**不需要改框架**；
+  共享系统（`/auth`、`/verify`、`/api/files`）故意不声明，因此不参与归属校验。
+- 两个前端 Vite 放行 `*.localhost`（`server.allowedHosts`），本地联调改用
+  `console.localhost` / `oauth.localhost` 即可按 host 隔离 cookie；文档补了「多应用本地联调」一节。
+
+- **受限凭证（Bearer token）不再凭 GLOBAL 角色通吃全站**：`getPermissions()` 一直把 GLOBAL
+  角色并进各应用命名空间（会员等级角色需要它），而 GLOBAL 里的 `superadmin` 带 `*` —— 于是
+  一个 posecraft 的 token 也能匹配 `admin:user:read`（权限串不带命名空间，`*` 是真通配）。
+  现在 token 走 `scopedCredential`：GLOBAL 的 `*` 收窄成 `${appId}:*`，超管拿应用 token
+  仍能在**本应用**里做一切，但够不到后台。实测：超管视角 `posecraft` 命名空间 19 条 → 1 条
+  （`posecraft:*`），`admin` 命名空间仍是 `admin:*`（那是它自己的应用）。
+- **Bearer 路径补上权限命名空间映射**：`aud` 是 OAuth 的 client_id（`console`），角色却住在
+  `app_id='admin'` 下。此前直接把 `aud` 当 appId 查 ⇒ **管理员用自己的 token 也是 0 权限**
+  （实测 15 条 `admin:user:*` 全丢）。现在走 `resolvePermissionAppId()`，并把结果回填进
+  `user.appId`（`freshPermission` 第 4 层选命名空间要用它，缺了就退化成 GLOBAL）。
+- **第 4 层回源不再把门重新打开**：`guard.js` 的 `freshPermission` 回源时透传凭证类型
+  （`scopedCredential: user.tokenType === 'bearer'`）—— 否则超管用别家 token 打敏感接口，
+  回源会把 `*` 重新读回来，前一道闸白关。
+
+### 新增
+
+- **用户列表加「无角色」筛选与标记**：角色被撤销的账号会从非超管的列表里消失（应用域只留
+  "在我管理的应用里有角色"的人），超管想补授权都找不到入口。现在工具条多一个「无角色」开关
+  （`?noRole=1`，进地址栏、导出同口径），角色列对这类账号直接标 `无角色` 而不是一个破折号 ——
+  "没有角色"不是"没填"，是"对别人不存在"，看着像数据缺失反而更难查。
+  实测：超管 3 人 → 筛出 1 人（`33464525`）；观察者 2 人 → 筛出 0 人（应用域先排除，
+  这是安全边界，刻意不放宽）。
+
 ### 修复
 
+- **侧栏「收起」会收两次**：`.rail` 同时写了 `flex: 0 0 var(--rail-w)` 与 `width`，收起时
+  `flex-basis` 立刻跳到 64px（布局基准没有过渡），而 `width` 还在按 0.22s 过渡 —— 两个值争
+  同一个尺寸。逐帧采样实测为 `232 → 97.1（停住约 110ms）→ 64`，肉眼就是"先变窄一下、
+  然后又窄一次"。改成 `flex: 0 0 auto` + 只让 `width` 驱动（`flex-shrink: 0` 保留），
+  采样变成一条连续的 `232 → 64`。
+- **登录日志的表头只铺到第 8 列**：空态行还留着 `colspan="9"`，而这张表在"IP / 归属地"合并后
+  只有 8 列 —— `table-layout: fixed` 下多出来的那一列会把剩余宽度整段吃掉，表现为表头在
+  「详情」处断掉、右侧一大块空白、空态文字看着偏左，同时「结果」列被挤成「结…」。
+  改成 `colspan="8"`。
+- 新增关卡 `scripts/check-table-columns.mjs`（`npm run check:table`，已并入 `typecheck`）：
+  扫所有带 `<colgroup>` 的版式，`colspan` 必须等于列数。这类问题 `vue-tsc` 与单测都看不见，
+  只有肉眼在某个分辨率下才会撞见；关卡反过来验过能抓到本次这一处。
 - **清除日志不再把工作台统计一起清零**：登录脉搏、成功率、今日操作、近 7 天趋势原先都直接
   `COUNT` `audit_logs` / `session_logs`，点一次「清除日志」看板就归零（2026-11-17 反馈）。
   现在 `purge` 在**同一事务**里先把待删范围按小时桶汇总进 `log_stats_hourly`（条数 + 失败数）、
   把成功登录的账号存进 `log_stats_users`（去重用），再删明细；统计查询改为「明细 + 归档」相加。
-  迁移：`migrations/session/20261118000001-create-log-stats.js`。
+  迁移：`migrations/session/20261118000001-create-log-stats.js`、
+  `20261118000002-create-log-stats-ips.js`（来源 IP 存在性）。
+- **登录热力 / 年度日历 / 报表卡片同样合并归档**：7×24 热力按 `WEEKDAY/HOUR`、年度日历按
+  `DATE(bucket_start)` 折叠归档小时桶；「账号数 / 来源 IP」改用「明细 ∪ 归档」后
+  `COUNT(DISTINCT)`（计数相加会把同一账号算成两个人，所以归档存的是 user_id / ip 本身）。
+  此前只合并了总数，「总次数 8 而账号数 0」照样对不上。
+- 一次性回填脚本 `scripts/backfill-log-archive.mjs`：清理过的历史在 `audit_logs` 里还留着一份
+  登录事件（被 `OPER_ONLY_SQL` 排除在操作统计之外），可只读地补成登录侧归档；默认干跑、
+  同桶取 `GREATEST` 所以幂等。
 - 活跃账号数改走 `logDao.activeLoginUsers()`：在「明细 ∪ 归档」上重新 `COUNT(DISTINCT)`。
   两边人数直接相加会把"昨天被清过、今天又登录"的同一账号算成两个人，所以归档存的是
   user_id 而不是计数。

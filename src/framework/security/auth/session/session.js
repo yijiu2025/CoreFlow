@@ -17,6 +17,8 @@ import {
   COOKIE_OPTIONS,
   COOKIE_SID,
   COOKIE_SID_R,
+  sidCookieName,
+  sidCookieCandidates,
   SHORT_SESSION_TTL,
   LONG_SESSION_TTL,
   REFRESH_TOKEN_TTL,
@@ -345,7 +347,11 @@ async function createSession(params) {
 
   // 6. 下发 Cookie（accessCount 从 0 开始）
   const sidValue = signCookie(sessionId, 0);
-  reply.setCookie(COOKIE_SID, sidValue, {
+  /*
+   * cookie 名按应用分（`session.cookieScopedByApp` 开启时是 `sid_<app>`）。
+   * 不开时仍写裸 `sid` —— 与旧行为逐字节一致。
+   */
+  reply.setCookie(sidCookieName(appId), sidValue, {
     ...COOKIE_OPTIONS.SID,
     maxAge: sessionTtl
   });
@@ -380,17 +386,25 @@ async function createSession(params) {
  * @returns {object|null} 会话数据或 null
  */
 async function getSession(params) {
-  const { cookies, reply } = params;
+  const { cookies, reply, appId } = params;
 
-  // 1. 解析 sid cookie
-  const sidCookie = cookies[COOKIE_SID];
-  if (!sidCookie) return null;
+  /*
+   * 1. 解析 sid cookie
+   *
+   * 开启「按应用分名」后先找 `sid_<当前应用>`，再回落裸 `sid`（迁移期兜底，见
+   * `sidCookieCandidates` 的注释）。两个都没有才算未登录 —— 关键是不能因为
+   * A 应用的 cookie 存在，就把它当成 B 应用的登录态。
+   */
+  const candidateNames = sidCookieCandidates(appId);
+  const cookieName = candidateNames.find(name => cookies?.[name]);
+  if (!cookieName) return null;
+  const sidCookie = cookies[cookieName];
 
   const parsed = verifyCookie(sidCookie);
   if (!parsed) {
     log.debug('❌ sid Cookie 签名验证失败');
     // 清失效 sid cookie，防下次请求携带坏 cookie 反复 401
-    if (reply) reply.clearCookie(COOKIE_SID, { ...COOKIE_OPTIONS.SID });
+    if (reply) reply.clearCookie(cookieName, { ...COOKIE_OPTIONS.SID });
     return null;
   }
 

@@ -26,8 +26,6 @@
     "verify:all": "node scripts/verify/run-all.mjs",
     "verify:lock": "node scripts/verify/lock-mutex.mjs",
     "verify:guard": "node scripts/verify/guard-sync.mjs",
-    "verify:fanout": "node scripts/verify/ws-fanout.mjs",
-    "verify:stats": "node scripts/verify/stats-aggregation.mjs",
     "verify:queue": "node scripts/verify/queue-atomic.mjs",
     "verify:docs": "node scripts/verify/doc-links.mjs",
     "bench": "node scripts/bench/baseline.mjs",

@@ -53,8 +53,14 @@ const PERM_TTL = 60;
  * @param {string} appId 应用标识
  * @returns {string} 形如 `a1b2c3d4e5f6a7b8` 的 16 位 hex
  */
-function buildPermKey(userId, appId) {
-  return crypto.createHash('sha256').update(`${userId}\u0000${appId}`).digest('hex').slice(0, 16);
+function buildPermKey(userId, appId, scoped = false) {
+  /*
+   * 🔴 受限凭证（token）必须**单独一份缓存**：它的权限集里剔除了 GLOBAL 的通配授权，
+   *    与同 appId 的会话快照不是同一份数据。共用键会让会话把带 `*` 的快照塞给 token
+   *    （或反过来把残缺集塞给会话）。
+   */
+  const material = scoped ? `${userId}\u0000${appId}\u0000scoped` : `${userId}\u0000${appId}`;
+  return crypto.createHash('sha256').update(material).digest('hex').slice(0, 16);
 }
 
 /**
@@ -212,17 +218,19 @@ function warnIfNotNumericUserId(userId, caller) {
  * @param {string} appId 应用标识
  * @param {object} [opts={}] 选项
  * @param {boolean} [opts.fresh=false] **强制回源**：跳过缓存直接查库（敏感操作用，第 4 层）
+ * @param {boolean} [opts.scopedCredential=false] 受限凭证（Bearer token）：
+ *   剔除 GLOBAL 角色的通配授权，见 `permission-loader.js` 的 `collectRolePermissions`
  * @returns {Promise<{roles: string[], permissions: {allows: string[], denies: string[]}}>}
  */
 async function getPermissions(userId, appId, opts = {}) {
   warnIfNotNumericUserId(userId, 'getPermissions');
-  const { fresh = false } = opts;
+  const { fresh = false, scopedCredential = false } = opts;
   const store = permStore();
-  const key = buildPermKey(userId, appId);
+  const key = buildPermKey(userId, appId, scopedCredential);
 
   if (fresh) {
     log.debug('🔐 强制回源加载权限: userId=%s, appId=%s', userId, appId);
-    const loaded = await loadUserPermissions(userId, appId);
+    const loaded = await loadUserPermissions(userId, appId, { scopedCredential });
     // 回源结果顺手刷新缓存（下次可命中），写失败不影响本次返回
     try {
       const fingerprint = await computePermFingerprint(userId, appId);
@@ -254,7 +262,7 @@ async function getPermissions(userId, appId, opts = {}) {
     }
   }
 
-  const loaded = await loadUserPermissions(userId, appId);
+  const loaded = await loadUserPermissions(userId, appId, { scopedCredential });
   try {
     const fingerprint = await computePermFingerprint(userId, appId);
     await store.set(key, { fingerprint, ...loaded }, PERM_TTL);
@@ -282,11 +290,13 @@ async function invalidatePermCache(userId, appId = null) {
   const apps = appId ? [appId] : ['GLOBAL'];
   let removed = 0;
   for (const a of apps) {
-    try {
-      await store.delete(buildPermKey(userId, a));
-      removed += 1;
-    } catch (err) {
-      log.warn('[Auth] 权限缓存失效失败: userId=%s, appId=%s', userId, a, err);
+    for (const scoped of [false, true]) {
+      try {
+        await store.delete(buildPermKey(userId, a, scoped));
+        removed += 1;
+      } catch (err) {
+        log.warn('[Auth] 权限缓存失效失败: userId=%s, appId=%s, scoped=%s', userId, a, scoped, err);
+      }
     }
   }
   return removed;

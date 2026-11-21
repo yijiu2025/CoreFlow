@@ -13,18 +13,18 @@
 权限编码遵循 `{应用域}:{资源名}:{动作}` 三段式小写格式：
 
 ```js
-// src/app/firewall/permission/index.js
-export const FIREWALL_PERMISSIONS = createPermissionRegistry('firewall', '防火墙模块', {
-  MONITOR: {
-    READ: { code: 'fw:monitor:read', label: '查看监控数据', type: 'read' },
-    LOGS: { code: 'fw:monitor:logs', label: '查看访问日志', type: 'read' }
+// src/app/oauth21/permission/index.js
+const OAUTH_PERMISSIONS = createPermissionRegistry('oauth21', 'OAuth 2.1 授权中心', {
+  CLIENT: {
+    READ: { code: 'oauth:client:read', label: '查看客户端', type: 'read' },
+    UPDATE: { code: 'oauth:client:update', label: '编辑客户端', type: 'write' }
   },
-  BLOCK: {
-    READ: { code: 'fw:block:read', label: '查看封禁列表', type: 'read' },
-    WRITE: { code: 'fw:block:write', label: '添加/移除封禁', type: 'write' }
+  TOKEN: {
+    READ: { code: 'oauth:token:read', label: '查看 Token', type: 'read' },
+    REVOKE: { code: 'oauth:token:revoke', label: '吊销 Token', type: 'high_risk' }
   },
   ADMIN: {
-    ALL: { code: 'fw:admin:*', label: '管理员全量通配符', type: 'wildcard' }
+    ALL: { code: 'oauth:admin:*', label: '管理员全量通配符', type: 'wildcard' }
   }
 });
 ```
@@ -35,25 +35,26 @@ export const FIREWALL_PERMISSIONS = createPermissionRegistry('firewall', '防火
 
 ```
 superadmin (rank:99) → 所有应用管理员（自动继承）
-  ├── fw_admin (rank:90) → 防火墙管理员
-  ├── fw_operator (rank:50) → 防火墙操作员
-  └── fw_viewer (rank:1) → 观察者（默认授予）
+  ├── oauth_admin (rank:80) → 授权中心管理员
+  └── oauth_viewer (rank:10) → 观察者（默认授予）
 ```
 
 ### 角色定义
 
 ```js
-// src/app/firewall/permission/roles.js
+// src/app/oauth21/permission/roles.js
 defineRoles([
   {
-    code: 'fw_viewer',
-    app_id: 'firewall',
-    name: '防火墙观察者',
-    rank_level: 1,
+    code: 'oauth_viewer',
+    app_id: 'oauth21',
+    name: 'OAuth 观察者',
+    rank_level: 10,
     is_default: true, // 授权即送的默认角色（见下一节）
     policy: {
       Version: '2026-06-06',
-      Statement: [{ Effect: 'Allow', Action: [FIREWALL_PERMISSIONS.MONITOR.READ] }]
+      Statement: [
+        { Effect: 'Allow', Action: [OAUTH_PERMISSIONS.CLIENT.READ, OAUTH_PERMISSIONS.TOKEN.READ] }
+      ]
     }
   }
 ]);
@@ -68,8 +69,8 @@ defineRoles([
 2. `roles.js` 里该角色的 `is_default: true` —— 辅口径，贴着定义写，不容易漏。
 
 ```js
-// src/app/firewall/config.js
-default_role: 'fw_viewer',
+// src/app/oauth21/config.js
+default_role: 'oauth_viewer',
 ```
 
 解析顺序（`src/app/oauth21/dao/approval.dao.js`）：
@@ -108,8 +109,9 @@ default_role: 'fw_viewer',
 - 判据被 `src/__tests__/permission/role-rank-levels.test.js` 卡死：
   真实 config + 真实 `roles.js` 跑一遍审计，有问题测试就红，不用等部署。
 
-命名空间注意：console 的登录应用是 `console`，角色住在 `admin`（`config.permission_app_id`）。
-`default_role` 要写 `admin` 命名空间下的 code（如 `admin_viewer`），解析时会按命名空间查库。
+命名空间注意：管理后台的应用标识、OAuth 客户端 id、角色命名空间**都是 `admin`**
+（2026-11-21 把 `console` 并入 `admin`，`permission_app_id` 已删除）。
+`default_role` 写 `admin` 命名空间下的 code（如 `admin_viewer`）。
 :::
 
 ::: warning `rank_level` 有硬上限

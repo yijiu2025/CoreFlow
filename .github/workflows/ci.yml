@@ -38,7 +38,8 @@
 #
 #   安装范围 = `--workspace=packages/shared-device --include-workspace-root`：
 #     只把「根工程 + shared-device 这一个 workspace」纳入安装，
-#     oauth21 / posecraft / firewall 三个前端工程（vue / vite / vitest…）不进图。
+#     oauth21 前端工程（vue / vite / vitest…）不进图；posecraft / firewall 等
+#     第三方前端已移出本仓（2026-11-21），更不需要在这里安装。
 #   ⚠️ 不要改回 `--workspaces=false`（踩过）：那个值会让 npm 对
 #     「既由某个 workspace 提供、又是根依赖」的包名两头落空 —— 既不建软链，
 #     也不去 registry 取。`stable-deviceid` 恰好就是这种情况（提供者是
@@ -196,15 +197,11 @@ jobs:
             --ignore-scripts --legacy-peer-deps --no-package-lock --no-audit --no-fund
           node packages/shared-device/scripts/build.mjs
 
-      # `data/` 不进 git（部署状态随卷持久化），于是 CI 里没有 data/firewall_config.json。
-      # firewall.test.js 的「initDao 真的被执行」用例靠**对象身份变化**判定：
-      # dao.js 只在文件存在时才重新赋值 securitySettings，缺文件 → 身份不变 → 假红。
-      # 这里种一份**语义为空**的配置：`securitySettings: {}` 会触发重新赋值，
-      # 但合并结果与默认值完全相同（不会给其它套件打开限流/黑名单）。
-      - name: 种入防火墙配置文件（data/ 不入库）
-        run: |
-          mkdir -p data
-          printf '{"securitySettings":{}}' > data/firewall_config.json
+      # —— 已移除的步骤：种入 data/firewall_config.json ——
+      # 原先这一步是给 `firewall.test.js` 的「initDao 真的被执行」用例做夹具
+      # （`data/` 不进 git，缺文件时 dao 不会重新赋值 → 对象身份不变 → 假红）。
+      # 2026-11-21 面板应用（src/app/firewall）移出本仓，该套件随之删除；
+      # 留一份没有任何用例读取的文件只会让后来人误以为还有依赖，故一并去掉。
 
       # 必须带 --experimental-vm-modules：项目是 ESM 且测试大量使用
       # jest.unstable_mockModule，直接 npx jest 会丢掉这个标志而大面积失败。
@@ -217,11 +214,15 @@ jobs:
         run: node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci --coverage
 
   # --------------------------------------------------------------------------
-  # 3. 跨进程不变量（E1 分布式锁 / E3 遥测聚合 / E3 WS 扇出）
+  # 3. 跨进程不变量（E1 分布式锁 / E2 守卫配置同步 / 队列指针原子性）
   #
-  # 为什么值得单独一条作业：这三种行为在单进程里都能被单例状态"伪装成正确"，
+  # 为什么值得单独一条作业：这些行为在单进程里都能被单例状态"伪装成正确"，
   # 只有真实多进程 + 真实 Redis 才能证伪。它们此前只靠人记得手动跑 ——
   # 结果就是长期没人跑。放进 CI 才算真正有了门禁。
+  #
+  # 2026-11-21：E3 的两关（遥测跨实例聚合 / WS 广播）随防火墙面板应用移出本仓一并删除。
+  # 框架层的遥测改为单进程环形缓冲 + 单文件落盘（framework/ingress/firewall/telemetry/store.js），
+  # 不再声称跨实例语义 —— 没有这个能力就不该保留一个只验旧实现的关卡。
   # --------------------------------------------------------------------------
   verify:
     name: Verify（跨进程关卡）
@@ -271,7 +272,7 @@ jobs:
         run: |
           set +e
           failed=0
-          for k in lock-mutex ws-fanout stats-aggregation queue-atomic; do
+          for k in lock-mutex queue-atomic; do
             echo "=== $k ==="
             node "scripts/verify/$k.mjs"
             code=$?

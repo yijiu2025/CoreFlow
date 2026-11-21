@@ -84,12 +84,32 @@ describe('敏感操作回源校验（第 4 层）', () => {
     const reply = makeReply();
     await __test__applyGuardLogic({ enabled: true, freshPermission: true }, req, reply);
     expect(calls).toHaveLength(1);
-    expect(calls[0].opts).toEqual({ fresh: true });
+    /* 会话凭证：scopedCredential=false（GLOBAL 的 `*` 照常生效） */
+    expect(calls[0].opts).toEqual({ fresh: true, scopedCredential: false });
     // 🔴 必须传数字主键 userId，不能传 sub（UUID）：UserRole.user_id 是数字列，
     // 传 uid 会静默查空 → fresh 恒为空权限 → 敏感操作路由必 403
     expect(calls[0].userId).toBe(7);
     expect(calls[0].userId).not.toBe(req.state.user.sub);
     expect(calls[0].appId).toBe('app1');
+  });
+
+  test('Bearer token → 回源时声明 scopedCredential（GLOBAL 的 `*` 要收窄）', async () => {
+    /*
+     * 🔴 这条是最容易被漏掉的地方：第 4 层是"最该收紧"的一层，若这里不带凭证类型，
+     *    超管用别家应用的 token 打敏感接口时，回源会把 `*` 重新读回来 —— 前一道闸白关。
+     */
+    const req = makeRequest({
+      sub: 'uid-uuid-string',
+      userId: 7,
+      appId: 'admin',
+      roles: ['superadmin'],
+      permissions: { allows: ['admin:*'], denies: [] },
+      tokenType: 'bearer'
+    });
+    const reply = makeReply();
+    await __test__applyGuardLogic({ enabled: true, freshPermission: true }, req, reply);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].opts).toEqual({ fresh: true, scopedCredential: true });
   });
 
   test('client_token（无数字主键）→ 403 拒绝，不发起回源', async () => {

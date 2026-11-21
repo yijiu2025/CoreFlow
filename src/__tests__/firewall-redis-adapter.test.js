@@ -79,13 +79,10 @@ describe('isUserManuallyBlocked：manualBlacklistUsers 执行点（修复"只写
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '..');
-// 访问层已上移 framework（2026-11-01 两层分离）：扫描范围加 framework/firewall，
-// app/firewall 保留面板/配置/遥测消费方，api/firewall 是路由层
-const FIREWALL_DIRS = [
-  path.join(SRC, 'framework', 'ingress', 'firewall'),
-  path.join(SRC, 'app', 'firewall'),
-  path.join(SRC, 'api', 'firewall')
-];
+// 访问层已上移 framework（2026-11-01 两层分离）：扫描范围加 framework/firewall。
+// 2026-11-21 起面板应用（app/firewall、api/firewall）已移出本仓，只扫仍存在的目录 ——
+// 目录缺失时 readdirSync 会直接炸，而不是"少扫一点"。
+const FIREWALL_DIRS = [path.join(SRC, 'framework', 'ingress', 'firewall')].filter(dir => fs.existsSync(dir));
 
 /** 收集目录下全部 .js 源文件 */
 function walkJs(dir, out = []) {

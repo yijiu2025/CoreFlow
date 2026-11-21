@@ -96,7 +96,9 @@ function collectDeclarations(file) {
 describe('requireSignature 声明必须有执行者', () => {
   it('src/api 下所有 requireSignature: true 都落在 oauth21 目录内', () => {
     const files = walk(API_DIR);
-    expect(files.length).toBeGreaterThan(50); // 目录没被扫空（否则本断言恒真 = 假绿）
+    // 目录没被扫空（否则本断言恒真 = 假绿）。第三方应用移出后剩 45 个文件，
+    // 阈值取 30 留余量，同时仍能发现"路径写错扫到空目录"。
+    expect(files.length).toBeGreaterThan(30);
 
     const offenders = [];
     for (const file of files) {

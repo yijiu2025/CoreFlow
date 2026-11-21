@@ -554,10 +554,6 @@ const {
                 {{ app.name }}
               </label>
               <p v-if="scopeAppOptions.length === 0" class="form-hint">暂无可用应用清单</p>
-              <!-- fail-closed 的破坏力就在这里：不勾 = 立刻失明，保存前必须看见这句话 -->
-              <p v-if="form.dataAppIds.length === 0" class="form-hint" style="color: #f0a020">
-                未选择任何应用 —— 保存后该角色将看不到任何用户（这是刻意的，避免"没配 = 全量"）。
-              </p>
             </div>
           </div>
           <label class="field">

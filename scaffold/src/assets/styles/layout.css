@@ -17,7 +17,19 @@
   top: 0;
   display: flex;
   flex-direction: column;
-  flex: 0 0 var(--rail-w);
+  /*
+   * 🔴 宽度**只能有一个驱动属性**。
+   *
+   * 早先这里是 `flex: 0 0 var(--rail-w)` + `width` + `transition: width`：收起时
+   * `flex-basis` 立刻变成 64px（它是布局基准，没有过渡），而 `width` 还在按 0.22s 过渡 ——
+   * 两个值争同一个尺寸，实测（逐帧采样）表现为**两次收缩**：
+   *   232px → 97.1px（停住约 110ms，过渡被 flex-basis 的重排打断）→ 64px。
+   * 用户看到的就是"先变窄一下，然后又窄一次"。
+   *
+   * 现在让 `width` 唯一驱动（`flex-basis: auto` 会取 width 作为基准），
+   * `flex-shrink: 0` 保留 —— 内容再长也不许把侧栏压窄。
+   */
+  flex: 0 0 auto;
   width: var(--rail-w);
   height: 100vh;
   padding: 18px 12px 12px;
@@ -30,7 +42,7 @@
 }
 
 .rail[data-collapsed='true'] {
-  flex-basis: var(--rail-w-collapsed);
+  /* 只改 width：flex-basis 保持 auto，跟着 width 走（见上一条注释） */
   width: var(--rail-w-collapsed);
 }
 
