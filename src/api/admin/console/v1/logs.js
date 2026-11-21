@@ -173,7 +173,7 @@ function csvCell(value) {
 
 async function registerLogRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleLog',
+    name: 'adminLog',
     alias: '管理后台日志',
     description: '操作日志与登录日志查询、统计、导出、清理',
     prefix: '/console/v1',
@@ -182,7 +182,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogList',
+    name: 'adminOperLogList',
     alias: '操作日志列表',
     method: 'GET',
     url: '/oper-logs',
@@ -199,7 +199,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogStats',
+    name: 'adminOperLogStats',
     alias: '操作日志统计',
     method: 'GET',
     url: '/oper-logs/stats',
@@ -212,7 +212,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogTimeline',
+    name: 'adminOperLogTimeline',
     alias: '操作日志泳道',
     method: 'GET',
     url: '/oper-logs/timeline',
@@ -227,7 +227,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogHeatmap',
+    name: 'adminOperLogHeatmap',
     alias: '操作热力',
     method: 'GET',
     url: '/oper-logs/heatmap',
@@ -252,7 +252,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperCalendar',
+    name: 'adminOperCalendar',
     alias: '操作日历',
     method: 'GET',
     url: '/oper-logs/calendar',
@@ -276,7 +276,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogExport',
+    name: 'adminOperLogExport',
     alias: '导出操作日志',
     method: 'GET',
     url: '/oper-logs/export',
@@ -315,7 +315,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogRemove',
+    name: 'adminOperLogRemove',
     alias: '删除操作日志',
     method: 'DELETE',
     url: '/oper-logs/:id',
@@ -349,7 +349,7 @@ async function registerLogRoutes(fastify) {
    * 那至少是被留痕记录下来的一次**有范围**的操作。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogPurgeChallenge',
+    name: 'adminOperLogPurgeChallenge',
     alias: '清除操作日志-二次验证',
     method: 'POST',
     url: '/oper-logs/purge/challenge',
@@ -379,7 +379,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleOperLogPurge',
+    name: 'adminOperLogPurge',
     alias: '清除操作日志',
     method: 'POST',
     url: '/oper-logs/purge',
@@ -412,7 +412,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLoginLogList',
+    name: 'adminLoginLogList',
     alias: '登录日志列表',
     method: 'GET',
     url: '/login-logs',
@@ -428,7 +428,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLoginLogStats',
+    name: 'adminLoginLogStats',
     alias: '登录日志统计',
     method: 'GET',
     url: '/login-logs/stats',
@@ -441,7 +441,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLoginLogHeatmap',
+    name: 'adminLoginLogHeatmap',
     alias: '登录热力',
     method: 'GET',
     url: '/login-logs/heatmap',
@@ -465,7 +465,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLoginCalendar',
+    name: 'adminLoginCalendar',
     alias: '登录日历',
     method: 'GET',
     url: '/login-logs/calendar',
@@ -489,7 +489,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLoginLogExport',
+    name: 'adminLoginLogExport',
     alias: '导出登录日志',
     method: 'GET',
     url: '/login-logs/export',
@@ -515,7 +515,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLoginLogRemove',
+    name: 'adminLoginLogRemove',
     alias: '删除登录日志',
     method: 'DELETE',
     url: '/login-logs/:id',
@@ -538,7 +538,7 @@ async function registerLogRoutes(fastify) {
 
   // 登录日志同一套两步流程，理由见上面操作日志那段
   registerSecureRoute(fastify, {
-    name: 'consoleLoginLogPurgeChallenge',
+    name: 'adminLoginLogPurgeChallenge',
     alias: '清除登录日志-二次验证',
     method: 'POST',
     url: '/login-logs/purge/challenge',
@@ -566,7 +566,7 @@ async function registerLogRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLoginLogPurge',
+    name: 'adminLoginLogPurge',
     alias: '清除登录日志',
     method: 'POST',
     url: '/login-logs/purge',

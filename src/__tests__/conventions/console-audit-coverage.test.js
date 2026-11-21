@@ -24,43 +24,43 @@ const MODULES = [
   {
     file: 'users.js',
     routes: [
-      ['consoleUserCreate', 'USER_EVENTS.CREATE'],
-      ['consoleUserUpdate', 'USER_EVENTS.UPDATE'],
-      ['consoleUserStatus', 'USER_EVENTS.STATUS'],
-      ['consoleUserExport', 'USER_EVENTS.EXPORT'],
-      ['consoleUserBatchGrant', 'USER_EVENTS.BATCH_GRANT']
+      ['adminUserCreate', 'USER_EVENTS.CREATE'],
+      ['adminUserUpdate', 'USER_EVENTS.UPDATE'],
+      ['adminUserStatus', 'USER_EVENTS.STATUS'],
+      ['adminUserExport', 'USER_EVENTS.EXPORT'],
+      ['adminUserBatchGrant', 'USER_EVENTS.BATCH_GRANT']
     ]
   },
   {
     file: 'roles.js',
     routes: [
-      ['consoleRoleCreate', "'ROLE_CREATE'"],
-      ['consoleRoleUpdate', "'ROLE_UPDATE'"],
-      ['consoleRoleRemove', "'ROLE_DELETE'"]
+      ['adminRoleCreate', "'ROLE_CREATE'"],
+      ['adminRoleUpdate', "'ROLE_UPDATE'"],
+      ['adminRoleRemove', "'ROLE_DELETE'"]
     ]
   },
   {
     file: 'menus.js',
     routes: [
-      ['consoleMenuCreate', "'MENU_CREATE'"],
-      ['consoleMenuUpdate', "'MENU_UPDATE'"],
-      ['consoleMenuRemove', "'MENU_DELETE'"]
+      ['adminMenuCreate', "'MENU_CREATE'"],
+      ['adminMenuUpdate', "'MENU_UPDATE'"],
+      ['adminMenuRemove', "'MENU_DELETE'"]
     ]
   },
   {
     file: 'posts.js',
     routes: [
-      ['consolePostCreate', "'POST_CREATE'"],
-      ['consolePostUpdate', "'POST_UPDATE'"],
-      ['consolePostRemove', "'POST_DELETE'"]
+      ['adminPostCreate', "'POST_CREATE'"],
+      ['adminPostUpdate', "'POST_UPDATE'"],
+      ['adminPostRemove', "'POST_DELETE'"]
     ]
   },
   {
     file: 'depts.js',
     routes: [
-      ['consoleDeptCreate', 'DEPT_AUDIT_TYPES.CREATE'],
-      ['consoleDeptUpdate', 'DEPT_AUDIT_TYPES.UPDATE'],
-      ['consoleDeptRemove', 'DEPT_AUDIT_TYPES.DELETE']
+      ['adminDeptCreate', 'DEPT_AUDIT_TYPES.CREATE'],
+      ['adminDeptUpdate', 'DEPT_AUDIT_TYPES.UPDATE'],
+      ['adminDeptRemove', 'DEPT_AUDIT_TYPES.DELETE']
     ]
   }
 ];
@@ -126,32 +126,32 @@ describe('Console 写接口必须留痕', () => {
 
 describe('留痕要记「改成了什么」，不能只有一句"操作成功"', () => {
   test('用户状态变更带 changes（from → to）', () => {
-    const block = blockOf(blocksOf('users.js'), 'consoleUserStatus');
+    const block = blockOf(blocksOf('users.js'), 'adminUserStatus');
     expect(block).toContain('changes');
     expect(block).toContain('statusText(');
     expect(block).toContain('statusBefore');
   });
 
   test('用户编辑带字段级 diff', () => {
-    const block = blockOf(blocksOf('users.js'), 'consoleUserUpdate');
+    const block = blockOf(blocksOf('users.js'), 'adminUserUpdate');
     expect(block).toContain('diffProfile(');
     expect(block).toContain('changes');
   });
 
   test('导出记条数与筛选条件（数据外带要能追溯范围）', () => {
-    const block = blockOf(blocksOf('users.js'), 'consoleUserExport');
+    const block = blockOf(blocksOf('users.js'), 'adminUserExport');
     expect(block).toContain('count');
     expect(block).toContain('filters');
   });
 
   test('菜单编辑记字段级 diff（permission 换码等于换授权范围）', () => {
-    const block = blockOf(blocksOf('menus.js'), 'consoleMenuUpdate');
+    const block = blockOf(blocksOf('menus.js'), 'adminMenuUpdate');
     expect(block).toContain('menuChanges');
     expect(block).toContain("'permission'");
   });
 
   test('岗位编辑在 update 之前取变更前快照', () => {
-    const block = blockOf(blocksOf('posts.js'), 'consolePostUpdate');
+    const block = blockOf(blocksOf('posts.js'), 'adminPostUpdate');
     expect(block).toContain('postDao.findById(id)');
     expect(block.indexOf('postDao.findById(id)')).toBeLessThan(block.indexOf('postDao.update(id'));
   });

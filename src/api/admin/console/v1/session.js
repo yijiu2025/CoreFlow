@@ -34,7 +34,7 @@ import { hasAnyPermissionIn } from '../../../../app/admin/console/utils/permissi
 
 async function registerSessionRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleSession',
+    name: 'adminSession',
     alias: '管理后台会话',
     description: '当前用户信息、可见菜单、修改密码、退出登录',
     prefix: '/console/v1',
@@ -101,7 +101,7 @@ async function registerSessionRoutes(fastify) {
   }
 
   registerSecureRoute(fastify, {
-    name: 'consoleMe',
+    name: 'adminMe',
     alias: '当前用户',
     method: 'GET',
     url: '/session/me',
@@ -157,7 +157,7 @@ async function registerSessionRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleRoutes',
+    name: 'adminRoutes',
     alias: '可见菜单',
     method: 'GET',
     url: '/session/routes',
@@ -218,7 +218,7 @@ async function registerSessionRoutes(fastify) {
    * 合并语义（不是覆盖）：只传 `accent` 时不能把将来新增的偏好键抹掉。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleSavePreferences',
+    name: 'adminSavePreferences',
     alias: '保存个人偏好',
     method: 'PUT',
     url: '/session/preferences',
@@ -285,7 +285,7 @@ async function registerSessionRoutes(fastify) {
    * 否则自动保存会每次把未修改的字段也写一遍。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleSaveProfile',
+    name: 'adminSaveProfile',
     alias: '保存后台个人资料',
     method: 'PUT',
     url: '/session/profile',
@@ -326,7 +326,7 @@ async function registerSessionRoutes(fastify) {
    * 类型按 MIME 白名单 + 文件头魔数双重校验（见 avatar.service）。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleUploadAvatar',
+    name: 'adminUploadAvatar',
     alias: '上传头像',
     method: 'POST',
     url: '/session/avatar',
@@ -350,7 +350,7 @@ async function registerSessionRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleChangePassword',
+    name: 'adminChangePassword',
     alias: '修改本人密码',
     method: 'PUT',
     url: '/session/password',
@@ -385,7 +385,7 @@ async function registerSessionRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleLogout',
+    name: 'adminLogout',
     alias: '退出登录',
     method: 'POST',
     url: '/session/logout',

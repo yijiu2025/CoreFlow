@@ -138,7 +138,7 @@ function toModelFields(body) {
 
 async function registerDeptRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleDept',
+    name: 'adminDept',
     alias: '管理后台部门',
     description: '组织架构维护',
     prefix: '/console/v1',
@@ -147,7 +147,7 @@ async function registerDeptRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleDeptTree',
+    name: 'adminDeptTree',
     alias: '部门树',
     method: 'GET',
     url: '/depts/tree',
@@ -165,7 +165,7 @@ async function registerDeptRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleDeptOptions',
+    name: 'adminDeptOptions',
     alias: '部门选项',
     method: 'GET',
     url: '/depts/options',
@@ -177,7 +177,7 @@ async function registerDeptRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleDeptCreate',
+    name: 'adminDeptCreate',
     alias: '新建部门',
     method: 'POST',
     url: '/depts',
@@ -197,7 +197,7 @@ async function registerDeptRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleDeptUpdate',
+    name: 'adminDeptUpdate',
     alias: '编辑部门',
     method: 'PUT',
     url: '/depts/:id',
@@ -233,7 +233,7 @@ async function registerDeptRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleDeptRemove',
+    name: 'adminDeptRemove',
     alias: '删除部门',
     method: 'DELETE',
     url: '/depts/:id',
@@ -267,7 +267,7 @@ async function registerDeptRoutes(fastify) {
    * 什么样"。数据来自审计表（写操作处落库），不是另建一张变更表。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleDeptHistory',
+    name: 'adminDeptHistory',
     alias: '部门变更历史',
     method: 'GET',
     url: '/depts/:id/history',

@@ -61,7 +61,7 @@ function toBlockView(row) {
 
 async function registerConsoleFirewallRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleFirewall',
+    name: 'adminFirewall',
     alias: '管理后台防火墙监控',
     description: '防火墙汇总、封禁名单、白名单（只读）',
     prefix: '/console/v1',
@@ -70,7 +70,7 @@ async function registerConsoleFirewallRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleFirewallSummary',
+    name: 'adminFirewallSummary',
     alias: '防火墙汇总',
     method: 'GET',
     url: '/firewall/summary',
@@ -83,7 +83,7 @@ async function registerConsoleFirewallRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleFirewallBlocks',
+    name: 'adminFirewallBlocks',
     alias: '封禁名单',
     method: 'GET',
     url: '/firewall/blocks',
@@ -112,7 +112,7 @@ async function registerConsoleFirewallRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleFirewallWhitelist',
+    name: 'adminFirewallWhitelist',
     alias: '白名单',
     method: 'GET',
     url: '/firewall/whitelist',

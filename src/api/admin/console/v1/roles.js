@@ -40,6 +40,7 @@ import {
   canWriteApp,
   getActorScope,
   assertCanManageRole,
+  roleManageBlock,
   assertRankBelowActor,
   assertRankChangeAllowed,
   assertCanGrantCodes
@@ -77,7 +78,7 @@ async function audit(request, type, details) {
 
 async function registerRoleRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleRole',
+    name: 'adminRole',
     alias: '管理后台角色',
     description: '角色维护、菜单授权、权限关系图',
     prefix: '/console/v1',
@@ -86,7 +87,7 @@ async function registerRoleRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleRoleList',
+    name: 'adminRoleList',
     alias: '角色列表',
     method: 'GET',
     url: '/roles',
@@ -121,21 +122,35 @@ async function registerRoleRoutes(fastify) {
       const { rows, total } = await roleDao.page({ pageNum, pageSize, keyword, appId, appIds: allowedAppIds });
       /*
        * 逐行标 `manageable`：前端据此把编辑/删除按钮置灰，而不是让人填完表单再吃 403。
-       * 判据与写接口完全一致：`canWriteApp` + **严格低于**（`rank < maxRank`），
-       * 与 `assertCanManageRole` 同一条线 —— 界面上灰掉的按钮，接口也确实调不通。
+       * 判据与写接口完全一致（`roleManageBlock`）：超管角色固定不可改、自己所属的角色不可改，
+       * 再叠加应用域与职级 —— 界面上灰掉的按钮，接口也确实调不通。
        */
       const actor = await getActorScope(request.state.user?.userId);
-      const marked = rows.map(role => ({
-        ...role,
-        app_label: appLabel(role.app_id),
-        manageable: canWriteApp(actor, role.app_id) && (actor.isSuper || Number(role.rank_level) < actor.maxRank)
-      }));
+      /*
+       * `manageable` 与写接口同一份判据（`roleManageBlock`）：
+       * 超管角色谁都不可编辑、自己所属的角色不可编辑，再叠加应用域与职级。
+       * `manage_reason` 直接给前端做 tooltip，避免"按钮灰了但不知道为什么"。
+       */
+      const marked = rows.map(role => {
+        const block = roleManageBlock(actor, {
+          id: role.id,
+          isSuper: isRankLockedRole(role.code),
+          appId: role.app_id,
+          rank: Number(role.rank_level)
+        });
+        return {
+          ...role,
+          app_label: appLabel(role.app_id),
+          manageable: block === '',
+          manage_reason: block
+        };
+      });
       return reply.result.success('获取成功', { rows: marked, total, pageNum, pageSize });
     })
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleRoleCreate',
+    name: 'adminRoleCreate',
     alias: '新建角色',
     method: 'POST',
     url: '/roles',
@@ -219,7 +234,7 @@ async function registerRoleRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleRoleUpdate',
+    name: 'adminRoleUpdate',
     alias: '编辑角色',
     method: 'PUT',
     url: '/roles/:id',
@@ -285,7 +300,7 @@ async function registerRoleRoutes(fastify) {
       const actor = await getActorScope(request.state.user?.userId);
       assertCanManageRole(
         actor,
-        { isSuper: isRankLockedRole(role.code), appId: role.app_id, rank: Number(role.rank_level) },
+        { id: role.id, isSuper: isRankLockedRole(role.code), appId: role.app_id, rank: Number(role.rank_level) },
         '编辑'
       );
       /*
@@ -361,7 +376,7 @@ async function registerRoleRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleRoleRemove',
+    name: 'adminRoleRemove',
     alias: '删除角色',
     method: 'DELETE',
     url: '/roles/:id',
@@ -379,7 +394,7 @@ async function registerRoleRoutes(fastify) {
       const actor = await getActorScope(request.state.user?.userId);
       assertCanManageRole(
         actor,
-        { isSuper: isRankLockedRole(role.code), appId: role.app_id, rank: Number(role.rank_level) },
+        { id: role.id, isSuper: isRankLockedRole(role.code), appId: role.app_id, rank: Number(role.rank_level) },
         '删除'
       );
 
@@ -404,7 +419,7 @@ async function registerRoleRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleRoleMenus',
+    name: 'adminRoleMenus',
     alias: '角色菜单授权',
     method: 'GET',
     url: '/roles/:id/menus',
@@ -420,7 +435,7 @@ async function registerRoleRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleRoleSetMenus',
+    name: 'adminRoleSetMenus',
     alias: '保存角色菜单授权',
     method: 'PUT',
     url: '/roles/:id/menus',
@@ -446,11 +461,15 @@ async function registerRoleRoutes(fastify) {
       if (role.code === MENU_LOCKED_CODE) {
         throw new Error('BUILTIN_PROTECTED:超级管理员的菜单固定为全部，不可修改');
       }
-      // 菜单授权同样是"改这个角色"：跨应用改别人的侧栏等于改别人看到的后台
+      // 菜单授权同样是"改这个角色"：自己所属的角色不可改（与编辑同一判据）
       const actor = await getActorScope(request.state.user?.userId);
-      if (!canWriteApp(actor, role.app_id)) {
-        throw new Error(`FORBIDDEN:不能修改${appLabel(role.app_id)}应用角色的菜单授权`);
-      }
+      const block = roleManageBlock(actor, {
+        id: role.id,
+        isSuper: false, // 超管在上面已被 MENU_LOCKED_CODE 拦下，这里只看自身/应用域/职级
+        appId: role.app_id,
+        rank: Number(role.rank_level)
+      });
+      if (block) throw new Error(`FORBIDDEN:不能修改该角色的菜单授权 —— ${block}`);
       const count = await menuDao.setRoleMenus(role.id, request.body.menuIds);
       /*
        * 🔴 必须立刻失效按钮授权缓存：这条保存正是"关掉某个按钮"的动作，而守卫每次判定
@@ -462,7 +481,7 @@ async function registerRoleRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consolePermissionGraph',
+    name: 'adminPermissionGraph',
     alias: '权限关系图',
     method: 'GET',
     url: '/permissions/graph',
@@ -478,7 +497,7 @@ async function registerRoleRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consolePermissionCatalog',
+    name: 'adminPermissionCatalog',
     alias: '权限码目录',
     method: 'GET',
     url: '/permissions/catalog',

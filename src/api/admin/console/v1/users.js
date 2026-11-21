@@ -217,7 +217,7 @@ function scopeAppIdsFrom(actor) {
 
 async function registerUserRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleUser',
+    name: 'adminUser',
     alias: '管理后台用户',
     description: '用户列表、创建、编辑、状态、重置密码、导出',
     prefix: '/console/v1',
@@ -226,7 +226,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserList',
+    name: 'adminUserList',
     alias: '用户列表',
     method: 'GET',
     url: '/users',
@@ -282,7 +282,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserOptions',
+    name: 'adminUserOptions',
     alias: '用户引用选项',
     method: 'GET',
     url: '/users/options',
@@ -341,7 +341,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserCreate',
+    name: 'adminUserCreate',
     alias: '新建用户',
     method: 'POST',
     url: '/users',
@@ -404,7 +404,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserUpdate',
+    name: 'adminUserUpdate',
     alias: '编辑用户',
     method: 'PUT',
     url: '/users/:id',
@@ -465,19 +465,22 @@ async function registerUserRoutes(fastify) {
       }
 
       /**
-       * 防自锁：不允许把「自己」的管理权限摘干净。
+       * 🔴 不能修改自己账号的角色（2026-11-21）
        *
-       * 权限是**每次请求实时判定**的，所以把当前账号的最后一个管理角色去掉后，
-       * 下一次请求立刻 403 —— 而你已经没有权限再改回来，只能直连数据库改 policy
-       * 或找另一个管理员。这不是理论风险：实测清空自己的角色后当场失去后台入口。
+       * 角色变更等于权限变更，必须由**职级更高**的管理员操作；自己给自己加/删角色
+       * 既是自我提权的入口，也没有实际需要（超管角色固定全权限，本身就是"不用改"）。
+       * 资料、邮箱、部门、密码仍然可以自己改，这里只锁 `roleIds`。
        *
-       * 只拦「保存后自己不再有任何 admin 能力」这一种情形：
-       * 换成另一个仍有 `admin:*` 的角色是允许的（那是正常调整）。
+       * 这条同时取代了原来「不能移除自己的全部管理权限」的自锁保护：自己已经完全
+       * 不能改角色，自锁风险不复存在；而旧判据在"角色没变"时也会误伤 —— 只持有
+       * `admin:user:update`（policy 里没有 `admin:*`）的账号改个昵称就会被判成自锁。
        */
       if (Array.isArray(body.roleIds) && targetId === operatorId) {
-        const stillAdmin = await roleDao.hasAdminCapability(body.roleIds);
-        if (!stillAdmin) {
-          throw new Error('FORBIDDEN:不能移除自己的全部管理权限，否则会立刻锁死后台');
+        const before = new Set(beforeRoleIds);
+        const after = new Set(body.roleIds.map(Number));
+        const changed = before.size !== after.size || [...after].some(id => !before.has(id));
+        if (changed) {
+          throw new Error('FORBIDDEN:不能修改自己账号的角色，请让职级更高的管理员调整');
         }
       }
       const ok = await userDao.update(targetId, body, actorOf(request));
@@ -547,7 +550,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserStatus',
+    name: 'adminUserStatus',
     alias: '更新用户状态',
     method: 'PUT',
     url: '/users/:id/status',
@@ -602,7 +605,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserExport',
+    name: 'adminUserExport',
     alias: '导出用户',
     method: 'GET',
     url: '/users/export',
@@ -682,7 +685,7 @@ async function registerUserRoutes(fastify) {
    * 破坏半径比删单个账号更大，所以不该只要一个权限码就放行。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleUserImportChallenge',
+    name: 'adminUserImportChallenge',
     alias: '批量导入-二次验证',
     method: 'POST',
     url: '/users/import/challenge',
@@ -718,7 +721,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserImport',
+    name: 'adminUserImport',
     alias: '批量导入用户',
     method: 'POST',
     url: '/users/import',
@@ -841,7 +844,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserGrants',
+    name: 'adminUserGrants',
     alias: '用户授权历史',
     method: 'GET',
     url: '/users/:id/grants',
@@ -883,7 +886,7 @@ async function registerUserRoutes(fastify) {
    *    半批已生效、半批没动的状态，用户看到的成功数是假的。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleUserBatchGrant',
+    name: 'adminUserBatchGrant',
     alias: '批量授权',
     method: 'POST',
     url: '/users/roles/batch',
@@ -936,8 +939,12 @@ async function registerUserRoutes(fastify) {
             : target.roleIds.filter(id => !grants.includes(id));
         // 应用域外保留：批量同样不能把别人在其它应用的角色连带删掉
         const plan = await planRoleChange({ actor: scope, target, submittedRoleIds: base });
-        if (userId === operatorId && !(await roleDao.hasAdminCapability(plan.finalRoleIds))) {
-          throw new Error('FORBIDDEN:批量操作会移除你自己的全部管理权限，已中止（未改动任何用户）');
+        /*
+         * 批量同样不能给自己改角色（与单条编辑同一判据）。
+         * 整批预检阶段就中止：逐个"改到一半才发现不能动自己"会留下半批已生效的状态。
+         */
+        if (userId === operatorId) {
+          throw new Error('FORBIDDEN:批量授权不能包含你自己 —— 自己的角色需由职级更高的管理员调整（未改动任何用户）');
         }
         plans.push({ userId, next: plan.finalRoleIds });
       }
@@ -978,7 +985,7 @@ async function registerUserRoutes(fastify) {
    */
 
   registerSecureRoute(fastify, {
-    name: 'consoleStepUpFactors',
+    name: 'adminStepUpFactors',
     alias: '二次验证方式',
     method: 'GET',
     url: '/stepup/factors',
@@ -1005,7 +1012,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleStepUpChallenge',
+    name: 'adminStepUpChallenge',
     alias: '获取二次验证码',
     method: 'POST',
     url: '/stepup/challenge',
@@ -1045,7 +1052,7 @@ async function registerUserRoutes(fastify) {
    */
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserDeletion',
+    name: 'adminUserDeletion',
     alias: '查询待执行注销',
     method: 'GET',
     url: '/users/:id/deletion',
@@ -1066,7 +1073,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserDelete',
+    name: 'adminUserDelete',
     alias: '删除账号（缓冲期）',
     method: 'POST',
     url: '/users/:id/deletion',
@@ -1100,7 +1107,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserDeleteCancel',
+    name: 'adminUserDeleteCancel',
     alias: '撤销注销申请',
     method: 'POST',
     url: '/users/:id/deletion/:requestId/cancel',
@@ -1131,7 +1138,7 @@ async function registerUserRoutes(fastify) {
    * 职级规则在 service 里统一判：同级能看、下级看不了上级。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleUserProfile',
+    name: 'adminUserProfile',
     alias: '用户详情',
     method: 'GET',
     url: '/users/:id/profile',
@@ -1156,7 +1163,7 @@ async function registerUserRoutes(fastify) {
    * `inherit` 表示把这条从个人策略里摘掉，回到"跟角色走"。
    */
   registerSecureRoute(fastify, {
-    name: 'consoleUserPermission',
+    name: 'adminUserPermission',
     alias: '调整用户单条权限',
     method: 'PUT',
     url: '/users/:id/permissions',
@@ -1189,7 +1196,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserApps',
+    name: 'adminUserApps',
     alias: '用户应用账号',
     method: 'GET',
     url: '/users/:id/apps',
@@ -1205,7 +1212,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserAppDeactivate',
+    name: 'adminUserAppDeactivate',
     alias: '注销应用账号',
     method: 'POST',
     url: '/users/:id/apps/:appId/deactivation',
@@ -1244,7 +1251,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserTempPasswordList',
+    name: 'adminUserTempPasswordList',
     alias: '有效临时密码',
     method: 'GET',
     url: '/users/:id/temp-password',
@@ -1260,7 +1267,7 @@ async function registerUserRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleUserTempPassword',
+    name: 'adminUserTempPassword',
     alias: '签发临时密码',
     method: 'POST',
     url: '/users/:id/temp-password',

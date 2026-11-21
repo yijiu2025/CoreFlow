@@ -68,7 +68,7 @@ async function audit(request, type, details) {
 
 async function registerPostRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consolePost',
+    name: 'adminPost',
     alias: '管理后台岗位',
     description: '岗位维护与在岗成员',
     prefix: '/console/v1',
@@ -77,7 +77,7 @@ async function registerPostRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consolePostList',
+    name: 'adminPostList',
     alias: '岗位列表',
     method: 'GET',
     url: '/posts',
@@ -102,7 +102,7 @@ async function registerPostRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consolePostCreate',
+    name: 'adminPostCreate',
     alias: '新建岗位',
     method: 'POST',
     url: '/posts',
@@ -125,7 +125,7 @@ async function registerPostRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consolePostUpdate',
+    name: 'adminPostUpdate',
     alias: '编辑岗位',
     method: 'PUT',
     url: '/posts/:id',
@@ -173,7 +173,7 @@ async function registerPostRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consolePostRemove',
+    name: 'adminPostRemove',
     alias: '删除岗位',
     method: 'DELETE',
     url: '/posts/:id',
@@ -197,7 +197,7 @@ async function registerPostRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consolePostUsers',
+    name: 'adminPostUsers',
     alias: '在岗成员',
     method: 'GET',
     url: '/posts/:id/users',

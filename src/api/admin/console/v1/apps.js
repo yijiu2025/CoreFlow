@@ -77,7 +77,7 @@ const nodePatchSchema = {
 
 async function registerAppRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleApp',
+    name: 'adminApp',
     alias: '应用管理',
     description: '应用清单、授权数据规模与接口开关',
     prefix: '/console/v1',
@@ -86,7 +86,7 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppSwitchPolicy',
+    name: 'adminAppSwitchPolicy',
     alias: '接口开关二次验证策略',
     method: 'GET',
     url: '/apps/switch-policy',
@@ -100,7 +100,7 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppSwitchPolicyUpdate',
+    name: 'adminAppSwitchPolicyUpdate',
     alias: '调整接口开关二次验证策略',
     method: 'PUT',
     url: '/apps/switch-policy',
@@ -131,7 +131,7 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppList',
+    name: 'adminAppList',
     alias: '应用列表',
     method: 'GET',
     url: '/apps',
@@ -155,7 +155,7 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppApis',
+    name: 'adminAppApis',
     alias: '应用接口树',
     method: 'GET',
     url: '/apps/:appId/apis',
@@ -184,7 +184,7 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppApiToggle',
+    name: 'adminAppApiToggle',
     alias: '切换接口开关',
     method: 'POST',
     url: '/apps/:appId/apis/toggle',
@@ -240,7 +240,7 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppApiUpdate',
+    name: 'adminAppApiUpdate',
     alias: '编辑接口配置',
     method: 'PATCH',
     url: '/apps/:appId/apis',
@@ -295,14 +295,14 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppApiStepUpChallenge',
+    name: 'adminAppApiStepUpChallenge',
     alias: '接口开关二次认证',
     method: 'POST',
     url: '/apps/:appId/apis/stepup/challenge',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
     // 发码有外部副作用，单独限频
-    config: { rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'consoleAppStepupChallenge' } },
+    config: { rateLimit: { max: 10, timeWindow: '1 minute', groupId: 'adminAppStepupChallenge' } },
     schema: {
       body: {
         type: 'object',
@@ -373,13 +373,13 @@ async function registerAppRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleAppApiStepUpVerify',
+    name: 'adminAppApiStepUpVerify',
     alias: '核验接口开关二次认证',
     method: 'POST',
     url: '/apps/:appId/apis/stepup/verify',
     requireLogin: true,
     requirePermission: ADMIN_PERMISSIONS.APP.READ,
-    config: { rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'consoleAppStepupVerify' } },
+    config: { rateLimit: { max: 20, timeWindow: '1 minute', groupId: 'adminAppStepupVerify' } },
     schema: {
       body: {
         type: 'object',

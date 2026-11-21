@@ -1195,16 +1195,16 @@ class LogDao {
 
     const { sequelize } = getModel('SessionLog');
     /*
-     * 🔴 字符串列要 `CAST(... AS CHAR)`：`log_stats_ips.ip` 与 `session_logs.ip` 的排序规则
-     *    未必一致（建表时没继承源表），UNION 会直接报 `Illegal mix of collations`。
-     *    两侧都转成连接默认排序规则就齐了。
+     * 🔴 字符串列要 `CONVERT(... USING utf8mb4)`：`log_stats_ips.ip` 是 utf8mb4_unicode_ci，
+     *    `session_logs.ip` 是 utf8mb4_general_ci（建表时没继承源表），UNION 直接报
+     *    `Illegal mix of collations`。`CAST(x AS CHAR)` **不够** —— 它保留源列排序规则。
      */
     const rows = await sequelize.query(
       `SELECT COUNT(DISTINCT v) AS c FROM (
-         SELECT CAST(${rawCol} AS CHAR) AS v FROM session_logs l
+         SELECT CONVERT(${rawCol} USING utf8mb4) AS v FROM session_logs l
           WHERE ${String(spec.whereSql).replace(/a\.created_at/g, 'l.created_at')} AND ${notEmpty}
          UNION
-         SELECT CAST(a.${archCol} AS CHAR) AS v FROM ${archTable} a WHERE ${archiveWhere}
+         SELECT CONVERT(a.${archCol} USING utf8mb4) AS v FROM ${archTable} a WHERE ${archiveWhere}
        ) t`,
       { type: QueryTypes.SELECT }
     );
@@ -1474,14 +1474,21 @@ const logDao = new LogDao();
  */
 function buildLoginAnomalySql(span, offset) {
   /* 明细侧：按 (ip, 账号) 收敛成一行 —— 行数从"每次尝试"降到"每种组合" */
-  const detailPairs = `SELECT l.ip AS ip, COALESCE(l.user_id, 0) AS user_id,
+  /*
+   * 🔴 `ip` 两侧排序规则不一致：`session_logs.ip` 是 utf8mb4_general_ci，
+   *    归档表 `log_stats_login_pairs.ip` 是 utf8mb4_unicode_ci（建表时没继承源表），
+   *    `UNION ALL` 直接报 `Illegal mix of collations for operation 'UNION'`（真实事故）。
+   *    两侧统一 `CONVERT(... USING utf8mb4)`：同一个字符集 + 连接默认排序规则，UNION 才成立。
+   *    `CAST(x AS CHAR)` 不够 —— 它保留源列的排序规则。
+   */
+  const detailPairs = `SELECT CONVERT(l.ip USING utf8mb4) AS ip, COALESCE(l.user_id, 0) AS user_id,
                               SUM(${LOGIN_FAILED_SQL}) AS failed, COUNT(*) AS total,
                               MIN(l.created_at) AS first_at, MAX(l.created_at) AS last_at
                          FROM session_logs l
                         WHERE ${windowSql('l.created_at', span, offset)}
                         GROUP BY 1, 2`;
   /* 归档侧：本来就是小时桶，再按 (ip, 账号) 折叠一次，口径与明细完全一致 */
-  const archivePairs = `SELECT p.ip AS ip, p.user_id AS user_id,
+  const archivePairs = `SELECT CONVERT(p.ip USING utf8mb4) AS ip, p.user_id AS user_id,
                                SUM(p.failed) AS failed, SUM(p.total) AS total,
                                MIN(p.first_at) AS first_at, MAX(p.last_at) AS last_at
                           FROM log_stats_login_pairs p

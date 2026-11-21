@@ -14,7 +14,7 @@ import { withFail } from '../../../../app/admin/console/utils/respond.js';
 
 async function registerDashboardRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleDashboard',
+    name: 'adminDashboard',
     alias: '管理后台工作台',
     description: '系统读数与趋势聚合',
     prefix: '/console/v1',
@@ -23,7 +23,7 @@ async function registerDashboardRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleDashboardSummary',
+    name: 'adminDashboardSummary',
     alias: '工作台概览',
     method: 'GET',
     url: '/dashboard/summary',

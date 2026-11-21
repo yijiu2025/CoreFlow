@@ -173,7 +173,7 @@ async function audit(request, type, details) {
 
 async function registerMenuRoutes(fastify) {
   registerGroupMetadata({
-    name: 'consoleMenu',
+    name: 'adminMenu',
     alias: '管理后台菜单',
     description: '菜单树维护与导出',
     prefix: '/console/v1',
@@ -182,7 +182,7 @@ async function registerMenuRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleMenuTree',
+    name: 'adminMenuTree',
     alias: '菜单树',
     method: 'GET',
     url: '/menus/tree',
@@ -202,7 +202,7 @@ async function registerMenuRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleMenuApps',
+    name: 'adminMenuApps',
     alias: '可配置的应用',
     method: 'GET',
     url: '/menus/apps',
@@ -224,7 +224,7 @@ async function registerMenuRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleMenuPermissionOptions',
+    name: 'adminMenuPermissionOptions',
     alias: '菜单可选权限码',
     method: 'GET',
     url: '/menus/permission-options',
@@ -250,7 +250,7 @@ async function registerMenuRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleMenuCreate',
+    name: 'adminMenuCreate',
     alias: '新建菜单',
     method: 'POST',
     url: '/menus',
@@ -302,7 +302,7 @@ async function registerMenuRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleMenuUpdate',
+    name: 'adminMenuUpdate',
     alias: '编辑菜单',
     method: 'PUT',
     url: '/menus/:id',
@@ -376,7 +376,7 @@ async function registerMenuRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleMenuRemove',
+    name: 'adminMenuRemove',
     alias: '删除菜单',
     method: 'DELETE',
     url: '/menus/:id',
@@ -412,7 +412,7 @@ async function registerMenuRoutes(fastify) {
   });
 
   registerSecureRoute(fastify, {
-    name: 'consoleMenuExport',
+    name: 'adminMenuExport',
     alias: '导出菜单',
     method: 'GET',
     url: '/menus/export',
