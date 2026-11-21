@@ -16,8 +16,10 @@
  * @author yijiu2025
  * @since 2026-11-21
  */
-import { getAllGuardConfigs } from '../../../api/guard-config.js';
+import { getAllGuardConfigs, setGuardConfig } from '../../../api/guard-config.js';
 import { toggleConfig, toggleSystemConfig, updateConfig } from './config.service.js';
+import { getApiSwitchPolicy } from './app-switch-policy.service.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
 import { createLogger } from '../../../framework/support/log/index.js';
 
 const log = createLogger('app.guard.app-api');
@@ -116,6 +118,44 @@ async function toggleAppNode({ appId, systemKey, groupKey, apiKey, request, step
   if (!ownsSystem(appId, systemKey)) {
     return { ok: false, statusCode: 403, message: '该系统不属于当前应用' };
   }
+
+  /*
+   * 免票通道：策略关掉二次验证时，**只有"关闭"免票**。
+   * "重开"是放宽，签名信封签不出来（见 app-switch-policy.service.js 的说明），仍走原路径。
+   */
+  const { requireStepUp } = getApiSwitchPolicy();
+  if (!requireStepUp) {
+    const node = getAllGuardConfigs()[systemKey];
+    const target = !groupKey ? node : apiKey ? node?.groups?.[groupKey]?.apis?.[apiKey] : node?.groups?.[groupKey];
+    if (!target) return { ok: false, statusCode: 404, message: '未找到指定配置路径' };
+
+    if (target.enabled) {
+      /* 收紧方向：直接写内存 + 落库，并留审计（reason 从请求体取，没有就写明免票策略） */
+      const operator = { userId: request?.state?.user?.userId ?? null, ip: request?.ip ?? null };
+      const updated = setGuardConfig(
+        systemKey,
+        { enabled: false, _relaxation: null },
+        groupKey || null,
+        apiKey || null,
+        operator
+      );
+      if (!updated) return { ok: false, statusCode: 404, message: '未找到指定配置路径' };
+      await logAuditEvent({
+        type: 'PERMISSION_CHANGE',
+        userId: operator.userId,
+        ip: operator.ip,
+        details: {
+          action: 'api_switch_disable_without_stepup',
+          path: [systemKey, groupKey || '', apiKey || ''].join('/'),
+          reason: String(request?.body?.reason || '二次验证策略已关闭'),
+          timestamp: new Date().toISOString()
+        }
+      }).catch(() => {});
+      return { ok: true, enabled: false };
+    }
+    /* 正在开启：继续走带票据的路径，让上层拿到需要认证的结果 */
+  }
+
   if (!groupKey) return toggleSystemConfig({ system: systemKey, request, stepupToken });
 
   const res = await toggleConfig({

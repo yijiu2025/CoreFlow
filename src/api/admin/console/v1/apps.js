@@ -7,6 +7,8 @@
  * PATCH  /admin/console/v1/apps/:appId/apis          —— 改节点字段（描述 / 白名单 / 是否要求登录）
  * POST   /admin/console/v1/apps/:appId/apis/stepup/challenge —— 申请二次认证（发邮箱验证码）
  * POST   /admin/console/v1/apps/:appId/apis/stepup/verify    —— 核验并换取票据
+ * GET    /admin/console/v1/apps/switch-policy        —— 二次验证策略（是否要求票据）
+ * PUT    /admin/console/v1/apps/switch-policy        —— 调整策略（**仅超管**）
  *
  * === 应用本身为什么只读 ===
  * 应用是**代码声明**的：一个应用 = `src/app/<app>/config.js`（app_id / 准入策略 / 默认角色）
@@ -41,6 +43,8 @@ import {
   togglePatchOf
 } from '../../../../app/guard/services/app-api.service.js';
 import { createChallenge, verifyChallenge } from '../../../../app/guard/services/stepup.service.js';
+import { getApiSwitchPolicy, setApiSwitchPolicy } from '../../../../app/guard/services/app-switch-policy.service.js';
+import { isSuperAdmin } from '../../../../app/guard/services/authority.js';
 import { withFail } from '../../../../app/admin/console/utils/respond.js';
 
 /**
@@ -79,6 +83,51 @@ async function registerAppRoutes(fastify) {
     prefix: '/console/v1',
     enabled: true,
     requireLogin: true
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleAppSwitchPolicy',
+    alias: '接口开关二次验证策略',
+    method: 'GET',
+    url: '/apps/switch-policy',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    handler: withFail(async (request, reply) => {
+      const policy = getApiSwitchPolicy();
+      /* `canEdit` 决定前端要不要渲染那个开关：只有超管能改，普通应用管理员只读 */
+      return reply.result.success('获取成功', { ...policy, canEdit: isSuperAdmin(request.state.user) });
+    })
+  });
+
+  registerSecureRoute(fastify, {
+    name: 'consoleAppSwitchPolicyUpdate',
+    alias: '调整接口开关二次验证策略',
+    method: 'PUT',
+    url: '/apps/switch-policy',
+    requireLogin: true,
+    requirePermission: ADMIN_PERMISSIONS.APP.READ,
+    config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    schema: {
+      body: {
+        type: 'object',
+        required: ['requireStepUp'],
+        properties: { requireStepUp: { type: 'boolean' } },
+        additionalProperties: false
+      }
+    },
+    handler: withFail(async (request, reply) => {
+      const res = await setApiSwitchPolicy({
+        requireStepUp: request.body.requireStepUp,
+        actor: request.state.user,
+        request
+      });
+      if (!res.ok) {
+        return reply
+          .code(res.statusCode || 400)
+          .send({ code: res.statusCode || 400, message: res.message, data: null });
+      }
+      return reply.result.success('策略已更新', res.policy);
+    })
   });
 
   registerSecureRoute(fastify, {

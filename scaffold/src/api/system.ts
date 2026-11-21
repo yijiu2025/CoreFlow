@@ -498,9 +498,17 @@ export function appApiStepUpChallenge(
     apiKey?: string;
     action: 'toggle' | 'patch';
     patch?: Record<string, unknown>;
+    /** 变更原因（后端要求 4-200 字，写进审计并绑进票据） */
+    reason?: string;
     method?: 'email' | 'password';
   }
-): Promise<{ challengeId: string; method: string; maskedTarget: string; expiresIn: number }> {
+): Promise<{
+  challengeId: string;
+  method: string;
+  maskedTarget: string;
+  expiresIn: number;
+  patch?: Record<string, unknown>;
+}> {
   return post(`${BASE}/apps/${appId}/apis/stepup/challenge`, body);
 }
 
@@ -510,4 +518,21 @@ export function appApiStepUpVerify(
   body: { challengeId: string; code?: string; password?: string }
 ): Promise<{ ticket: string; expiresIn: number; method: string }> {
   return post(`${BASE}/apps/${appId}/apis/stepup/verify`, body);
+}
+
+/** 接口开关的二次验证策略 */
+export interface AppSwitchPolicy {
+  requireStepUp: boolean;
+  /** 当前账号能否修改（只有超管） */
+  canEdit: boolean;
+}
+
+/** 读策略 */
+export function getAppSwitchPolicy(): Promise<AppSwitchPolicy> {
+  return get(`${BASE}/apps/switch-policy`);
+}
+
+/** 改策略（仅超管；后端会再判一次） */
+export function setAppSwitchPolicy(requireStepUp: boolean): Promise<{ requireStepUp: boolean }> {
+  return put(`${BASE}/apps/switch-policy`, { requireStepUp });
 }

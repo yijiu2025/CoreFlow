@@ -20,7 +20,14 @@
  */
 import { computed, onMounted, ref } from 'vue';
 import { ChevronRight, Loader2, Lock, MailCheck, X } from 'lucide-vue-next';
-import { appApiStepUpChallenge, appApiStepUpVerify, listAppApis, toggleAppApi } from '@/api/system';
+import {
+  appApiStepUpChallenge,
+  appApiStepUpVerify,
+  getAppSwitchPolicy,
+  listAppApis,
+  setAppSwitchPolicy,
+  toggleAppApi
+} from '@/api/system';
 import type { AppApiSystem } from '@/api/system';
 import { useToastStore } from '@/stores/toast';
 
@@ -44,17 +51,22 @@ const expanded = ref<Set<string>>(new Set());
 /** 正在切换的节点（`system|group|api`），用于行内禁用与转圈 */
 const busyKey = ref('');
 
-/** 等待二次认证的上下文 */
+/** 二次验证策略（后端设置，只有超管能改） */
+const policy = ref<{ requireStepUp: boolean; canEdit: boolean }>({ requireStepUp: true, canEdit: false });
+const policyBusy = ref(false);
+
+/** 等待二次认证的上下文（`challengeId` 为空 = 还没发码） */
 const stepup = ref<{
   systemKey: string;
   groupKey?: string;
   apiKey?: string;
   challengeId: string;
   maskedTarget: string;
-  /** 服务端算出的 patch，重试时原样带回 */
-  patch: Record<string, unknown>;
+  /** 变更原因：审计与票据都绑定它（后端要求 4-200 字） */
+  reason: string;
 } | null>(null);
 const code = ref('');
+const sending = ref(false);
 const verifying = ref(false);
 
 /** 节点唯一键 */
@@ -120,33 +132,43 @@ async function doToggle(systemKey: string, groupKey?: string, apiKey?: string): 
  * @param groupKey 模块标识
  * @param apiKey 接口标识
  */
-async function requestChallenge(systemKey: string, groupKey?: string, apiKey?: string): Promise<void> {
+function requestChallenge(systemKey: string, groupKey?: string, apiKey?: string): void {
+  /* 只展开表单：原因必须由人填（4-200 字），拿到之后才发码 */
+  stepup.value = { systemKey, groupKey, apiKey, challengeId: '', maskedTarget: '', reason: '' };
+  code.value = '';
+}
+
+/** 发码（带变更原因） */
+async function sendChallengeCode(): Promise<void> {
+  const ctx = stepup.value;
+  if (!ctx) return;
+  const reason = ctx.reason.trim();
+  if (reason.length < 4) {
+    toast.push('变更原因至少 4 个字', 'info');
+    return;
+  }
+  sending.value = true;
   try {
     const res = await appApiStepUpChallenge(props.appId, {
-      systemKey,
-      groupKey,
-      apiKey,
-      action: 'toggle'
+      systemKey: ctx.systemKey,
+      groupKey: ctx.groupKey,
+      apiKey: ctx.apiKey,
+      action: 'toggle',
+      reason
     });
-    stepup.value = {
-      systemKey,
-      groupKey,
-      apiKey,
-      challengeId: res.challengeId,
-      maskedTarget: res.maskedTarget,
-      patch: (res as unknown as { patch: Record<string, unknown> }).patch || {}
-    };
-    code.value = '';
+    stepup.value = { ...ctx, challengeId: res.challengeId, maskedTarget: res.maskedTarget };
     toast.push(`验证码已发送至 ${res.maskedTarget}`, 'info');
   } catch (err) {
     toast.pushError(err, '发起认证失败');
+  } finally {
+    sending.value = false;
   }
 }
 
 /** 核验并重试 */
 async function confirmStepUp(): Promise<void> {
   const ctx = stepup.value;
-  if (!ctx || !code.value.trim()) return;
+  if (!ctx || !ctx.challengeId || !code.value.trim()) return;
   verifying.value = true;
   try {
     const { ticket } = await appApiStepUpVerify(props.appId, { challengeId: ctx.challengeId, code: code.value.trim() });
@@ -210,8 +232,34 @@ const disabledCount = computed(() => {
   return n;
 });
 
+/** 读策略（失败不阻断面板：默认按"要二次验证"渲染） */
+async function loadPolicy(): Promise<void> {
+  try {
+    policy.value = await getAppSwitchPolicy();
+  } catch {
+    /* 忽略：拿不到就按默认严格处理 */
+  }
+}
+
+/** 超管切换策略 */
+async function togglePolicy(): Promise<void> {
+  const next = !policy.value.requireStepUp;
+  policyBusy.value = true;
+  try {
+    const res = await setAppSwitchPolicy(next);
+    policy.value = { ...policy.value, requireStepUp: res.requireStepUp };
+    toast.push(res.requireStepUp ? '已开启二次验证' : '已关闭二次验证（仅超管可改）');
+    emit('changed');
+  } catch (err) {
+    toast.pushError(err, '调整失败');
+  } finally {
+    policyBusy.value = false;
+  }
+}
+
 onMounted(() => {
   void load();
+  void loadPolicy();
 });
 </script>
 
@@ -308,25 +356,64 @@ onMounted(() => {
         <span v-if="disabledCount > 0" class="api-drawer__warn">{{ disabledCount }} 个节点已关闭</span>
       </footer>
 
-      <!-- 二次认证：就地展开，不弹第二个浮层 -->
+      <!-- 二次验证策略：只有超管能改，其他人只读 -->
+      <div class="policy">
+        <span class="policy__label">变更二次验证</span>
+        <span :class="['policy__state', { 'is-off': !policy.requireStepUp }]">
+          {{ policy.requireStepUp ? '已启用' : '已关闭（关闭免票，重开仍需验证）' }}
+        </span>
+        <label v-if="policy.canEdit" class="switch" :title="'仅超级管理员可调整'">
+          <input type="checkbox" :checked="policy.requireStepUp" :disabled="policyBusy" @change="togglePolicy" />
+          <span class="switch__track" />
+        </label>
+        <span v-else class="policy__hint">仅超管可调整</span>
+      </div>
+
+      <!-- 二次认证：就地展开，不弹第二个浮层。两段式：先填原因发码，再输码执行 -->
       <div v-if="stepup" class="stepup">
         <div class="stepup__head">
           <MailCheck :size="15" />
-          <span>需要二次认证：验证码已发送至 {{ stepup.maskedTarget }}</span>
+          <span v-if="!stepup.challengeId">本次变更需要二次认证，先填写变更原因</span>
+          <span v-else>验证码已发送至 {{ stepup.maskedTarget }}</span>
         </div>
-        <div class="stepup__body">
-          <input v-model="code" class="stepup__input" inputmode="numeric" maxlength="8" placeholder="输入验证码" />
-          <button
-            class="btn btn--primary btn--sm"
-            type="button"
-            :disabled="verifying || !code.trim()"
-            @click="confirmStepUp"
-          >
-            <Loader2 v-if="verifying" :size="14" class="spin" />
-            确认并执行
-          </button>
-          <button class="btn btn--ghost btn--sm" type="button" @click="stepup = null">取消</button>
-        </div>
+
+        <template v-if="!stepup.challengeId">
+          <div class="stepup__body">
+            <input
+              v-model="stepup.reason"
+              class="stepup__input stepup__input--text"
+              maxlength="200"
+              placeholder="变更原因（4-200 字，写入审计）"
+            />
+            <button
+              class="btn btn--primary btn--sm"
+              type="button"
+              :disabled="sending || stepup.reason.trim().length < 4"
+              @click="sendChallengeCode"
+            >
+              <Loader2 v-if="sending" :size="14" class="spin" />
+              发送验证码
+            </button>
+            <button class="btn btn--ghost btn--sm" type="button" @click="stepup = null">取消</button>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="stepup__body">
+            <input v-model="code" class="stepup__input" inputmode="numeric" maxlength="8" placeholder="输入验证码" />
+            <button
+              class="btn btn--primary btn--sm"
+              type="button"
+              :disabled="verifying || !code.trim()"
+              @click="confirmStepUp"
+            >
+              <Loader2 v-if="verifying" :size="14" class="spin" />
+              确认并执行
+            </button>
+            <button class="btn btn--ghost btn--sm" type="button" @click="stepup = null">取消</button>
+          </div>
+          <p class="stepup__reason">原因：{{ stepup.reason }}</p>
+        </template>
       </div>
     </aside>
   </div>
@@ -584,6 +671,32 @@ onMounted(() => {
   color: var(--mauth-danger, #d9534f);
 }
 
+.policy {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 18px;
+  border-top: 1px solid var(--mauth-border);
+  font-size: 12px;
+}
+
+.policy__label {
+  color: var(--mauth-text-mid);
+}
+
+.policy__state {
+  flex: 1;
+  color: var(--mauth-text);
+}
+
+.policy__state.is-off {
+  color: var(--mauth-danger, #d9534f);
+}
+
+.policy__hint {
+  color: var(--mauth-text-faint);
+}
+
 .stepup {
   padding: 12px 18px 14px;
   border-top: 1px solid var(--mauth-border);
@@ -602,6 +715,16 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.stepup__input--text {
+  letter-spacing: 0;
+}
+
+.stepup__reason {
+  margin: 6px 0 0;
+  color: var(--mauth-text-faint);
+  font-size: 11.5px;
 }
 
 .stepup__input {
