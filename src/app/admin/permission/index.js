@@ -64,6 +64,12 @@ const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
     ALL: { code: 'admin:system:*', label: '系统管理通配', type: 'wildcard' }
   },
 
+  // 应用管理（应用由代码声明，这里只读清单与统计；不能增删）
+  APP: {
+    READ: { code: 'admin:app:read', label: '查看应用', type: 'read' },
+    ALL: { code: 'admin:app:*', label: '应用管理通配', type: 'wildcard' }
+  },
+
   // 管理后台工作台
   DASHBOARD: {
     READ: { code: 'admin:dashboard:read', label: '查看工作台', type: 'read' }

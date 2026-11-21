@@ -107,6 +107,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '菜单管理', permission: 'admin:menu:read' }
       },
       {
+        path: 'system/app',
+        name: 'system-app',
+        component: () => import('@/views/system/Apps.vue'),
+        meta: { title: '应用管理', permission: 'admin:app:read' }
+      },
+      {
         path: 'system/dept',
         name: 'system-dept',
         component: () => import('@/views/system/Depts.vue'),

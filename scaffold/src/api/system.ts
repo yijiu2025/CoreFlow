@@ -410,3 +410,35 @@ export function removePost(id: number): Promise<null> {
 export function permissionGraph(): Promise<PermissionGraph> {
   return get(`${BASE}/permissions/graph`);
 }
+
+/* ── 应用管理 ──────────────────────────────────────────────── */
+
+/**
+ * 一个应用的清单行
+ *
+ * 应用是**代码声明**的（`src/app/<app>/config.js`），接口只读：没有增删改。
+ * `counts` 是各应用授权数据的规模，用来回答"这个应用配齐了没有"。
+ */
+export interface AppOverview {
+  /** 应用标识（会话里的 appId） */
+  appId: string;
+  /** 显示名 */
+  name: string;
+  /** 一句话说明 */
+  description: string;
+  /** 权限命名空间：角色/菜单/权限码都挂在它下面（console → admin） */
+  permissionAppId: string;
+  /** 授权即送的默认角色 */
+  defaultRole: string;
+  /** 登录准入策略（null = 不限制） */
+  access: { anyPermission: string[]; anyRole: string[]; denyMessage: string } | null;
+  /** 应用声明的 Host（多域名部署用） */
+  hosts: string[];
+  /** 授权数据规模 */
+  counts: { roles: number; menus: number; permissionCodes: number; oauthClients: number };
+}
+
+/** 应用清单（只读） */
+export function listApps(): Promise<{ apps: AppOverview[]; total: number }> {
+  return get(`${BASE}/apps`);
+}
