@@ -21,13 +21,12 @@
  * @since 2026-11-21
  */
 import { computed, onMounted, ref } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, RefreshCw } from 'lucide-vue-next';
+import { useRoute } from 'vue-router';
+import { RefreshCw } from 'lucide-vue-next';
 import { listApps, type AppOverview } from '@/api/system';
 import AppApiPanel from '@/components/business/AppApiPanel.vue';
 
 const route = useRoute();
-const router = useRouter();
 
 /** 路由里的应用标识（`/system/app/:appId/apis`） */
 const appId = computed(() => String(route.params.appId || ''));
@@ -64,11 +63,6 @@ async function load(): Promise<void> {
   }
 }
 
-/** 返回应用列表 */
-function back(): void {
-  void router.push({ name: 'system-app' });
-}
-
 onMounted(() => {
   void load();
 });
@@ -77,12 +71,8 @@ onMounted(() => {
 <template>
   <div class="app-apis">
     <header class="app-apis__head">
-      <button class="app-apis__back" type="button" @click="back">
-        <ArrowLeft :size="15" />
-        应用管理
-      </button>
       <div class="app-apis__titles">
-        <h1 class="app-apis__title">接口开关 · {{ appName }}</h1>
+        <h1 class="app-apis__title">{{ appName }} · 接口开关</h1>
         <p v-if="summary" class="app-apis__sub">{{ summary }}</p>
       </div>
       <button class="btn btn--ghost btn--sm" type="button" :disabled="loading" @click="load">
@@ -100,33 +90,14 @@ onMounted(() => {
 .app-apis {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-width: 1180px;
+  gap: 10px;
+  width: 100%;
 }
 
 .app-apis__head {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.app-apis__back {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex: none;
-  padding: 4px 8px;
-  border: 1px solid transparent;
-  border-radius: var(--mauth-radius-sm);
-  background: transparent;
-  color: var(--mauth-text-soft);
-  font-size: 12.5px;
-  cursor: pointer;
-}
-
-.app-apis__back:hover {
-  background: var(--mauth-hover);
-  color: var(--mauth-text);
 }
 
 .app-apis__titles {

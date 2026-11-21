@@ -221,9 +221,19 @@ function systemScale(system: AppApiSystem): string {
   return off > 0 ? `${base} · ${off} 关` : base;
 }
 
+/**
+ * 模块行的开关摘要
+ *
+ * 全开时只说"8 个"（"8/8"要让人在心里做一次除法才知道是全开）；
+ * 有缺口时才写"6/8 开" —— 数字的用途是**提示异常**，正常状态不该占注意力。
+ *
+ * @param group 模块节点
+ * @returns {string} 摘要
+ */
 function enabledText(group: AppApiGroup): string {
+  const total = group.apis.length;
   const on = group.apis.filter(a => a.enabled).length;
-  return `${on}/${group.apis.length}`;
+  return on === total ? `${total} 个` : `${on}/${total} 开`;
 }
 
 /**
@@ -825,7 +835,6 @@ onBeforeUnmount(() => {
               <th class="api-table__name">接口</th>
               <th class="api-table__path">路径</th>
               <th class="api-table__perm">权限码</th>
-              <th class="api-table__login">登录</th>
               <th class="api-table__switch">开关</th>
             </tr>
           </thead>
@@ -836,13 +845,12 @@ onBeforeUnmount(() => {
                   <ChevronDown v-if="systemOpen(system.key)" :size="14" class="api-row__caret" />
                   <ChevronRight v-else :size="14" class="api-row__caret" />
                   <span class="api-row__strong">{{ system.name || system.key }}</span>
+                  <span class="api-row__count">{{ systemScale(system) }}</span>
                 </td>
                 <td class="api-table__path">
                   <code>{{ system.prefix || '—' }}</code>
-                  <span class="api-row__count">{{ systemScale(system) }}</span>
                 </td>
                 <td class="api-table__perm" />
-                <td class="api-table__login" />
                 <td class="api-table__switch">
                   <span v-if="system.critical" class="lock" title="保护性接口：关闭后无法登录或无法管理，不允许关闭">
                     <Lock :size="13" />
@@ -889,7 +897,6 @@ onBeforeUnmount(() => {
                         {{ permissionKinds(group) }} 种权限
                       </span>
                     </td>
-                    <td class="api-table__login" />
                     <td class="api-table__switch">
                       <span v-if="group.critical" class="lock" title="保护性接口：关闭后无法登录或无法管理，不允许关闭">
                         <Lock :size="13" />
@@ -928,6 +935,7 @@ onBeforeUnmount(() => {
                         <span class="api-row__name" :class="{ 'is-danger': isDangerous(api.key) }">
                           {{ api.name || api.key }}
                         </span>
+                        <Lock v-if="api.requireLogin" :size="11" class="api-row__login" title="要求登录" />
                         <span
                           v-if="isDangerous(api.key)"
                           class="chip chip--danger"
@@ -949,10 +957,6 @@ onBeforeUnmount(() => {
                         >
                         <span v-else-if="!api.requirePermission" class="api-row__muted">—</span>
                         <span v-else class="api-row__same" title="与本组其他接口相同">同上</span>
-                      </td>
-                      <td class="api-table__login">
-                        <span v-if="api.requireLogin" class="chip">要求登录</span>
-                        <span v-else class="api-row__muted">—</span>
                       </td>
                       <td class="api-table__switch">
                         <span v-if="api.critical" class="lock" title="保护性接口：关闭后无法登录或无法管理，不允许关闭">
@@ -1220,10 +1224,11 @@ onBeforeUnmount(() => {
 .api-panel--inline .api-panel__sheet {
   width: 100%;
   height: auto;
-  min-height: 360px;
+  min-height: 320px;
   border: 1px solid var(--mauth-border);
   border-radius: var(--mauth-radius-md);
-  box-shadow: var(--e1);
+  /* 页面内的容器不用投影：投影是"浮在上面"的语义，这里是页面本身的一块面 */
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -1278,6 +1283,8 @@ onBeforeUnmount(() => {
 /* ── 工具条 ─────────────────────────────────────────────── */
 
 .api-panel__tools {
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 70%, transparent);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1427,16 +1434,11 @@ onBeforeUnmount(() => {
 }
 
 .api-table__path {
-  width: 34%;
+  width: 40%;
 }
 
 .api-table__perm {
-  width: 24%;
-}
-
-.api-table__login {
-  width: 84px;
-  text-align: center;
+  width: 22%;
 }
 
 .api-table__switch {
@@ -1460,9 +1462,47 @@ onBeforeUnmount(() => {
 }
 
 .api-row__count {
+  flex: none;
   margin-left: 8px;
   color: var(--mauth-text-faint);
   font-size: 11.5px;
+}
+
+/* 层级用"缩进 + 左侧竖线"表达：比只靠箭头更容易一眼看出谁属于谁 */
+.api-row--group .api-table__name {
+  padding-left: 18px;
+  position: relative;
+}
+
+.api-row--api .api-table__name {
+  padding-left: 34px;
+  position: relative;
+}
+
+.api-row--group .api-table__name::before,
+.api-row--api .api-table__name::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--mauth-border) 80%, transparent);
+}
+
+.api-row--group .api-table__name::before {
+  left: 10px;
+}
+
+.api-row--api .api-table__name::before {
+  left: 26px;
+}
+
+/* 名称列右侧的小锁：表示"这条要求登录"，hover 有说明 */
+.api-row__login {
+  flex: none;
+  margin-left: 5px;
+  color: var(--mauth-text-faint);
+  vertical-align: -1px;
 }
 
 .api-row--system {
@@ -1512,18 +1552,16 @@ onBeforeUnmount(() => {
 }
 
 .api-row__group {
-  padding-left: 10px;
   font-weight: 550;
   color: var(--mauth-text);
 }
 
 .api-row__name {
-  padding-left: 24px;
   color: var(--mauth-text-soft);
 }
 
 .api-row__count {
-  margin-left: 6px;
+  margin-left: 8px;
   font-size: 11px;
   color: var(--mauth-text-faint);
 }
@@ -1558,8 +1596,7 @@ onBeforeUnmount(() => {
 /* 窄屏：先保"名字 + 开关"，路径与权限码可以靠 title 看 */
 @media (max-width: 760px) {
   .api-table__path,
-  .api-table__perm,
-  .api-table__login {
+  .api-table__perm {
     display: none;
   }
 
