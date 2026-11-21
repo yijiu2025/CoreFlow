@@ -26,6 +26,7 @@
  * @since 2026-11-21
  */
 import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
+import { syncGuardConfigFromDb } from '../../../guard-config.js';
 import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
 import { listAppsOverview, canManageApp } from '../../../../app/admin/console/services/app-overview.service.js';
 import {
@@ -89,6 +90,11 @@ async function registerAppRoutes(fastify) {
        * 过滤放在数据源这一侧，前端拿到的就是"你能管的那些"，不需要再判一次。
        */
       const apps = await listAppsOverview(request.state.user);
+      /*
+       * 列表页也要显示"接口 N 个 / N 个已关闭"，同样先与 DB 对账一次（理由见 `GET /apis`）。
+       * 这里是整页数据的入口，对一次账让下面的统计与抽屉里的树同源。
+       */
+      await syncGuardConfigFromDb();
       /* 接口开关统计在这里合并：服务层在 admin 域，接口树在 guard 域，两者不在同层 */
       const withApis = apps.map(app => ({ ...app, apis: countAppApis(app.appId) }));
       return reply.result.success('获取成功', { apps: withApis, total: withApis.length });
@@ -105,6 +111,20 @@ async function registerAppRoutes(fastify) {
     handler: withFail(async (request, reply) => {
       const appId = String(request.params.appId || '');
       assertCanManageApp(request.state.user, appId);
+
+      /*
+       * 🔴 读之前**先跟 DB 对一次账**。
+       *
+       * 守卫配置的运行期真相在内存（请求期判定要零 IO），DB 是持久层；多实例之间靠
+       * `startGuardConfigSync` 每 30s 轮询对齐。于是"在 A 实例改、在 B 实例看"最多有
+       * 30s 的窗口 —— 对一张运维开关表，看到旧状态再去点一下，等于用错误的当前值做决策
+       * （后端按"取反"执行，结果正好相反）。
+       *
+       * `syncGuardConfigFromDb()` 只做版本号比对（一行一查、无变更不做深合并），
+       * 开销远小于"每秒轮询"，所以放在**打开页面的那一刻**做一次是对的。
+       */
+      await syncGuardConfigFromDb();
+
       const systems = listAppSystems(appId);
       return reply.result.success('获取成功', { appId, systems, total: systems.length });
     })
