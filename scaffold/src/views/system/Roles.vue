@@ -941,6 +941,15 @@ function openCreate(): void {
  * @param row 角色行
  */
 function openFormEdit(row: RoleRow): void {
+  /*
+   * 兜底：编辑按钮已按 `manageable` 置灰，这里再拦一次 —— 函数也可能被别处
+   * （溯源 / 深链）调到。超管角色固定全权限、自己所属的角色只能由更高职级的人改，
+   * 这两种情况下打开一个"保存必然 403"的弹窗比不打开更糟。
+   */
+  if (row.manageable === false) {
+    notify(row.manage_reason || '不在你的管理范围，无法编辑');
+    return;
+  }
   form.id = row.id;
   form.code = row.code;
   form.name = row.name;
@@ -1047,6 +1056,10 @@ async function openMenus(row: RoleRow): Promise<void> {
   // 打开一个"保存必然 403"的弹窗比不打开更糟
   if (!canEdit.value) {
     notify('当前账号只有查看权限，不能修改菜单授权');
+    return;
+  }
+  if (row.manageable === false) {
+    notify(row.manage_reason || '不在你的管理范围，无法修改菜单授权');
     return;
   }
   activeRole.value = row;

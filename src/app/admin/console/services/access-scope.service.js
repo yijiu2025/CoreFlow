@@ -232,8 +232,10 @@ function assertCanManageUser(actor, target, targetUserId, operatorId, { action =
    *
    * "严格大于"在这里会把顶级也锁死：两个超管职级都是 99，谁都改不了谁，一旦有账号
    * 需要降权（离职、泄露），除了直连数据库没有任何出路。超管是系统的最高权威，
-   * 给它设一个"管不了的人"只会把风险推到改库上。超管自己的"防自锁"仍由
-   * `hasAdminCapability` 那道闸负责。
+   * 给它设一个"管不了的人"只会把风险推到改库上。
+   *
+   * 🔴 防自锁改由「不能修改自己账号的角色」兜底（见 `users.js` 的编辑接口）：
+   *    超管可以改别人的角色，但改不了自己的，所以不存在"把自己摘空"的路径。
    */
   if (actor.isSuper) return;
 
@@ -439,23 +441,61 @@ function assertGrantableRoles(actor, roles) {
 }
 
 /**
- * 校验「能不能改这个角色本身」（角色管理页）
+ * 角色为什么不能被当前操作者管理（空串 = 可以管理）
+ *
+ * 四条闸，顺序即提示优先级：
+ *   ① 超级管理员角色 —— 固定全权限，**谁都不需要也不应该编辑它**（含超管自己）。
+ *      policy 是 `*`、菜单是整棵树，界面改出来的任何差异都会被下次启动的
+ *      `defineRoles` 覆盖，或者干脆改出一个人人可提权的漏洞。
+ *   ② 自己所属的角色 —— 自己改自己等于自我提权 / 自我削权，必须由职级更高的人操作。
+ *   ③ 应用域：只能管自己应用（或 GLOBAL）的角色。
+ *   ④ 职级：必须**严格低于**操作者，同级也不行。
+ *
+ * 列表的 `manageable` 与写接口的 `assertCanManageRole` 都从这里出结论 ——
+ * 一处判据，避免"界面能点、接口 403"或反之。
+ *
+ * @param {object} actor 操作者画像（`getActorScope`）
+ * @param {object} role 角色摘要（`id` / `isSuper` / `appId` / `rank`）
+ * @returns {string} 不能管理的原因；空串表示可管理
+ */
+function roleManageBlock(actor, role) {
+  if (role.isSuper) return '超级管理员角色固定为全部权限，无需编辑';
+  const selfIds = new Set((actor?.roleIds || []).map(Number));
+  if (role.id != null && selfIds.has(Number(role.id))) {
+    return '不能修改自己所属的角色，请让职级更高的管理员操作';
+  }
+  if (!canWriteApp(actor, role.appId)) return `不在你的应用域（${appLabel(role.appId)}）`;
+  if (!actor.isSuper && Number(role.rank) >= Number(actor.maxRank)) {
+    return `该角色职级（${role.rank}）不低于你的职级（${actor.maxRank}）`;
+  }
+  return '';
+}
+
+/**
+ * 当前操作者能否管理该角色（列表/按钮置灰用）
  *
  * @param {object} actor 操作者画像
  * @param {object} role 角色摘要
+ * @returns {boolean} 是否可管理
+ */
+function isRoleManageable(actor, role) {
+  return roleManageBlock(actor, role) === '';
+}
+
+/**
+ * 校验「能不能改这个角色本身」（角色管理页）
+ *
+ * 判据与列表的 `manageable` 同一个函数（`roleManageBlock`），所以界面上灰掉的按钮，
+ * 接口也确实调不通。
+ *
+ * @param {object} actor 操作者画像
+ * @param {object} role 角色摘要（`id` / `isSuper` / `appId` / `rank`）
  * @param {string} [action='编辑'] 动作名
  * @throws {Error} `FORBIDDEN:xxx`
  */
 function assertCanManageRole(actor, role, action = '编辑') {
-  if (role.isSuper && !actor.isSuper) {
-    throw new Error(`FORBIDDEN:只有超级管理员可以${action}超级管理员角色`);
-  }
-  if (!canWriteApp(actor, role.appId)) {
-    throw new Error(`FORBIDDEN:不能${action}其它应用（${appLabel(role.appId)}）的角色`);
-  }
-  if (!actor.isSuper && role.rank >= actor.maxRank) {
-    throw new Error(`FORBIDDEN:不能${action}职级不低于你自己的角色`);
-  }
+  const reason = roleManageBlock(actor, role);
+  if (reason) throw new Error(`FORBIDDEN:不能${action}该角色 —— ${reason}`);
 }
 
 /**
@@ -610,6 +650,8 @@ export {
   assertGrantable,
   assertGrantableRoles,
   assertCanManageRole,
+  roleManageBlock,
+  isRoleManageable,
   assertRankBelowActor,
   assertRankChangeAllowed,
   assertCanGrantCodes,

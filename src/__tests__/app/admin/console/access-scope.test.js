@@ -59,6 +59,8 @@ const fwViewer = role({ id: 5, app: 'firewall', code: 'fw_viewer', rank: 10 });
 const fwOperator = role({ id: 6, app: 'firewall', code: 'fw_operator', rank: 50 });
 const retroMember = role({ id: 7, app: 'retroweb', code: 'retroweb_member', rank: 20 });
 const normalUser = role({ id: 8, code: 'user_normal', rank: 10 });
+/** 同应用同职级的另一个角色：用来测「职级闸」，避免撞上「不能改自己所属角色」 */
+const fwAdminPeer = role({ id: 9, app: 'firewall', code: 'fw_admin_peer', rank: 95 });
 
 describe('assertCanManageUser —— 谁能动这个账号', () => {
   const actorSuper = persona([superRole]);
@@ -236,18 +238,28 @@ describe('assertCanManageRole / canWriteApp —— 角色本身的维护边界',
   const actorFwAdmin = persona([fwAdmin]);
 
   test('非跨应用管理员不能编辑 / 删除其它应用的角色', () => {
-    expect(() => assertCanManageRole(actorFwAdmin, adminAdmin)).toThrow(/其它应用/);
+    expect(() => assertCanManageRole(actorFwAdmin, adminAdmin)).toThrow(/应用域/);
     expect(canWriteApp(actorFwAdmin, 'firewall')).toBe(true);
     expect(canWriteApp(actorFwAdmin, 'GLOBAL')).toBe(true);
   });
 
-  test('不能编辑职级不低于自己的角色', () => {
-    expect(() => assertCanManageRole(actorFwAdmin, fwAdmin)).toThrow(/职级/);
+  test('不能编辑职级不低于自己的角色（用同应用的同级角色验证，排除"自己所属"的干扰）', () => {
+    expect(() => assertCanManageRole(actorFwAdmin, fwAdminPeer)).toThrow(/职级/);
   });
 
-  test('只有超管能改超管角色', () => {
-    expect(() => assertCanManageRole(persona([adminAdmin]), superRole)).toThrow(/超级管理员/);
-    expect(() => assertCanManageRole(persona([superRole]), superRole)).not.toThrow();
+  test('🔴 超管角色固定为全部权限：连超管自己也不可编辑', () => {
+    expect(() => assertCanManageRole(persona([adminAdmin]), superRole)).toThrow(/超级管理员角色固定/);
+    expect(() => assertCanManageRole(persona([superRole]), superRole)).toThrow(/超级管理员角色固定/);
+  });
+
+  test('🔴 不能修改自己所属的角色（自我提权/自我削权都该由更高职级的人做）', () => {
+    expect(() => assertCanManageRole(persona([adminAdmin]), adminAdmin)).toThrow(/自己所属/);
+    expect(() => assertCanManageRole(persona([adminOperator]), adminOperator)).toThrow(/自己所属/);
+  });
+
+  test('超管仍可编辑别人的角色（只锁自己那一行）', () => {
+    expect(() => assertCanManageRole(persona([superRole]), adminAdmin)).not.toThrow();
+    expect(() => assertCanManageRole(persona([superRole]), fwAdmin)).not.toThrow();
   });
 });
 

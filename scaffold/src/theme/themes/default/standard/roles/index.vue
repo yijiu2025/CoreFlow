@@ -291,7 +291,7 @@ const {
                       class="btn btn--ghost btn--sm btn--icon"
                       type="button"
                       :disabled="row.manageable === false"
-                      :title="row.manageable === false ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）' : '编辑角色'"
+                      :title="row.manageable === false ? (row.manage_reason || '不在你的管理范围') : '编辑角色'"
                       aria-label="编辑角色"
                       @click="openFormEdit(row)"
                     >
@@ -309,7 +309,7 @@ const {
                         row.menuLocked
                           ? '超级管理员的菜单固定为全部，不可修改'
                           : row.manageable === false
-                            ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）'
+                            ? (row.manage_reason || '不在你的管理范围')
                             : '菜单授权'
                       "
                       aria-label="菜单授权"
@@ -322,7 +322,7 @@ const {
                       class="btn btn--ghost btn--sm btn--icon role-del"
                       type="button"
                       :disabled="row.manageable === false"
-                      :title="row.manageable === false ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）' : '删除角色'"
+                      :title="row.manageable === false ? (row.manage_reason || '不在你的管理范围') : '删除角色'"
                       aria-label="删除角色"
                       @click="remove(row)"
                     >
@@ -384,7 +384,7 @@ const {
                   class="btn btn--sm"
                   type="button"
                   :disabled="row.manageable === false"
-                  :title="row.manageable === false ? '不在你的管理范围（应用域不允许，或门槛不低于你的职级）' : '编辑角色'"
+                  :title="row.manageable === false ? (row.manage_reason || '不在你的管理范围') : '编辑角色'"
                   @click="openFormEdit(row)"
                 >
                   <Pencil :size="13" /> 编辑

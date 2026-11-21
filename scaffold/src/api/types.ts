@@ -456,6 +456,8 @@ export interface RoleRow {
   app_label?: string;
   /** 当前操作者能否编辑 / 删除这个角色（后端与写接口同一份判据） */
   manageable?: boolean;
+  /** 不能管理时的具体原因（超管角色固定 / 自己所属 / 应用域 / 职级），可直接做 tooltip */
+  manage_reason?: string;
 }
 
 /** 工作台概览 */

@@ -32,6 +32,7 @@ import { createUser, permissionCatalog, setUserPermission, updateUser, userOptio
 import type { UserEditTarget, UserOptions } from '@/api/types';
 import RolePicker from '@/components/ui/RolePicker.vue';
 import PostPicker from '@/components/ui/PostPicker.vue';
+import { useAuthStore } from '@/stores/auth';
 
 const props = defineProps<{
   /** 是否打开（`v-if` 之外再留一层，便于做关闭动画与状态复位） */
@@ -70,6 +71,22 @@ const errorMessage = ref('');
 
 /** 选项：外部给了就用外部的，否则自己拉一份 */
 const options = ref<UserOptions>(props.options ?? { depts: [], roles: [], posts: [] });
+
+const auth = useAuthStore();
+
+/**
+ * 是否在编辑**自己**的账号
+ *
+ * 自己的角色只能由职级更高的管理员调整（后端同一条判据）：这里把角色选择器换成只读，
+ * 避免"选完点保存才 403"。资料 / 邮箱 / 部门 / 密码仍然可改。
+ */
+const isSelf = computed(() => !!props.target && Number(props.target.id) === Number(auth.me?.id));
+
+/** 自己当前持有的角色名（只读展示用；ID 来自 target，名字只用于显示） */
+const selfRoleNames = computed(() => {
+  const byId = new Map(options.value.roles.map(role => [Number(role.id), role]));
+  return (props.target?.roleIds ?? []).map(id => byId.get(Number(id))?.name || `#${id}`);
+});
 /**
  * 选项是否真的可用
  *
@@ -307,13 +324,18 @@ async function submit(): Promise<void> {
   try {
     if (props.target) {
       const targetId = props.target.id;
+      /*
+       * 改自己时角色原样回传：`submittableRoleIds` 会按"能不能管理"过滤，
+       * 而自己的角色里可能有够不着的项 —— 过滤后集合变化，后端会判定成"改自己角色"而 403。
+       */
+      const roleIds = isSelf.value ? [...(props.target.roleIds ?? [])] : submittableRoleIds.value;
       await updateUser(targetId, {
         username: form.username,
         email: form.email,
         deptId: form.deptId,
         status: form.status,
         rankLevel: form.rankLevel,
-        roleIds: submittableRoleIds.value,
+        roleIds,
         postIds: form.postIds
       });
       /*
@@ -416,7 +438,13 @@ async function submit(): Promise<void> {
             <h3 class="form-section__title">角色与岗位</h3>
             <div class="field">
               <span class="field__label">角色</span>
-              <RolePicker v-model="form.roleIds" :roles="options.roles" />
+              <!-- 自己的角色只读：角色变更等于权限变更，必须由职级更高的人操作 -->
+              <template v-if="isSelf">
+                <p class="field__hint">
+                  不能修改自己账号的角色 —— 请让职级更高的管理员调整。当前角色：{{ selfRoleNames.join('、') || '无' }}
+                </p>
+              </template>
+              <RolePicker v-else v-model="form.roleIds" :roles="options.roles" />
             </div>
             <div class="field">
               <span class="field__label">岗位</span>

@@ -131,7 +131,7 @@ describe('角色编码 → 菜单裁剪', () => {
     menuTree.mockResolvedValue([{ id: 1, name: '工作台', visible: 1, children: [] }]);
 
     const reply = makeReply();
-    await handlers.consoleRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
 
     expect(findIdsByCodes).toHaveBeenCalledWith(['admin_viewer']);
     // 角色编码一个都没匹配上 ⇒ 没有 id 去查授权 ⇒ 树被整枝剪空
@@ -154,7 +154,7 @@ describe('角色编码 → 菜单裁剪', () => {
     ]);
 
     const reply = makeReply();
-    await handlers.consoleRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
 
     // 1 未授权 ⇒ 整枝（含已授权的 2）都不出现
     expect(reply.last().data).toEqual([]);
@@ -164,7 +164,7 @@ describe('角色编码 → 菜单裁剪', () => {
     menuTree.mockResolvedValue([{ id: 1, name: '工作台', visible: 1, children: [] }]);
 
     const reply = makeReply();
-    await handlers.consoleRoutes({ state: { user: { roles: ['superadmin'] } } }, reply);
+    await handlers.adminRoutes({ state: { user: { roles: ['superadmin'] } } }, reply);
 
     expect(findIdsByCodes).not.toHaveBeenCalled();
     expect(reply.last().data).toEqual([{ id: 1, name: '工作台', visible: 1, children: [] }]);
@@ -174,7 +174,7 @@ describe('角色编码 → 菜单裁剪', () => {
 describe('修改本人密码', () => {
   it('读凭证 + 写新哈希都走 DAO', async () => {
     const reply = makeReply();
-    await handlers.consoleChangePassword(
+    await handlers.adminChangePassword(
       {
         state: { user: { userId: 7 } },
         body: { oldPassword: 'old-pass', newPassword: 'new-pass-1' }
@@ -191,7 +191,7 @@ describe('修改本人密码', () => {
     findPasswordIdentity.mockResolvedValue(null);
     const reply = makeReply();
 
-    await handlers.consoleChangePassword(
+    await handlers.adminChangePassword(
       { state: { user: { userId: 7 } }, body: { oldPassword: 'a', newPassword: 'new-pass-1' } },
       reply
     );
@@ -207,7 +207,7 @@ describe('保存后台个人资料', () => {
     profilePatch.mockResolvedValue({ nickname: '李四', avatar: '/a.png' });
     const reply = makeReply();
 
-    await handlers.consoleSaveProfile({ state: { user: { uid: 'u-7' } }, body: { nickname: '李四' } }, reply);
+    await handlers.adminSaveProfile({ state: { user: { uid: 'u-7' } }, body: { nickname: '李四' } }, reply);
 
     expect(findByUid).toHaveBeenCalledWith('u-7', ['id']);
     // 关键：avatar 没传就不能出现在写入字段里，否则会把已有头像清掉
@@ -216,7 +216,7 @@ describe('保存后台个人资料', () => {
 
   it('空串 = 清除该字段（写成 null）', async () => {
     const reply = makeReply();
-    await handlers.consoleSaveProfile({ state: { user: { uid: 'u-7' } }, body: { nickname: '' } }, reply);
+    await handlers.adminSaveProfile({ state: { user: { uid: 'u-7' } }, body: { nickname: '' } }, reply);
     expect(profilePatch).toHaveBeenCalledWith(7, { nickname: null });
   });
 });
@@ -226,7 +226,7 @@ describe('保存界面偏好', () => {
     profileFind.mockResolvedValue({ preferences: { accent: 'blue', mode: 'dark' } });
     const reply = makeReply();
 
-    await handlers.consoleSavePreferences({ state: { user: { uid: 'u-7' } }, body: { accent: 'teal' } }, reply);
+    await handlers.adminSavePreferences({ state: { user: { uid: 'u-7' } }, body: { accent: 'teal' } }, reply);
 
     expect(profilePatch).toHaveBeenCalledWith(7, {
       preferences: expect.objectContaining({ accent: 'teal', mode: 'dark' })

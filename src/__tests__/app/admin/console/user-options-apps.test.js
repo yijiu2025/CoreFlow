@@ -128,20 +128,14 @@ function makeReply() {
 describe('apps 候选只含有权限的应用', () => {
   test('只保留应用域内的应用（notice）与 GLOBAL', async () => {
     const reply = makeReply();
-    await handlers.consoleUserOptions(
-      { state: { user: { userId: 26 } }, ip: '10.0.0.1', headers: {}, query: {} },
-      reply
-    );
+    await handlers.adminUserOptions({ state: { user: { userId: 26 } }, ip: '10.0.0.1', headers: {}, query: {} }, reply);
     const ids = reply.sent.data.apps.map(app => app.id).sort();
     expect(ids).toEqual(['GLOBAL', 'notice']);
   });
 
   test('够不着的应用一个都不回（admin / oauth21）', async () => {
     const reply = makeReply();
-    await handlers.consoleUserOptions(
-      { state: { user: { userId: 26 } }, ip: '10.0.0.1', headers: {}, query: {} },
-      reply
-    );
+    await handlers.adminUserOptions({ state: { user: { userId: 26 } }, ip: '10.0.0.1', headers: {}, query: {} }, reply);
     const ids = reply.sent.data.apps.map(app => app.id);
     for (const denied of ['admin', 'oauth21']) {
       expect(ids).not.toContain(denied);
@@ -150,10 +144,7 @@ describe('apps 候选只含有权限的应用', () => {
 
   test('已卸载应用的角色被过滤，仍注册的照常返回（含 manageable 标记）', async () => {
     const reply = makeReply();
-    await handlers.consoleUserOptions(
-      { state: { user: { userId: 26 } }, ip: '10.0.0.1', headers: {}, query: {} },
-      reply
-    );
+    await handlers.adminUserOptions({ state: { user: { userId: 26 } }, ip: '10.0.0.1', headers: {}, query: {} }, reply);
     // firewall / retroweb 不在注册表里 → 只剩 admin / notice / GLOBAL 三条
     expect(reply.sent.data.roles).toHaveLength(3);
     expect(reply.sent.data.roles.map(role => role.app_id).sort()).toEqual(['GLOBAL', 'admin', 'notice']);
