@@ -461,6 +461,12 @@ export interface AppApiNode {
   allowRoles?: string[];
   /** 保护性接口：不允许关闭（登录/授权、应用管理与会话自身） */
   critical?: boolean;
+  /**
+   * 被哪个祖先"挂空"：`system` = 系统总开关已关，`group` = 模块开关已关
+   *
+   * 有值时**不允许再改这一层** —— 改完也不生效，请求在更外层就被拦了。
+   */
+  blockedBy?: 'system' | 'group' | null;
 }
 
 /** 模块节点 */

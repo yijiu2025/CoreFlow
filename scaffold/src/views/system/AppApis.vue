@@ -147,6 +147,45 @@ onMounted(() => {
   color: var(--mauth-text-faint);
 }
 
+/**
+ * 窄屏：手机上这页有三个问题
+ *   1. 「返回 + 标题 + 刷新」挤一行，标题被压成两字一行；
+ *   2. 外壳留白按桌面给（24px），手机上可用宽度只剩 320px；
+ *   3. 面板内部 `max-height: 62vh` 又造了一个滚动区 —— 页面滚一层、面板再滚一层，
+ *      手指经常滚不动列表（这是"手机端不正常"最常见的成因）。
+ *
+ * 所以窄屏只做三件事：标题换行、收窄留白、把内层滚动交给页面。
+ */
+@media (max-width: 760px) {
+  .app-apis {
+    gap: 8px;
+  }
+
+  .app-apis__head {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+
+  .app-apis__titles {
+    flex-basis: 100%;
+    order: 2;
+  }
+
+  .app-apis__title {
+    font-size: 15px;
+  }
+
+  .app-apis__sub {
+    margin-top: 2px;
+    font-size: 11.5px;
+  }
+
+  /* 刷新按钮跟"返回"一条，放右侧；标题独占下一行 */
+  .app-apis__head > .btn {
+    margin-left: auto;
+  }
+}
+
 .is-spin {
   animation: app-apis-spin 0.9s linear infinite;
 }

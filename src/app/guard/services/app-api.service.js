@@ -35,7 +35,8 @@ const PUBLIC_FIELDS = [
   'requirePermission',
   'allowIps',
   'allowRoles',
-  'critical'
+  'critical',
+  'blockedBy'
 ];
 
 /**
@@ -75,11 +76,22 @@ function listAppSystems(appId) {
       const apis = [];
       for (const [apiKey, api] of Object.entries(group.apis || {})) {
         /* 系统级声明了 critical 时，整棵树都是保护性的（如 oauth21 整个授权域） */
-        apis.push({ key: apiKey, ...pickFields(api), critical: Boolean(api.critical || system.critical) });
+        apis.push({
+          key: apiKey,
+          ...pickFields(api),
+          critical: Boolean(api.critical || system.critical),
+          blockedBy: blockedByOf(system, groupKey, apiKey)
+        });
       }
       // 组内按 key 排序：注册顺序取决于文件扫描顺序，每次重启可能变
       apis.sort((a, b) => String(a.key).localeCompare(String(b.key)));
-      groups.push({ key: groupKey, ...pickFields(group), critical: Boolean(group.critical || system.critical), apis });
+      groups.push({
+        key: groupKey,
+        ...pickFields(group),
+        critical: Boolean(group.critical || system.critical),
+        blockedBy: blockedByOf(system, groupKey, null),
+        apis
+      });
     }
     groups.sort((a, b) => String(a.key).localeCompare(String(b.key)));
     systems.push({ key: systemKey, ...pickFields(system), groups });
@@ -133,6 +145,20 @@ async function toggleAppNode({ appId, systemKey, groupKey, apiKey, request, step
       ? guardTree?.groups?.[groupKey]?.apis?.[apiKey]
       : guardTree?.groups?.[groupKey];
   if (!targetNode) return { ok: false, statusCode: 404, message: '未找到指定配置路径' };
+
+  /* 上级开关关着时，改这一层没有任何效果 —— 直接拒绝，比"改了没用"清楚 */
+  const blocked = blockedByOf(guardTree, groupKey, apiKey);
+  if (blocked) {
+    return {
+      ok: false,
+      statusCode: 409,
+      message:
+        blocked === 'system'
+          ? '所属系统的总开关已关闭，请先开启系统再调整接口'
+          : '所属模块的开关已关闭，请先开启模块再调整接口'
+    };
+  }
+
   if (targetNode.enabled && (targetNode.critical || guardTree?.critical)) {
     return {
       ok: false,
@@ -212,6 +238,20 @@ async function updateAppNode({ appId, systemKey, groupKey, apiKey, patch, reques
   if (!ownsSystem(appId, systemKey)) {
     return { ok: false, statusCode: 403, message: '该系统不属于当前应用' };
   }
+
+  const tree = getAllGuardConfigs()[systemKey];
+  const blocked = blockedByOf(tree, groupKey, apiKey);
+  if (blocked) {
+    return {
+      ok: false,
+      statusCode: 409,
+      message:
+        blocked === 'system'
+          ? '所属系统的总开关已关闭，请先开启系统再编辑接口'
+          : '所属模块的开关已关闭，请先开启模块再编辑接口'
+    };
+  }
+
   const res = await updateConfig({
     system: systemKey,
     group: groupKey || null,
@@ -253,6 +293,29 @@ function togglePatchOf({ appId, systemKey, groupKey, apiKey }) {
 }
 
 /**
+ * 上级开关是否把这一层"挂空"了
+ *
+ * 语义：系统关了 → 它下面所有模块与接口都不生效；模块关了 → 它的接口都不生效。
+ * 于是"当前这一层还能不能改"取决于**祖先**，而不是自己 ——
+ * 在关掉的系统里改单个接口，改完也不会有任何效果（请求在更外层就被拦了），
+ * 让人以为"改了没用"，是比报错更糟的体验。
+ *
+ * @param {object} system 系统节点
+ * @param {string|null} [groupKey] 模块标识
+ * @param {string|null} [apiKey] 接口标识
+ * @returns {'system'|'group'|null} 把当前层挂空的祖先（null = 没被挂空）
+ */
+function blockedByOf(system, groupKey, apiKey) {
+  if (!system) return null;
+  if (system.enabled === false) return 'system';
+  if (apiKey && groupKey) {
+    const group = system.groups?.[groupKey];
+    if (group && group.enabled === false) return 'group';
+  }
+  return null;
+}
+
+/**
  * 某应用下的接口统计（供应用清单展示"关了 N 个"）
  *
  * @param {string} appId 应用标识
@@ -275,4 +338,4 @@ function countAppApis(appId) {
 
 log.dev('📦 [AppApi] 应用级接口开关已加载');
 
-export { listAppSystems, ownsSystem, toggleAppNode, updateAppNode, countAppApis, togglePatchOf };
+export { listAppSystems, ownsSystem, toggleAppNode, updateAppNode, countAppApis, togglePatchOf, blockedByOf };

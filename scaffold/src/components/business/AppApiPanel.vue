@@ -190,6 +190,17 @@ function permissionKinds(group: AppApiGroup): number {
 
 /** 某个模块的启用计数（组头显示 `3/5`） */
 /**
+ * 被祖先挂空时的提示文案
+ *
+ * @param node 接口节点
+ * @returns {string} 提示
+ */
+function blockedTitle(node: AppApiNode): string {
+  if (!node.blockedBy) return '';
+  return node.blockedBy === 'system' ? '所属系统的总开关已关闭，先开启系统' : '所属模块的开关已关闭，先开启模块';
+}
+
+/**
  * 系统行右侧的规模摘要：`3 组 / 42 个 · 5 关`
  *
  * 系统行是"要不要展开"的决策点 —— 只写应用名的话，运维得逐个展开才知道哪块有问题。
@@ -867,7 +878,7 @@ onBeforeUnmount(() => {
                       v-for="api in group.apis"
                       :key="api.key"
                       class="api-row api-row--api"
-                      :class="{ 'is-off': !api.enabled }"
+                      :class="{ 'is-off': !api.enabled, 'is-blocked': Boolean(api.blockedBy) }"
                     >
                       <td class="api-table__name">
                         <span class="api-row__name" :class="{ 'is-danger': isDangerous(api.key) }">
@@ -907,7 +918,12 @@ onBeforeUnmount(() => {
                           <input
                             type="checkbox"
                             :checked="api.enabled"
-                            :disabled="api.critical || busyKey === nodeKey(system.key, group.key, api.key)"
+                            :disabled="
+                              api.critical ||
+                              Boolean(api.blockedBy) ||
+                              busyKey === nodeKey(system.key, group.key, api.key)
+                            "
+                            :title="blockedTitle(api)"
                             :aria-label="`${api.name || api.key} 开关`"
                             @change="doToggle(system.key, group.key, api.key)"
                           />
@@ -916,8 +932,9 @@ onBeforeUnmount(() => {
                         <button
                           class="api-edit"
                           type="button"
+                          :disabled="Boolean(api.blockedBy)"
                           :aria-label="`编辑 ${api.name || api.key} 的描述与白名单`"
-                          title="编辑描述 / 登录要求 / 白名单"
+                          :title="api.blockedBy ? blockedTitle(api) : '编辑描述 / 登录要求 / 白名单'"
                           @click.stop="openEdit(system, group, api)"
                         >
                           <Pencil :size="13" />
@@ -1417,6 +1434,15 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--mauth-surface-2) 28%, var(--mauth-surface));
 }
 
+.api-row--api.is-blocked {
+  cursor: not-allowed;
+}
+
+.api-row--api.is-blocked .api-row__name,
+.api-row--api.is-blocked .api-table__path code {
+  opacity: 0.55;
+}
+
 .api-row--api.is-off .api-row__name {
   color: var(--mauth-text-faint);
 }
@@ -1499,6 +1525,16 @@ onBeforeUnmount(() => {
 
   .api-row td {
     padding: 7px 8px;
+  }
+
+  /*
+   * 窄屏不要再造第二个滚动区：页面本身就在滚，里面再套一层 `max-height` +
+   * overflow 会让手指滚不动列表（iOS 上尤其明显，表现为"卡住"）。
+   * 表头 sticky 改成相对页面滚动，仍然吸顶。
+   */
+  .api-panel--inline .api-panel__scroll {
+    max-height: none;
+    overflow: visible;
   }
 }
 
