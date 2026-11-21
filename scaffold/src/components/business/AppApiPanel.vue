@@ -1,9 +1,14 @@
 <script setup lang="ts">
 /**
- * 应用接口开关（右侧抽屉）
+ * 应用接口开关
  *
  * 数据就是守卫配置的三级树（系统 / 模块 / 接口），只是按**应用**收口：
  * 只有 `system.json` 里声明了 `app_id` 的系统才属于这个应用，共享系统不会出现在这里。
+ *
+ * ── 两种形态，同一份逻辑 ──
+ * `mode = 'inline'`：整页表格（`views/system/AppApis.vue`）。101 个接口在抽屉里只能一条条
+ * 往下滚，换成一页表之后能对齐扫读、能搜索、能只看已关闭 —— 这是主要形态。
+ * `mode = 'drawer'`：右侧抽屉，保留给"从列表里点一下就改"的临时场景。
  *
  * ── 为什么关一下也要二次认证 ──
  * 误把模块关掉，和越权放宽在结果上没有区别（都是服务不可用或防线被拆）。所以后端
@@ -19,7 +24,7 @@
  * @since 2026-11-21
  */
 import { computed, onMounted, ref } from 'vue';
-import { ChevronRight, Loader2, Lock, MailCheck, X } from 'lucide-vue-next';
+import { ChevronDown, ChevronRight, Loader2, Lock, MailCheck, Search, X } from 'lucide-vue-next';
 import {
   appApiStepUpChallenge,
   appApiStepUpVerify,
@@ -28,15 +33,20 @@ import {
   setAppSwitchPolicy,
   toggleAppApi
 } from '@/api/system';
-import type { AppApiSystem } from '@/api/system';
+import type { AppApiGroup, AppApiSystem } from '@/api/system';
 import { useToastStore } from '@/stores/toast';
 
-const props = defineProps<{
-  /** 应用标识 */
-  appId: string;
-  /** 应用显示名（标题用） */
-  appName: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    /** 应用标识 */
+    appId: string;
+    /** 应用显示名（标题用） */
+    appName: string;
+    /** 形态：整页表格 / 右侧抽屉 */
+    mode?: 'drawer' | 'inline';
+  }>(),
+  { mode: 'drawer' }
+);
 
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>();
 
@@ -48,8 +58,14 @@ const loading = ref(false);
 const error = ref('');
 /** 展开中的系统 key（默认全展开：应用下通常只有一两个系统） */
 const expanded = ref<Set<string>>(new Set());
+/** 展开中的模块 key（`system|group`）。默认收起：先看到"有哪些模块" */
+const expandedGroups = ref<Set<string>>(new Set());
 /** 正在切换的节点（`system|group|api`），用于行内禁用与转圈 */
 const busyKey = ref('');
+
+/** 过滤：关键词（名称 / 路径 / 权限码）与"只看已关闭" */
+const keyword = ref('');
+const onlyDisabled = ref(false);
 
 /** 二次验证策略（后端设置，只有超管能改） */
 const policy = ref<{ requireStepUp: boolean; canEdit: boolean }>({ requireStepUp: true, canEdit: false });
@@ -74,6 +90,197 @@ function nodeKey(systemKey: string, groupKey?: string, apiKey?: string): string 
   return [systemKey, groupKey || '', apiKey || ''].join('|');
 }
 
+/** 模块展开键 */
+function groupKeyOf(systemKey: string, groupKey: string): string {
+  return `${systemKey}|${groupKey}`;
+}
+
+/** 是否命中当前过滤（关键词 + 只看已关闭） */
+function hit(node: { name?: string; key?: string; requirePermission?: string | null; enabled: boolean }): boolean {
+  if (onlyDisabled.value && node.enabled) return false;
+  const k = keyword.value.trim().toLowerCase();
+  if (!k) return true;
+  return [node.name, node.key, node.requirePermission].some(v =>
+    String(v || '')
+      .toLowerCase()
+      .includes(k)
+  );
+}
+
+/** 是否处于过滤状态（过滤时强制展开命中项） */
+const filtering = computed(() => Boolean(keyword.value.trim()) || onlyDisabled.value);
+
+/**
+ * 过滤后的视图（不改原树）
+ *
+ * 只保留"至少有一个接口命中"的模块，以及"至少有一个模块"的系统 ——
+ * 否则搜一个词会出现一堆空分组，滚动距离反而更长。
+ */
+const view = computed<AppApiSystem[]>(() => {
+  const on = filtering.value;
+  const out: AppApiSystem[] = [];
+  for (const system of systems.value) {
+    const groups = system.groups
+      .map(group => ({ ...group, apis: on ? group.apis.filter(hit) : group.apis }))
+      .filter(group => (on ? group.apis.length > 0 : true));
+    if (on && groups.length === 0) continue;
+    out.push({ ...system, groups });
+  }
+  return out;
+});
+
+/** 过滤中命中的接口数（工具条"匹配 M"） */
+const matchedCount = computed(() =>
+  view.value.reduce((n, s) => n + s.groups.reduce((m, g) => m + g.apis.length, 0), 0)
+);
+
+/** 全部接口数（不吃过滤） */
+const totalCount = computed(() =>
+  systems.value.reduce((n, s) => n + s.groups.reduce((m, g) => m + g.apis.length, 0), 0)
+);
+
+/** 系统是否展开（过滤时全展开，否则听话于用户） */
+function systemOpen(systemKey: string): boolean {
+  return filtering.value || expanded.value.has(systemKey);
+}
+
+/** 模块是否展开（过滤时全展开） */
+function groupOpen(systemKey: string, groupKey: string): boolean {
+  return filtering.value || expandedGroups.value.has(groupKeyOf(systemKey, groupKey));
+}
+
+/** 折叠/展开系统 */
+function toggleExpand(systemKey: string): void {
+  const next = new Set(expanded.value);
+  if (next.has(systemKey)) next.delete(systemKey);
+  else next.add(systemKey);
+  expanded.value = next;
+}
+
+/** 折叠/展开模块 */
+function toggleGroup(systemKey: string, groupKey: string): void {
+  const key = groupKeyOf(systemKey, groupKey);
+  const next = new Set(expandedGroups.value);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expandedGroups.value = next;
+}
+
+/**
+ * 一组接口"共同的权限码"
+ *
+ * 同一模块下几十行往往都是 `admin:dept:read`，逐行重复会把真正的差异淹掉。
+ * 组头显示共同值，行内只在**与组头不同**时才显示自己的码。
+ *
+ * @param group 模块
+ * @returns 共同权限码；不一致时返回空串
+ */
+function commonPermission(group: AppApiGroup): string {
+  const list = group.apis.map(a => a.requirePermission).filter(Boolean) as string[];
+  if (list.length === 0) return '';
+  const uniq = [...new Set(list)];
+  return uniq.length === 1 && uniq[0] ? uniq[0] : '';
+}
+
+/** 该组权限码种类数（组头显示"N 种"） */
+function permissionKinds(group: AppApiGroup): number {
+  return new Set(group.apis.map(a => a.requirePermission || '').filter(Boolean)).size;
+}
+
+/** 某个模块的启用计数（组头显示 `3/5`） */
+function enabledText(group: AppApiGroup): string {
+  const on = group.apis.filter(a => a.enabled).length;
+  return `${on}/${group.apis.length}`;
+}
+
+/**
+ * 写操作识别
+ *
+ * 关闭一个模块时，"影响 12 个接口"和"影响 3 个会删数据的接口"是两件事。
+ * 用路径里的动词判断，不强依赖权限码（有些接口的码是 `*:*` 通配，看不出动作）。
+ */
+const DANGER_RE = /(purge|delete|remove|reset|revoke|block|kick|disable|export|import)/i;
+
+/**
+ * 是否写操作
+ *
+ * @param key 接口路径（如 `/admin/console/v1/users/:id`）
+ * @returns 是否属于高影响动作
+ */
+function isDangerous(key: string): boolean {
+  return DANGER_RE.test(String(key || ''));
+}
+
+/** 待确认的关闭动作（`null` = 没有待确认项） */
+const pendingOff = ref<{ systemKey: string; groupKey?: string; label: string; total: number; writes: number } | null>(
+  null
+);
+
+/**
+ * 统计关闭某个节点的波及面
+ *
+ * @param systemKey 系统标识
+ * @param groupKey 模块标识（空 = 系统级）
+ * @returns 受影响接口数与其中写操作数
+ */
+function impactOf(systemKey: string, groupKey?: string): { total: number; writes: number } {
+  const system = systems.value.find(s => s.key === systemKey);
+  if (!system) return { total: 0, writes: 0 };
+  const groups = groupKey ? system.groups.filter(g => g.key === groupKey) : system.groups;
+  let total = 0;
+  let writes = 0;
+  for (const g of groups) {
+    for (const a of g.apis) {
+      if (!a.enabled) continue;
+      total += 1;
+      if (isDangerous(a.key)) writes += 1;
+    }
+  }
+  return { total, writes };
+}
+
+/**
+ * 节点开关变更（系统级 / 模块级）
+ *
+ * 开启直接生效；**关闭先确认**——一次误点会让整块接口全部 403，而恢复要再来一遍二次验证。
+ * 取消时把 checkbox 视觉状态推回去（`:checked` 是单向绑定，DOM 已经被用户改过）。
+ *
+ * @param event 变更事件
+ * @param systemKey 系统标识
+ * @param groupKey 模块标识（空 = 系统级）
+ */
+function onNodeChange(event: Event, systemKey: string, groupKey?: string): void {
+  const input = event.target as HTMLInputElement;
+  if (input.checked) {
+    void doToggle(systemKey, groupKey);
+    return;
+  }
+  const { total, writes } = impactOf(systemKey, groupKey);
+  if (total === 0) {
+    void doToggle(systemKey, groupKey);
+    return;
+  }
+  const system = systems.value.find(s => s.key === systemKey);
+  const group = groupKey ? system?.groups.find(g => g.key === groupKey) : null;
+  pendingOff.value = {
+    systemKey,
+    groupKey,
+    label: group?.name || group?.key || system?.name || systemKey,
+    total,
+    writes
+  };
+  /* 还没确认，先把开关拨回去：否则界面显示"已关闭"但后端没变 */
+  input.checked = true;
+}
+
+/** 确认关闭 */
+function confirmOff(): void {
+  const p = pendingOff.value;
+  if (!p) return;
+  pendingOff.value = null;
+  void doToggle(p.systemKey, p.groupKey);
+}
+
 /** 拉取接口树 */
 async function load(): Promise<void> {
   loading.value = true;
@@ -87,14 +294,6 @@ async function load(): Promise<void> {
   } finally {
     loading.value = false;
   }
-}
-
-/** 折叠/展开 */
-function toggleExpand(systemKey: string): void {
-  const next = new Set(expanded.value);
-  if (next.has(systemKey)) next.delete(systemKey);
-  else next.add(systemKey);
-  expanded.value = next;
 }
 
 /**
@@ -264,352 +463,403 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="api-drawer">
-    <!-- 遮罩：点击关闭（抽屉本身阻止冒泡） -->
-    <div class="api-drawer__mask" @click="emit('close')" />
-    <aside class="api-drawer__panel">
-      <header class="api-drawer__head">
-        <div>
-          <h3 class="api-drawer__title">接口开关 · {{ appName }}</h3>
-          <p class="api-drawer__sub">关闭后该接口直接拒绝请求（403 前拦截）。变更需二次认证并留审计。</p>
+  <div class="api-panel" :class="`api-panel--${mode}`">
+    <!-- 遮罩只在抽屉形态出现：整页形态是页面的一部分，不该挡住导航 -->
+    <div v-if="mode === 'drawer'" class="api-panel__mask" @click="emit('close')" />
+
+    <section class="api-panel__sheet" :aria-label="`${appName} 接口开关`">
+      <header class="api-panel__head">
+        <div class="api-panel__titles">
+          <h2 class="api-panel__title">接口开关 · {{ appName }}</h2>
+          <p class="api-panel__sub">关闭后该接口直接拒绝请求（403 前置拦截）。变更需二次认证并留审计。</p>
         </div>
-        <button class="btn btn--icon btn--sm" type="button" aria-label="关闭" @click="emit('close')">
+        <button v-if="mode === 'drawer'" class="api-panel__close" type="button" aria-label="关闭" @click="emit('close')">
           <X :size="16" />
         </button>
       </header>
 
-      <div v-if="loading" class="api-drawer__state"><Loader2 :size="16" class="spin" /> 正在加载接口树…</div>
-      <div v-else-if="error" class="api-drawer__state">
-        <p>{{ error }}</p>
-        <button class="btn btn--sm" type="button" @click="load">重试</button>
+      <!-- 工具条：101 个接口里"翻找"是主要动作，搜索必须放在最上面 -->
+      <div class="api-panel__tools">
+        <label class="api-search">
+          <Search :size="14" />
+          <input v-model="keyword" type="search" placeholder="搜索接口名 / 路径 / 权限码" aria-label="搜索接口" />
+        </label>
+        <button
+          class="api-chip"
+          :class="{ 'api-chip--on': onlyDisabled }"
+          type="button"
+          :aria-pressed="onlyDisabled"
+          @click="onlyDisabled = !onlyDisabled"
+        >
+          只看已关闭
+        </button>
+        <span class="api-panel__tools-spacer" />
+        <span v-if="filtering" class="api-panel__match">匹配 {{ matchedCount }} / {{ totalCount }}</span>
       </div>
-      <div v-else-if="systems.length === 0" class="api-drawer__state">
-        <Lock :size="18" />
-        <p>这个应用还没有声明归属的接口系统。</p>
-        <p class="api-drawer__hint">
-          私有 API 写 <code>"app_id": "{{ appId }}"</code>；共享 API（登录/通知这类，会被别的应用调用） 写
-          <code>"owner_app_id": "{{ appId }}"</code> —— 只登记管理归属，不参与会话归属校验。
-        </p>
+
+      <!-- 关闭前的影响面确认：一次误点会让整块接口 403，而恢复要再来一遍二次验证 -->
+      <div v-if="pendingOff" class="api-confirm" role="alert">
+        <span class="api-confirm__text">
+          关闭「{{ pendingOff.label }}」将影响
+          <b>{{ pendingOff.total }}</b> 个接口<template v-if="pendingOff.writes"
+            >，其中 <b>{{ pendingOff.writes }}</b> 个是写操作</template
+          >
+        </span>
+        <button class="btn btn--sm" type="button" @click="pendingOff = null">取消</button>
+        <button class="btn btn--primary btn--sm" type="button" @click="confirmOff">确认关闭</button>
       </div>
 
-      <div v-else class="api-drawer__body">
-        <section v-for="system in systems" :key="system.key" class="api-node">
-          <div class="api-node__row api-node__row--system">
-            <button class="api-node__toggle" type="button" @click="toggleExpand(system.key)">
-              <ChevronRight :size="14" :class="{ 'is-open': expanded.has(system.key) }" />
-              <span class="api-node__name">{{ system.name || system.key }}</span>
-              <code class="api-node__prefix">{{ system.prefix || '—' }}</code>
-            </button>
-            <label class="switch" :title="system.enabled ? '已启用' : '已关闭'">
-              <input
-                type="checkbox"
-                :checked="system.enabled"
-                :disabled="busyKey === nodeKey(system.key)"
-                @change="doToggle(system.key)"
-              />
-              <span class="switch__track" />
-            </label>
-          </div>
+      <div class="api-panel__scroll">
+        <p v-if="error" class="api-panel__error">{{ error }}</p>
 
-          <div v-if="expanded.has(system.key)" class="api-node__children">
-            <section v-for="group in system.groups" :key="group.key" class="api-group">
-              <div class="api-node__row">
-                <span class="api-node__name api-node__name--group">{{ group.name || group.key }}</span>
-                <code class="api-node__prefix">{{ group.prefix || '—' }}</code>
-                <label class="switch">
-                  <input
-                    type="checkbox"
-                    :checked="group.enabled"
-                    :disabled="busyKey === nodeKey(system.key, group.key)"
-                    @change="doToggle(system.key, group.key)"
-                  />
-                  <span class="switch__track" />
-                </label>
-              </div>
-
-              <ul class="api-list">
-                <li v-for="api in group.apis" :key="api.key" class="api-item">
-                  <div class="api-item__main">
-                    <span class="api-item__name">{{ api.name || api.key }}</span>
-                    <code class="api-item__key">{{ api.key }}</code>
-                    <span v-if="api.requireLogin" class="chip">要求登录</span>
-                    <span v-if="api.requirePermission" class="chip chip--perm">{{ api.requirePermission }}</span>
-                  </div>
-                  <label class="switch">
+        <table class="api-table">
+          <thead>
+            <tr>
+              <th class="api-table__name">接口</th>
+              <th class="api-table__path">路径</th>
+              <th class="api-table__perm">权限码</th>
+              <th class="api-table__login">登录</th>
+              <th class="api-table__switch">开关</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="system in view" :key="system.key">
+              <tr class="api-row api-row--system" @click="toggleExpand(system.key)">
+                <td class="api-table__name">
+                  <ChevronDown v-if="systemOpen(system.key)" :size="14" class="api-row__caret" />
+                  <ChevronRight v-else :size="14" class="api-row__caret" />
+                  <span class="api-row__strong">{{ system.name || system.key }}</span>
+                </td>
+                <td class="api-table__path"><code>{{ system.prefix || '—' }}</code></td>
+                <td class="api-table__perm" />
+                <td class="api-table__login" />
+                <td class="api-table__switch">
+                  <label class="switch" :title="system.enabled ? '已启用' : '已关闭'">
                     <input
                       type="checkbox"
-                      :checked="api.enabled"
-                      :disabled="busyKey === nodeKey(system.key, group.key, api.key)"
-                      @change="doToggle(system.key, group.key, api.key)"
+                      :checked="system.enabled"
+                      :disabled="busyKey === nodeKey(system.key)"
+                      :aria-label="`${system.name || system.key} 开关`"
+                      @click.stop
+                      @change="onNodeChange($event, system.key)"
                     />
                     <span class="switch__track" />
                   </label>
-                </li>
-              </ul>
-            </section>
-          </div>
-        </section>
+                </td>
+              </tr>
+
+              <template v-if="systemOpen(system.key)">
+                <template v-for="group in system.groups" :key="group.key">
+                  <tr class="api-row api-row--group" @click="toggleGroup(system.key, group.key)">
+                    <td class="api-table__name">
+                      <ChevronDown v-if="groupOpen(system.key, group.key)" :size="13" class="api-row__caret" />
+                      <ChevronRight v-else :size="13" class="api-row__caret" />
+                      <span class="api-row__group">{{ group.name || group.key }}</span>
+                      <span class="api-row__count">{{ enabledText(group) }}</span>
+                    </td>
+                    <td class="api-table__path"><code>{{ group.prefix || '—' }}</code></td>
+                    <td class="api-table__perm">
+                      <!-- 组头只给"共同权限码"：几十行重复同一个码是噪音，不是信息 -->
+                      <span v-if="commonPermission(group)" class="chip chip--perm">{{ commonPermission(group) }}</span>
+                      <span v-else-if="permissionKinds(group) > 1" class="chip chip--muted">
+                        {{ permissionKinds(group) }} 种权限
+                      </span>
+                    </td>
+                    <td class="api-table__login" />
+                    <td class="api-table__switch">
+                      <label class="switch" :title="group.enabled ? '已启用' : '已关闭'">
+                        <input
+                          type="checkbox"
+                          :checked="group.enabled"
+                          :disabled="busyKey === nodeKey(system.key, group.key)"
+                          :aria-label="`${group.name || group.key} 开关`"
+                          @click.stop
+                          @change="onNodeChange($event, system.key, group.key)"
+                        />
+                        <span class="switch__track" />
+                      </label>
+                    </td>
+                  </tr>
+
+                  <template v-if="groupOpen(system.key, group.key)">
+                    <tr v-for="api in group.apis" :key="api.key" class="api-row api-row--api">
+                      <td class="api-table__name">
+                        <span class="api-row__name" :class="{ 'is-danger': isDangerous(api.key) }">
+                          {{ api.name || api.key }}
+                        </span>
+                        <span v-if="isDangerous(api.key)" class="chip chip--danger" title="写操作：关闭后相关功能会直接 403">
+                          写
+                        </span>
+                      </td>
+                      <td class="api-table__path">
+                        <!-- 长路径必须能看清全名：截断 + title 是唯一不撑破表格的折中 -->
+                        <code :title="api.key">{{ api.key }}</code>
+                      </td>
+                      <td class="api-table__perm">
+                        <span
+                          v-if="api.requirePermission && api.requirePermission !== commonPermission(group)"
+                          class="chip chip--perm"
+                          :title="api.requirePermission"
+                          >{{ api.requirePermission }}</span
+                        >
+                        <span v-else-if="!api.requirePermission" class="api-row__muted">—</span>
+                        <span v-else class="api-row__same" title="与本组其他接口相同">同上</span>
+                      </td>
+                      <td class="api-table__login">
+                        <span v-if="api.requireLogin" class="chip">要求登录</span>
+                        <span v-else class="api-row__muted">—</span>
+                      </td>
+                      <td class="api-table__switch">
+                        <label class="switch" :title="api.enabled ? '已启用' : '已关闭'">
+                          <input
+                            type="checkbox"
+                            :checked="api.enabled"
+                            :disabled="busyKey === nodeKey(system.key, group.key, api.key)"
+                            :aria-label="`${api.name || api.key} 开关`"
+                            @change="doToggle(system.key, group.key, api.key)"
+                          />
+                          <span class="switch__track" />
+                        </label>
+                      </td>
+                    </tr>
+                  </template>
+                </template>
+              </template>
+            </template>
+
+            <tr v-if="loading">
+              <td colspan="5" class="api-empty"><Loader2 :size="14" class="is-spin" /> 加载中…</td>
+            </tr>
+            <tr v-else-if="view.length === 0">
+              <td colspan="5" class="api-empty">没有匹配的接口</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
-      <footer class="api-drawer__foot">
-        <span>共 {{ systems.reduce((n, s) => n + s.groups.reduce((m, g) => m + g.apis.length, 0), 0) }} 个接口</span>
-        <span v-if="disabledCount > 0" class="api-drawer__warn">{{ disabledCount }} 个节点已关闭</span>
+      <footer class="api-panel__foot">
+        <span>共 {{ totalCount }} 个接口</span>
+        <span v-if="disabledCount > 0" class="api-panel__warn">{{ disabledCount }} 个节点已关闭</span>
       </footer>
 
       <!-- 二次验证策略：只有超管能改，其他人只读 -->
       <div class="policy">
-        <span class="policy__label">变更二次验证</span>
-        <span :class="['policy__state', { 'is-off': !policy.requireStepUp }]">
-          {{ policy.requireStepUp ? '已启用' : '已关闭（关闭免票，重开仍需验证）' }}
-        </span>
+        <span class="policy__label"><Lock :size="13" /> 变更二次验证</span>
+        <span class="policy__state">{{ policy.requireStepUp ? '已启用' : '已关闭' }}</span>
         <label v-if="policy.canEdit" class="switch" :title="'仅超级管理员可调整'">
-          <input type="checkbox" :checked="policy.requireStepUp" :disabled="policyBusy" @change="togglePolicy" />
+          <input
+            type="checkbox"
+            :checked="policy.requireStepUp"
+            :disabled="policyBusy"
+            aria-label="变更二次验证"
+            @change="togglePolicy"
+          />
           <span class="switch__track" />
         </label>
-        <span v-else class="policy__hint">仅超管可调整</span>
       </div>
 
-      <!-- 二次认证：就地展开，不弹第二个浮层。两段式：先填原因发码，再输码执行 -->
+      <!-- 二次认证：内联展开，不走弹窗（弹窗会盖住"到底要关哪个接口"） -->
       <div v-if="stepup" class="stepup">
         <div class="stepup__head">
-          <MailCheck :size="15" />
-          <span v-if="!stepup.challengeId">本次变更需要二次认证，先填写变更原因</span>
-          <span v-else>验证码已发送至 {{ stepup.maskedTarget }}</span>
+          <MailCheck :size="14" />
+          <span>变更接口开关需要邮箱验证</span>
+          <button class="stepup__cancel" type="button" @click="stepup = null">取消</button>
         </div>
 
         <template v-if="!stepup.challengeId">
           <div class="stepup__body">
             <input
               v-model="stepup.reason"
-              class="stepup__input stepup__input--text"
+              class="stepup__input"
               maxlength="200"
-              placeholder="变更原因（4-200 字，写入审计）"
+              placeholder="变更原因（至少 4 个字，会写进审计）"
+              aria-label="变更原因"
             />
-            <button
-              class="btn btn--primary btn--sm"
-              type="button"
-              :disabled="sending || stepup.reason.trim().length < 4"
-              @click="sendChallengeCode"
-            >
-              <Loader2 v-if="sending" :size="14" class="spin" />
-              发送验证码
+            <button class="btn btn--primary btn--sm" type="button" :disabled="sending" @click="sendChallengeCode">
+              <Loader2 v-if="sending" :size="14" class="is-spin" />
+              {{ sending ? '发送中…' : '发送验证码' }}
             </button>
-            <button class="btn btn--ghost btn--sm" type="button" @click="stepup = null">取消</button>
           </div>
         </template>
 
         <template v-else>
           <div class="stepup__body">
-            <input v-model="code" class="stepup__input" inputmode="numeric" maxlength="8" placeholder="输入验证码" />
-            <button
-              class="btn btn--primary btn--sm"
-              type="button"
-              :disabled="verifying || !code.trim()"
-              @click="confirmStepUp"
-            >
-              <Loader2 v-if="verifying" :size="14" class="spin" />
-              确认并执行
+            <input
+              v-model="code"
+              class="stepup__input"
+              inputmode="numeric"
+              maxlength="8"
+              placeholder="输入验证码"
+              aria-label="验证码"
+            />
+            <button class="btn btn--primary btn--sm" type="button" :disabled="verifying" @click="confirmStepUp">
+              <Loader2 v-if="verifying" :size="14" class="is-spin" />
+              {{ verifying ? '核验中…' : '核验并保存' }}
             </button>
-            <button class="btn btn--ghost btn--sm" type="button" @click="stepup = null">取消</button>
+            <span class="stepup__hint">已发送至 {{ stepup.maskedTarget }}</span>
           </div>
-          <p class="stepup__reason">原因：{{ stepup.reason }}</p>
         </template>
       </div>
-    </aside>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.api-drawer {
+/* ── 容器：两种形态共用一套内层结构，只有外壳定位不同 ─────────────── */
+
+.api-panel {
   position: fixed;
   inset: 0;
   z-index: 60;
+  display: flex;
+  justify-content: flex-end;
 }
 
-.api-drawer__mask {
+.api-panel--inline {
+  position: static;
+  inset: auto;
+  z-index: auto;
+  display: block;
+}
+
+.api-panel__mask {
   position: absolute;
   inset: 0;
-  background: rgb(16 20 24 / 32%);
+  background: color-mix(in srgb, #000 32%, transparent);
 }
 
-.api-drawer__panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+.api-panel__sheet {
+  position: relative;
   display: flex;
   flex-direction: column;
-  width: min(560px, 100vw);
+  width: min(680px, 100%);
+  height: 100%;
   background: var(--mauth-surface);
   border-left: 1px solid var(--mauth-border);
-  box-shadow: -8px 0 24px rgb(46 58 62 / 10%);
+  box-shadow: var(--e3);
 }
 
-.api-drawer__head {
+.api-panel--inline .api-panel__sheet {
+  width: 100%;
+  height: auto;
+  min-height: 360px;
+  border: 1px solid var(--mauth-border);
+  border-radius: var(--mauth-radius-md);
+  box-shadow: var(--e1);
+  overflow: hidden;
+}
+
+/* ── 头部 ───────────────────────────────────────────────── */
+
+.api-panel__head {
   display: flex;
-  gap: 12px;
   align-items: flex-start;
+  gap: 12px;
   padding: 16px 18px 12px;
   border-bottom: 1px solid var(--mauth-border);
 }
 
-.api-drawer__title {
+.api-panel__titles {
+  min-width: 0;
+  flex: 1;
+}
+
+.api-panel__title {
   margin: 0;
   font-size: 15px;
-  font-weight: 620;
+  font-weight: 600;
+  color: var(--mauth-text);
 }
 
-.api-drawer__sub {
+.api-panel__sub {
   margin: 4px 0 0;
-  color: var(--mauth-text-soft);
   font-size: 12px;
-  line-height: 1.6;
-}
-
-.api-drawer__state {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: center;
-  padding: 40px 20px;
-  color: var(--mauth-text-soft);
-  font-size: 12.5px;
-  text-align: center;
-}
-
-.api-drawer__hint {
-  margin: 0;
+  line-height: 1.5;
   color: var(--mauth-text-faint);
 }
 
-.api-drawer__body {
-  flex: 1;
-  overflow: auto;
-  padding: 8px 12px 12px;
-}
-
-.api-node {
-  border-bottom: 1px solid var(--mauth-border);
-}
-
-.api-node:last-child {
-  border-bottom: 0;
-}
-
-.api-node__row {
-  display: flex;
-  gap: 8px;
+.api-panel__close {
+  flex: none;
+  display: inline-flex;
   align-items: center;
-  padding: 8px 6px;
-}
-
-.api-node__row--system {
-  background: var(--mauth-surface-2);
-  border-radius: 8px;
-  margin-top: 6px;
-}
-
-.api-node__toggle {
-  display: flex;
-  flex: 1;
-  gap: 6px;
-  align-items: center;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--mauth-radius-sm);
+  background: transparent;
+  color: var(--mauth-text-faint);
   cursor: pointer;
 }
 
-.api-node__toggle svg {
-  transition: transform 0.15s ease;
+.api-panel__close:hover {
+  background: var(--mauth-hover);
+  color: var(--mauth-text);
 }
 
-.api-node__toggle svg.is-open {
-  transform: rotate(90deg);
-}
+/* ── 工具条 ─────────────────────────────────────────────── */
 
-.api-node__name {
-  font-weight: 600;
-}
-
-.api-node__name--group {
-  flex: 1;
-  font-weight: 500;
-}
-
-.api-node__prefix {
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--mauth-surface-2);
-  color: var(--mauth-text-faint);
-  font-size: 11.5px;
-}
-
-.api-node__children {
-  padding: 0 0 8px 18px;
-}
-
-.api-group {
-  margin-top: 4px;
-}
-
-.api-list {
-  margin: 0;
-  padding: 0 0 0 14px;
-  list-style: none;
-}
-
-.api-item {
+.api-panel__tools {
   display: flex;
+  align-items: center;
   gap: 8px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--mauth-border);
+  background: color-mix(in srgb, var(--mauth-surface-2) 45%, var(--mauth-surface));
+}
+
+.api-panel__tools-spacer {
+  margin-left: auto;
+}
+
+.api-search {
+  display: inline-flex;
   align-items: center;
-  padding: 5px 6px;
-  border-radius: 6px;
-}
-
-.api-item:hover {
-  background: var(--mauth-surface-2);
-}
-
-.api-item__main {
-  display: flex;
-  flex: 1;
   gap: 6px;
-  align-items: center;
-  min-width: 0;
-}
-
-.api-item__name {
-  overflow: hidden;
-  font-size: 12.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.api-item__key {
+  flex: 1;
+  max-width: 340px;
+  padding: 0 10px;
+  height: 30px;
+  border: 1px solid var(--mauth-border);
+  border-radius: var(--mauth-radius-sm);
+  background: var(--mauth-surface);
   color: var(--mauth-text-faint);
-  font-size: 11.5px;
 }
 
-.chip {
-  padding: 1px 6px;
+.api-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--mauth-text);
+  font-size: 12.5px;
+}
+
+.api-chip {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--mauth-border);
   border-radius: 999px;
-  background: var(--mauth-surface-2);
+  background: var(--mauth-surface);
   color: var(--mauth-text-soft);
-  font-size: 11px;
-  white-space: nowrap;
+  font-size: 12px;
+  cursor: pointer;
 }
 
-.chip--perm {
-  background: var(--mauth-primary-soft);
+.api-chip--on {
+  border-color: var(--mauth-primary);
   color: var(--mauth-primary);
+  background: color-mix(in srgb, var(--mauth-primary) 10%, transparent);
 }
 
-/* 开关：纯 CSS，不引组件库 */
+.api-panel__match {
+  font-size: 12px;
+  color: var(--mauth-text-faint);
+}
+
+/* ── 开关：纯 CSS，不引组件库（与旧版逐像素一致，别改成复选框） ── */
+
 .switch {
   position: relative;
   display: inline-flex;
@@ -617,6 +867,7 @@ onMounted(() => {
   width: 34px;
   height: 18px;
   cursor: pointer;
+  vertical-align: -3px;
 }
 
 .switch input {
@@ -657,101 +908,274 @@ onMounted(() => {
   opacity: 0.5;
 }
 
-.api-drawer__foot {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  padding: 10px 18px;
-  border-top: 1px solid var(--mauth-border);
-  color: var(--mauth-text-soft);
-  font-size: 12px;
+/* ── 表格 ───────────────────────────────────────────────── */
+
+.api-panel__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 6px 8px;
 }
 
-.api-drawer__warn {
-  color: var(--mauth-danger, #d9534f);
+.api-panel--inline .api-panel__scroll {
+  max-height: min(62vh, 760px);
+}
+
+.api-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12.5px;
+}
+
+.api-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+  background: var(--mauth-surface);
+  border-bottom: 1px solid var(--mauth-border);
+  white-space: nowrap;
+}
+
+.api-table__path {
+  width: 34%;
+}
+
+.api-table__perm {
+  width: 24%;
+}
+
+.api-table__login {
+  width: 84px;
+  text-align: center;
+}
+
+.api-table__switch {
+  width: 60px;
+  text-align: right;
+}
+
+.api-row td {
+  padding: 6px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 62%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.api-row--system {
+  cursor: pointer;
+  background: color-mix(in srgb, var(--mauth-surface-2) 60%, var(--mauth-surface));
+}
+
+.api-row--group {
+  cursor: pointer;
+}
+
+.api-row--group td {
+  background: color-mix(in srgb, var(--mauth-surface-2) 28%, var(--mauth-surface));
+}
+
+.api-row--api:hover td {
+  background: var(--mauth-hover);
+}
+
+.api-row__caret {
+  vertical-align: -2px;
+  margin-right: 4px;
+  color: var(--mauth-text-faint);
+}
+
+.api-row__strong {
+  font-weight: 600;
+  color: var(--mauth-text);
+}
+
+.api-row__group {
+  padding-left: 10px;
+  font-weight: 550;
+  color: var(--mauth-text);
+}
+
+.api-row__name {
+  padding-left: 24px;
+  color: var(--mauth-text-soft);
+}
+
+.api-row__count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+}
+
+.api-row td code {
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+}
+
+.api-row__muted {
+  color: var(--mauth-text-faint);
+}
+
+.api-row__same {
+  font-size: 11px;
+  color: var(--mauth-text-faint);
+  cursor: help;
+}
+
+.api-empty {
+  padding: 28px 10px;
+  text-align: center;
+  color: var(--mauth-text-faint);
+  font-size: 12.5px;
+}
+
+/* ── 关闭确认条 / 危险动作标识 ───────────────────────────── */
+
+.api-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-danger) 32%, transparent);
+  background: color-mix(in srgb, var(--mauth-danger) 8%, var(--mauth-surface));
+  font-size: 12px;
+  color: var(--mauth-text);
+}
+
+.api-confirm__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.api-confirm__text b {
+  font-weight: 600;
+  color: var(--mauth-danger);
+}
+
+.api-row__name.is-danger {
+  color: var(--mauth-text);
+  font-weight: 550;
+}
+
+.chip--danger {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid color-mix(in srgb, var(--mauth-danger) 40%, transparent);
+  border-radius: 4px;
+  color: var(--mauth-danger);
+  font-size: 10.5px;
+  line-height: 15px;
+}
+
+/* ── 页脚与策略 ─────────────────────────────────────────── */
+
+.api-panel__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--mauth-border);
+  font-size: 12px;
+  color: var(--mauth-text-faint);
+}
+
+.api-panel__warn {
+  color: var(--mauth-danger);
+}
+
+.api-panel__error {
+  margin: 10px;
+  padding: 8px 10px;
+  border-radius: var(--mauth-radius-sm);
+  background: color-mix(in srgb, var(--mauth-danger) 10%, transparent);
+  color: var(--mauth-danger);
+  font-size: 12px;
 }
 
 .policy {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
   padding: 10px 18px;
   border-top: 1px solid var(--mauth-border);
   font-size: 12px;
+  color: var(--mauth-text-soft);
 }
 
 .policy__label {
-  color: var(--mauth-text-mid);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .policy__state {
-  flex: 1;
-  color: var(--mauth-text);
-}
-
-.policy__state.is-off {
-  color: var(--mauth-danger, #d9534f);
-}
-
-.policy__hint {
   color: var(--mauth-text-faint);
 }
 
+/* ── 二次认证（内联） ───────────────────────────────────── */
+
 .stepup {
-  padding: 12px 18px 14px;
   border-top: 1px solid var(--mauth-border);
-  background: var(--mauth-surface-2);
+  background: color-mix(in srgb, var(--mauth-primary) 6%, var(--mauth-surface));
 }
 
 .stepup__head {
   display: flex;
-  gap: 6px;
   align-items: center;
-  margin-bottom: 8px;
-  font-size: 12.5px;
+  gap: 6px;
+  padding: 10px 18px 0;
+  font-size: 12px;
+  color: var(--mauth-text-soft);
+}
+
+.stepup__cancel {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--mauth-text-faint);
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .stepup__body {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
   align-items: center;
-}
-
-.stepup__input--text {
-  letter-spacing: 0;
-}
-
-.stepup__reason {
-  margin: 6px 0 0;
-  color: var(--mauth-text-faint);
-  font-size: 11.5px;
+  gap: 8px;
+  padding: 10px 18px 12px;
 }
 
 .stepup__input {
   flex: 1;
-  height: 30px;
+  min-width: 180px;
+  height: 32px;
   padding: 0 10px;
   border: 1px solid var(--mauth-border);
-  border-radius: 8px;
+  border-radius: var(--mauth-radius-sm);
   background: var(--mauth-surface);
   color: var(--mauth-text);
-  font: inherit;
-  letter-spacing: 2px;
+  font-size: 12.5px;
 }
 
-.spin {
+.stepup__hint {
+  font-size: 11.5px;
+  color: var(--mauth-text-faint);
+}
+
+.is-spin {
   animation: api-spin 0.9s linear infinite;
 }
 
 @keyframes api-spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 720px) {
-  .api-drawer__panel {
-    width: 100vw;
   }
 }
 </style>
