@@ -23,7 +23,7 @@
  * @author yijiu2025
  * @since 2026-11-21
  */
-import { computed, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ChevronDown, ChevronRight, Loader2, Lock, MailCheck, Search, X } from 'lucide-vue-next';
 import {
   appApiStepUpChallenge,
@@ -443,6 +443,11 @@ const editing = ref<{
   groupKey?: string;
   apiKey?: string;
   name: string;
+  /** 只读上下文：让人确认自己改的是哪一条 */
+  path: string;
+  perm: string;
+  /** 初始值快照：用来判断"有没有改动"（没改动就别让点保存） */
+  initial: string;
   description: string;
   requireLogin: boolean;
   ips: string;
@@ -467,6 +472,14 @@ function openEdit(system: AppApiSystem, group: { key: string }, api: AppApiNode)
     groupKey: group.key,
     apiKey: String(api.key),
     name: String(api.name || api.key),
+    path: String(api.key),
+    perm: String(api.requirePermission || '—'),
+    initial: JSON.stringify({
+      description: String(api.description || ''),
+      requireLogin: Boolean(api.requireLogin),
+      ips: (Array.isArray(api.allowIps) ? api.allowIps : []).join(', '),
+      roles: (Array.isArray(api.allowRoles) ? api.allowRoles : []).join(', ')
+    }),
     description: String(api.description || ''),
     requireLogin: Boolean(api.requireLogin),
     ips: (Array.isArray(api.allowIps) ? api.allowIps : []).join(', '),
@@ -478,6 +491,20 @@ function openEdit(system: AppApiSystem, group: { key: string }, api: AppApiNode)
     busy: false
   };
 }
+
+/** 表单当前值串（与 `initial` 同结构，用于比较） */
+const editDirty = computed(() => {
+  const e = editing.value;
+  if (!e) return false;
+  return (
+    JSON.stringify({
+      description: e.description,
+      requireLogin: e.requireLogin,
+      ips: e.ips,
+      roles: e.roles
+    }) !== e.initial
+  );
+});
 
 /** 从表单构造 patch（只带改过的字段；白名单按逗号/空白切分） */
 function buildEditPatch(): {
@@ -636,9 +663,39 @@ async function togglePolicy(): Promise<void> {
   }
 }
 
+/**
+ * 弹窗交互：ESC 关闭 + 打开期间锁背景滚动
+ *
+ * 锁滚动是为了避免"弹窗后面的表格跟着滚"——弹窗是 Teleport 到 body 的，
+ * 不锁的话滚轮事件会落在底下的列表上，视觉像弹窗在漂移。
+ */
+/** 弹窗期间挂的 ESC 监听（用 AbortController 统一摘除，避免"关了又开"堆叠监听） */
+let escController: AbortController | null = null;
+
+watch(editing, open => {
+  document.body.style.overflow = open ? 'hidden' : '';
+  escController?.abort();
+  escController = null;
+  if (!open) return;
+  escController = new AbortController();
+  window.addEventListener(
+    'keydown',
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') editing.value = null;
+    },
+    { signal: escController.signal }
+  );
+});
+
 onMounted(() => {
   void load();
   void loadPolicy();
+});
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = '';
+  escController?.abort();
+  escController = null;
 });
 </script>
 
@@ -912,96 +969,107 @@ onMounted(() => {
         </template>
       </div>
 
-      <!-- 编辑节点：描述 / 登录要求 / 白名单。保存同样要二次验证（原因 4-200 字） -->
-      <div v-if="editing" class="editor" role="dialog" aria-modal="true" aria-label="编辑接口配置">
-        <div class="editor__mask" @click="editing = null" />
-        <div class="editor__panel">
-          <header class="editor__head">
-            <h4 class="editor__title">编辑「{{ editing.name }}」</h4>
-            <button class="editor__close" type="button" aria-label="关闭" @click="editing = null">×</button>
-          </header>
+      <!--
+        编辑节点：描述 / 登录要求 / 白名单。
 
-          <div class="editor__body">
-            <label class="editor__field">
-              <span class="editor__label">描述</span>
-              <input
-                v-model="editing.description"
-                class="editor__input"
-                maxlength="200"
-                placeholder="会显示在接口列表里"
-              />
-            </label>
+        🔴 必须 Teleport 到 body：`position: fixed` 只要祖先链上有一个
+        `transform` / `filter` / `contain`（路由过渡、侧栏动画、滚动容器都会产生），
+        它就会**相对那个祖先定位**并被 `overflow: hidden` 裁掉 —— 表现就是
+        "点编辑没反应"（弹窗其实渲染了，只是画在屏幕外/被裁掉）。
+      -->
+      <Teleport to="body">
+        <div v-if="editing" class="editor" role="dialog" aria-modal="true" aria-label="编辑接口配置">
+          <div class="editor__mask" @click="editing = null" />
+          <div class="editor__panel">
+            <header class="editor__head">
+              <h4 class="editor__title">编辑「{{ editing.name }}」</h4>
+              <button class="editor__close" type="button" aria-label="关闭" @click="editing = null">×</button>
+            </header>
 
-            <label class="editor__field editor__field--row">
-              <span class="editor__label">要求登录</span>
-              <label class="switch">
-                <input v-model="editing.requireLogin" type="checkbox" />
-                <span class="switch__track" />
+            <div class="editor__body">
+              <label class="editor__field">
+                <span class="editor__label">描述</span>
+                <input
+                  v-model="editing.description"
+                  class="editor__input"
+                  maxlength="200"
+                  placeholder="会显示在接口列表里"
+                />
               </label>
-              <span class="editor__hint">关掉后匿名可访问（危险，谨慎）</span>
-            </label>
 
-            <label class="editor__field">
-              <span class="editor__label">IP 白名单</span>
-              <input
-                v-model="editing.ips"
-                class="editor__input"
-                placeholder="逗号分隔，如 10.0.0.1, 192.168.1.0/24；留空 = 不限制"
-              />
-            </label>
+              <label class="editor__field editor__field--row">
+                <span class="editor__label">要求登录</span>
+                <label class="switch">
+                  <input v-model="editing.requireLogin" type="checkbox" />
+                  <span class="switch__track" />
+                </label>
+                <span class="editor__hint" :class="{ 'is-danger': !editing.requireLogin }">
+                  {{ editing.requireLogin ? '匿名请求会被拒（推荐）' : '关掉后匿名可访问 —— 仅公开接口才这样做' }}
+                </span>
+              </label>
 
-            <label class="editor__field">
-              <span class="editor__label">角色白名单</span>
-              <input v-model="editing.roles" class="editor__input" placeholder="逗号分隔角色编码；留空 = 不限制" />
-            </label>
+              <label class="editor__field">
+                <span class="editor__label">IP 白名单</span>
+                <input
+                  v-model="editing.ips"
+                  class="editor__input"
+                  placeholder="逗号分隔，如 10.0.0.1, 192.168.1.0/24；留空 = 不限制"
+                />
+              </label>
 
-            <label class="editor__field">
-              <span class="editor__label">变更原因</span>
-              <input
-                v-model="editing.reason"
-                class="editor__input"
-                maxlength="200"
-                placeholder="至少 4 个字，写进审计（保存需要二次验证时必填）"
-              />
-            </label>
+              <label class="editor__field">
+                <span class="editor__label">角色白名单</span>
+                <input v-model="editing.roles" class="editor__input" placeholder="逗号分隔角色编码；留空 = 不限制" />
+              </label>
 
-            <div v-if="editing.challengeId" class="editor__field">
-              <span class="editor__label">验证码（已发送至 {{ editing.maskedTarget }}）</span>
-              <input
-                v-model="editing.code"
-                class="editor__input"
-                inputmode="numeric"
-                maxlength="8"
-                placeholder="输入验证码"
-              />
+              <label class="editor__field">
+                <span class="editor__label">变更原因</span>
+                <input
+                  v-model="editing.reason"
+                  class="editor__input"
+                  maxlength="200"
+                  placeholder="至少 4 个字，写进审计（保存需要二次验证时必填）"
+                />
+              </label>
+
+              <div v-if="editing.challengeId" class="editor__field">
+                <span class="editor__label">验证码（已发送至 {{ editing.maskedTarget }}）</span>
+                <input
+                  v-model="editing.code"
+                  class="editor__input"
+                  inputmode="numeric"
+                  maxlength="8"
+                  placeholder="输入验证码"
+                />
+              </div>
             </div>
-          </div>
 
-          <footer class="editor__foot">
-            <button class="btn btn--sm" type="button" :disabled="editing.busy" @click="editing = null">取消</button>
-            <button
-              v-if="!editing.challengeId"
-              class="btn btn--primary btn--sm"
-              type="button"
-              :disabled="editing.busy"
-              @click="saveEdit"
-            >
-              <Loader2 v-if="editing.busy" :size="14" class="is-spin" />
-              保存
-            </button>
-            <button
-              v-else
-              class="btn btn--primary btn--sm"
-              type="button"
-              :disabled="editing.busy || !editing.code.trim()"
-              @click="confirmEditStepUp"
-            >
-              <Loader2 v-if="editing.busy" :size="14" class="is-spin" />
-              核验并保存
-            </button>
-          </footer>
+            <footer class="editor__foot">
+              <button class="btn btn--sm" type="button" :disabled="editing.busy" @click="editing = null">取消</button>
+              <button
+                v-if="!editing.challengeId"
+                class="btn btn--primary btn--sm"
+                type="button"
+                :disabled="editing.busy"
+                @click="saveEdit"
+              >
+                <Loader2 v-if="editing.busy" :size="14" class="is-spin" />
+                保存
+              </button>
+              <button
+                v-else
+                class="btn btn--primary btn--sm"
+                type="button"
+                :disabled="editing.busy || !editing.code.trim()"
+                @click="confirmEditStepUp"
+              >
+                <Loader2 v-if="editing.busy" :size="14" class="is-spin" />
+                核验并保存
+              </button>
+            </footer>
+          </div>
         </div>
-      </div>
+      </Teleport>
     </section>
   </div>
 </template>
@@ -1470,6 +1538,45 @@ onMounted(() => {
   gap: 8px;
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--mauth-border);
+}
+
+.editor__titles {
+  flex: 1;
+  min-width: 0;
+}
+
+.editor__meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--mauth-text-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.editor__meta code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor__perm {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--mauth-primary-soft);
+  color: var(--mauth-primary);
+  font-size: 11px;
+}
+
+.editor__dot {
+  flex: none;
+  opacity: 0.6;
+}
+
+.editor__hint.is-danger {
+  color: var(--mauth-danger, #d9534f);
 }
 
 .editor__title {
