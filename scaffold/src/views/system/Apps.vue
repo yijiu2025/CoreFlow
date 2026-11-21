@@ -17,7 +17,7 @@
  * @since 2026-11-21
  */
 import { computed, onMounted, ref } from 'vue';
-import { LayoutGrid, RefreshCw, Search } from 'lucide-vue-next';
+import { ChevronRight, LayoutGrid, RefreshCw, Search } from 'lucide-vue-next';
 import { listApps, type AppOverview } from '@/api/system';
 import { useRouter } from 'vue-router';
 
@@ -61,6 +61,17 @@ function accessSummary(app: AppOverview): string {
   return parts.length > 0 ? parts.join(' · ') : '不限';
 }
 
+/**
+ * 计数文案
+ *
+ * 没有筛选时只给总数 —— "5 / 5" 要人先做一次比较才知道"没被筛掉"。
+ *
+ * @returns {string} `5` 或 `2 / 5`
+ */
+const countText = computed(() =>
+  keyword.value.trim() ? `${filtered.value.length} / ${apps.value.length}` : String(apps.value.length)
+);
+
 /** 拉取清单 */
 async function load(): Promise<void> {
   loading.value = true;
@@ -100,7 +111,7 @@ onMounted(() => {
     <section class="panel">
       <div class="panel__head">
         <span class="panel__title">已接入应用</span>
-        <span class="panel__sub">共 {{ apps.length }} 个</span>
+        <span class="apps__count">{{ countText }}</span>
         <label class="apps__search">
           <Search :size="14" />
           <input v-model="keyword" type="search" placeholder="搜索应用标识或名称" />
@@ -126,12 +137,12 @@ onMounted(() => {
       <div v-else class="table-wrap">
         <table class="table apps__table">
           <colgroup>
-            <col style="width: 250px" />
-            <col style="width: 150px" />
-            <col style="width: 210px" />
+            <col style="width: 268px" />
+            <col style="width: 132px" />
+            <col style="width: 196px" />
             <col />
-            <col style="width: 130px" />
-            <col style="width: 110px" />
+            <col style="width: 124px" />
+            <col style="width: 112px" />
           </colgroup>
           <thead>
             <tr>
@@ -146,11 +157,16 @@ onMounted(() => {
           <tbody>
             <tr v-for="app in filtered" :key="app.appId">
               <td>
-                <span class="apps__name">{{ app.name }}</span>
-                <code class="apps__id">{{ app.appId }}</code>
-                <span v-if="app.hosts.length > 0" class="apps__hosts" :title="app.hosts.join('\n')">
-                  {{ app.hosts.length }} 个域名
-                </span>
+                <div class="apps__app">
+                  <span class="apps__avatar" aria-hidden="true">{{ app.name.slice(0, 1) }}</span>
+                  <span class="apps__ident">
+                    <span class="apps__name">{{ app.name }}</span>
+                    <code class="apps__id">{{ app.appId }}</code>
+                  </span>
+                  <span v-if="app.hosts.length > 0" class="apps__hosts" :title="app.hosts.join('\n')">
+                    {{ app.hosts.length }} 域名
+                  </span>
+                </div>
               </td>
               <td>
                 <code
@@ -169,23 +185,23 @@ onMounted(() => {
               </td>
               <td>
                 <span class="apps__stats">
-                  <span
+                  <span :class="{ 'is-muted': app.counts.roles === 0 }"
                     ><b>{{ app.counts.roles }}</b> 角色</span
                   >
-                  <span
+                  <span :class="{ 'is-muted': app.counts.menus === 0 }"
                     ><b>{{ app.counts.menus }}</b> 菜单</span
                   >
-                  <span
+                  <span :class="{ 'is-muted': app.counts.permissionCodes === 0 }"
                     ><b>{{ app.counts.permissionCodes }}</b> 权限码</span
                   >
-                  <span :class="{ 'is-muted': app.counts.oauthClients === 0 }">
-                    <b>{{ app.counts.oauthClients }}</b> 客户端
-                  </span>
+                  <span :class="{ 'is-muted': app.counts.oauthClients === 0 }"
+                    ><b>{{ app.counts.oauthClients }}</b> 客户端</span
+                  >
                 </span>
               </td>
               <td>
                 <code v-if="app.defaultRole" class="apps__ns">{{ app.defaultRole }}</code>
-                <span v-else class="apps__mut">未声明</span>
+                <span v-else class="apps__mut" title="该应用没有声明默认角色">—</span>
               </td>
               <td>
                 <button
@@ -196,6 +212,7 @@ onMounted(() => {
                 >
                   {{ app.apis?.total ?? 0 }} 个
                   <span v-if="app.apis?.disabled" class="apps__apis-off">{{ app.apis.disabled }} 关</span>
+                  <ChevronRight :size="13" class="apps__apis-arrow" />
                 </button>
               </td>
             </tr>
@@ -299,15 +316,59 @@ onMounted(() => {
   font-size: 12.5px;
 }
 
-/* 应用列：名称 / 标识 / 域名 三段，名称是主信息 */
-.apps__name {
+/* 分组计数：`3 / 5` 一眼看出"筛选后还剩几个" */
+.apps__count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-mid);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 应用列：头像 + 名称/标识 + 域名 ────────────────────── */
+.apps__app {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+/* 字母头像：一列里全是文字时，它是最省事的"视觉锚点" */
+.apps__avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mauth-primary) 10%, var(--mauth-surface));
+  color: var(--mauth-primary);
+  font-size: 12.5px;
   font-weight: 600;
 }
 
+.apps__ident {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.apps__name {
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .apps__id {
-  margin-left: 6px;
-  color: var(--mauth-text-soft);
-  font-size: 12px;
+  width: fit-content;
+  color: var(--mauth-text-faint);
+  font-size: 11.5px;
+  letter-spacing: 0.2px;
 }
 
 .apps__hosts {
@@ -350,16 +411,28 @@ onMounted(() => {
   color: var(--mauth-text-faint);
 }
 
+/*
+ * 四个统计用两列网格，不用"数字 + 圆点"横排：
+ * 列宽固定后横排必然在窄屏折行，折出来的行首会留一个孤零零的圆点。
+ * 两列网格无论宽度多少都是整齐的 2×2，数字还能靠右对齐形成一列。
+ */
 .apps__stats {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, max-content));
+  gap: 2px 18px;
   color: var(--mauth-text-soft);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.apps__stats > span {
+  white-space: nowrap;
 }
 
 .apps__stats b {
+  margin-right: 3px;
   color: var(--mauth-text);
-  font-weight: 600;
+  font-weight: 620;
 }
 
 .apps__stats .is-muted {
@@ -392,6 +465,17 @@ onMounted(() => {
 .apps__apis-off {
   color: var(--mauth-danger, #d9534f);
   font-size: 11px;
+}
+
+.apps__apis-arrow {
+  margin-left: -2px;
+  color: var(--mauth-text-faint);
+  transition: transform 0.12s ease;
+}
+
+.apps__apis:hover .apps__apis-arrow {
+  color: var(--mauth-primary);
+  transform: translateX(1px);
 }
 
 .apps__note {
