@@ -61,13 +61,16 @@ jest.unstable_mockModule('../../../../app/admin/console/dao/role.dao.js', () => 
 }));
 jest.unstable_mockModule('../../../../app/admin/console/dao/grant.dao.js', () => ({ default: {} }));
 
+/** 目标用户画像（用例可覆盖：默认"无角色、低职级"，用来测自我角色变更的拦截） */
+let targetScope = { roleIds: [], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false };
+
 /** 权限作用域桩：默认「超管，什么都管得了」 */
 jest.unstable_mockModule('../../../../app/admin/console/services/access-scope.service.js', () => ({
   appLabel: id => id,
   canWriteApp: () => true,
   loadRoles: async ids => new Map(ids.map(id => [id, { id, name: `角色${id}`, appId: 'GLOBAL', rank: 1 }])),
   getActorScope: async () => ({ roleIds: [], apps: new Set(), maxRank: 999, isSuper: true, crossApp: true }),
-  getTargetScope: async () => ({ roleIds: [], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false }),
+  getTargetScope: async () => targetScope,
   assertCanManageUser: () => undefined,
   // 窄 mock 会炸链接期：users.js 新增了 assertCanSetRank 的导入，这里必须给全
   assertCanSetRank: () => undefined,
@@ -186,12 +189,13 @@ beforeEach(async () => {
   page.mockReset().mockResolvedValue({ rows: [] });
   userFindByPk.mockReset();
   roleFindAll.mockReset().mockResolvedValue([]);
+  targetScope = { roleIds: [], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false };
 });
 
 describe('冻结 / 解冻（用户报的问题）', () => {
   test('冻结账号会写一条 USER_STATUS，并带 from → to', async () => {
     userFindByPk.mockResolvedValue({ username: '张三', status: 1 });
-    await call('consoleUserStatus', makeRequest({ params: { id: '7' }, body: { status: 0 } }));
+    await call('adminUserStatus', makeRequest({ params: { id: '7' }, body: { status: 0 } }));
 
     expect(updateStatus).toHaveBeenCalledWith(7, 0);
     expect(auditCalls).toHaveLength(1);
@@ -211,14 +215,14 @@ describe('冻结 / 解冻（用户报的问题）', () => {
 
   test('解冻同样留痕，verb 是「启用」', async () => {
     userFindByPk.mockResolvedValue({ username: '张三', status: 0 });
-    await call('consoleUserStatus', makeRequest({ params: { id: '7' }, body: { status: 1 } }));
+    await call('adminUserStatus', makeRequest({ params: { id: '7' }, body: { status: 1 } }));
     expect(auditCalls[0].details).toMatchObject({ verb: '启用', from: 0, to: 1 });
     expect(auditCalls[0].details.changes).toEqual([{ field: 'status', from: '冻结', to: '正常' }]);
   });
 
   test('状态没实际变化也留痕（点击行为本身要有记录），但 changes 为空', async () => {
     userFindByPk.mockResolvedValue({ username: '张三', status: 1 });
-    await call('consoleUserStatus', makeRequest({ params: { id: '7' }, body: { status: 1 } }));
+    await call('adminUserStatus', makeRequest({ params: { id: '7' }, body: { status: 1 } }));
     expect(auditCalls).toHaveLength(1);
   });
 
@@ -226,7 +230,7 @@ describe('冻结 / 解冻（用户报的问题）', () => {
     userFindByPk.mockResolvedValue({ username: '张三', status: 1 });
     const danger = (await import('../../../../app/admin/console/services/user-danger.service.js')).default;
     danger.listDeletion = async () => ({ requests: [{ id: 1 }], pendingKicks: [] });
-    await call('consoleUserStatus', makeRequest({ params: { id: '7' }, body: { status: 0 } }));
+    await call('adminUserStatus', makeRequest({ params: { id: '7' }, body: { status: 0 } }));
     expect(updateStatus).not.toHaveBeenCalled();
     expect(auditCalls).toHaveLength(0);
     danger.listDeletion = async () => ({ requests: [], pendingKicks: [] });
@@ -239,7 +243,7 @@ describe('新建用户', () => {
     roleFindAll.mockResolvedValue([{ id: 3, name: '超级管理员' }]);
 
     await call(
-      'consoleUserCreate',
+      'adminUserCreate',
       makeRequest({ body: { username: '新同事', password: 'Passw0rd!', roleIds: [3], deptId: 2 } })
     );
 
@@ -261,7 +265,7 @@ describe('编辑用户', () => {
   test('资料字段变化写 USER_UPDATE，逐字段 from → to', async () => {
     userFindByPk.mockResolvedValue({ username: '旧名', email: 'old@x.com', dept_id: 2, status: 1 });
 
-    await call('consoleUserUpdate', makeRequest({ params: { id: '11' }, body: { username: '新名', deptId: 5 } }));
+    await call('adminUserUpdate', makeRequest({ params: { id: '11' }, body: { username: '新名', deptId: 5 } }));
 
     const update = auditCalls.find(e => e.type === 'USER_UPDATE');
     expect(update).toBeTruthy();
@@ -276,8 +280,41 @@ describe('编辑用户', () => {
 
   test('值没变时不写 USER_UPDATE（避免每次保存刷噪音）', async () => {
     userFindByPk.mockResolvedValue({ username: '同名', email: null, dept_id: null, status: 1 });
-    await call('consoleUserUpdate', makeRequest({ params: { id: '11' }, body: { username: '同名' } }));
+    await call('adminUserUpdate', makeRequest({ params: { id: '11' }, body: { username: '同名' } }));
     expect(auditCalls.filter(e => e.type === 'USER_UPDATE')).toHaveLength(0);
+  });
+});
+
+describe('不能修改自己账号的角色（2026-11-21）', () => {
+  test('给自己加角色 → 403，且不落库', async () => {
+    userFindByPk.mockResolvedValue({ username: 'op', email: null, dept_id: null, status: 1 });
+    const reply = await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body: { roleIds: [5] } }));
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.sent.message).toMatch(/不能修改自己账号的角色/);
+    expect(daoUpdate).not.toHaveBeenCalled();
+  });
+
+  test('给自己摘角色（含清空）同样拒绝', async () => {
+    // 目标（= 自己）当前持有角色 5，提交空数组 = 摘光
+    targetScope = { roleIds: [5], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false };
+    const reply = await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body: { roleIds: [] } }));
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.sent.message).toMatch(/不能修改自己账号的角色/);
+    expect(daoUpdate).not.toHaveBeenCalled();
+  });
+
+  test('只改资料（不提交角色）仍然放行', async () => {
+    userFindByPk.mockResolvedValue({ username: 'op', email: null, dept_id: null, status: 1 });
+    await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body: { username: 'op2' } }));
+    expect(daoUpdate).toHaveBeenCalled();
+  });
+
+  test('改别人的角色不受影响', async () => {
+    userFindByPk.mockResolvedValue({ username: '张三', email: null, dept_id: null, status: 1 });
+    await call('adminUserUpdate', makeRequest({ params: { id: '11' }, body: { roleIds: [5] } }));
+    expect(daoUpdate).toHaveBeenCalled();
   });
 });
 
@@ -290,7 +327,7 @@ describe('导出用户', () => {
       ]
     });
 
-    const reply = await call('consoleUserExport', makeRequest({ query: { keyword: '张', status: 1 } }));
+    const reply = await call('adminUserExport', makeRequest({ query: { keyword: '张', status: 1 } }));
 
     expect(reply.sent).toBeTruthy(); // CSV 已下发
     expect(auditCalls).toHaveLength(1);
@@ -304,7 +341,7 @@ describe('导出用户', () => {
 describe('批量授权', () => {
   test('USER_BATCH_GRANT 记模式、人数与角色名', async () => {
     roleFindAll.mockResolvedValue([{ id: 8, name: '审计员' }]);
-    await call('consoleUserBatchGrant', makeRequest({ body: { userIds: [3, 4], roleIds: [8], mode: 'add' } }));
+    await call('adminUserBatchGrant', makeRequest({ body: { userIds: [3, 4], roleIds: [8], mode: 'add' } }));
 
     expect(daoUpdate).toHaveBeenCalledTimes(2);
     expect(auditCalls).toHaveLength(1);
