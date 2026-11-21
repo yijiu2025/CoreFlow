@@ -307,6 +307,11 @@ function togglePatchOf({ appId, systemKey, groupKey, apiKey }) {
  */
 function blockedByOf(system, groupKey, apiKey) {
   if (!system) return null;
+  /*
+   * 🔴 系统自身没有祖先：`groupKey == null` 时**永远不算被挂空** ——
+   * 否则系统一旦关掉，"打开系统"这个操作自己也会被拦（那就再也开不回来了）。
+   */
+  if (!groupKey) return null;
   if (system.enabled === false) return 'system';
   if (apiKey && groupKey) {
     const group = system.groups?.[groupKey];

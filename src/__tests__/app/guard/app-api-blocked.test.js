@@ -93,6 +93,19 @@ describe('上级开关拦截', () => {
     expect(res.message).toMatch(/模块/);
   });
 
+  it('系统关着时，系统自己的总开关仍然可以点（否则再也开不回来）', async () => {
+    const res = await mod.toggleAppNode({
+      appId: 'admin',
+      systemKey: 'sysOff',
+      groupKey: null,
+      apiKey: null,
+      request,
+      stepupToken: null
+    });
+    expect(res.statusCode).not.toBe(409);
+    expect(res.code).toBe('stepup_required');
+  });
+
   it('全开时不会被拦（走到二次认证那一步）', async () => {
     const res = await mod.toggleAppNode({
       appId: 'admin',

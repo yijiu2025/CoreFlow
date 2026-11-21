@@ -474,6 +474,10 @@ const editing = ref<{
   systemKey: string;
   groupKey?: string;
   apiKey?: string;
+  /** 当前编辑的是哪一层（决定提示文案与提交参数） */
+  level: 'system' | 'group' | 'api';
+  /** 该层之下有多少接口（系统/模块级编辑时提示影响面） */
+  scopeCount: number;
   name: string;
   /** 只读上下文：让人确认自己改的是哪一条 */
   path: string;
@@ -492,30 +496,44 @@ const editing = ref<{
 } | null>(null);
 
 /**
- * 打开编辑（只对接口级开放：组/系统级没有"权限码"这类字段可改）
+ * 打开编辑（三层同构：接口 / 模块 / 系统）
+ *
+ * 「总开关」与「权限设定」都在这里改：系统行或模块行右侧的铅笔按钮打开的是**该层**的
+ * 配置（描述 / 要求登录 / IP 白名单 / 角色白名单）。三层用的是同一套字段与同一套二次验证，
+ * 只是影响面不同 —— 改系统级等于给整个域设默认门槛。
+ *
+ * ⚠️ `requirePermission`（权限码）不在这里改：它是**代码级授权声明**，允许页面改写
+ * 等于"谁都能把自己的接口门槛清空"，所以只读展示。
  *
  * @param system 系统节点
- * @param group 模块节点
- * @param api 接口节点
+ * @param group 模块节点（缺省 = 编辑系统级）
+ * @param api 接口节点（缺省 = 编辑模块级 / 系统级）
  */
-function openEdit(system: AppApiSystem, group: { key: string }, api: AppApiNode): void {
+function openEdit(system: AppApiSystem, group?: AppApiGroup, api?: AppApiNode): void {
+  /* 三层同构：接口 → 模块 → 系统，缺省哪个就编辑哪一层 */
+  const node = (api || group || system) as AppApiNode;
+  const level: 'system' | 'group' | 'api' = api ? 'api' : group ? 'group' : 'system';
+  const scopeApis = api ? [] : group ? group.apis : system.groups.flatMap(g => g.apis);
+
   editing.value = {
     systemKey: system.key,
-    groupKey: group.key,
-    apiKey: String(api.key),
-    name: String(api.name || api.key),
-    path: String(api.key),
-    perm: String(api.requirePermission || '—'),
+    groupKey: group?.key,
+    apiKey: api ? String(api.key) : undefined,
+    level,
+    scopeCount: scopeApis.length,
+    name: String(node.name || node.key),
+    path: String(api ? api.key : group ? group.key : system.prefix || system.key),
+    perm: level === 'api' ? String(api?.requirePermission || '—') : level === 'group' ? '模块级' : '系统级（整域）',
     initial: JSON.stringify({
-      description: String(api.description || ''),
-      requireLogin: Boolean(api.requireLogin),
-      ips: (Array.isArray(api.allowIps) ? api.allowIps : []).join(', '),
-      roles: (Array.isArray(api.allowRoles) ? api.allowRoles : []).join(', ')
+      description: String(node.description || ''),
+      requireLogin: Boolean(node.requireLogin),
+      ips: (Array.isArray(node.allowIps) ? node.allowIps : []).join(', '),
+      roles: (Array.isArray(node.allowRoles) ? node.allowRoles : []).join(', ')
     }),
-    description: String(api.description || ''),
-    requireLogin: Boolean(api.requireLogin),
-    ips: (Array.isArray(api.allowIps) ? api.allowIps : []).join(', '),
-    roles: (Array.isArray(api.allowRoles) ? api.allowRoles : []).join(', '),
+    description: String(node.description || ''),
+    requireLogin: Boolean(node.requireLogin),
+    ips: (Array.isArray(node.allowIps) ? node.allowIps : []).join(', '),
+    roles: (Array.isArray(node.allowRoles) ? node.allowRoles : []).join(', '),
     reason: '',
     challengeId: '',
     maskedTarget: '',
@@ -656,13 +674,21 @@ async function confirmEditStepUp(): Promise<void> {
 }
 
 /** 保存成功后把结果写回本地树（不整树重拉，避免丢展开状态） */
-function applyEdited(e: { systemKey: string; groupKey?: string; apiKey?: string }, node: AppApiNode | null): void {
+function applyEdited(
+  e: { systemKey: string; groupKey?: string; apiKey?: string; level: 'system' | 'group' | 'api' },
+  node: AppApiNode | null
+): void {
   if (!node) return;
   const system = systems.value.find(s => s.key === e.systemKey);
-  const group = system?.groups.find(g => g.key === e.groupKey);
-  const api = group?.apis.find(a => a.key === e.apiKey);
-  if (!api) return;
-  Object.assign(api, {
+  if (!system) return;
+  const target =
+    e.level === 'system'
+      ? system
+      : e.level === 'group'
+        ? system.groups.find(g => g.key === e.groupKey)
+        : system.groups.find(g => g.key === e.groupKey)?.apis.find(a => a.key === e.apiKey);
+  if (!target) return;
+  Object.assign(target, {
     description: node.description,
     requireLogin: node.requireLogin,
     allowIps: node.allowIps,
@@ -832,6 +858,15 @@ onBeforeUnmount(() => {
                     />
                     <span class="switch__track" />
                   </label>
+                  <button
+                    class="api-edit"
+                    type="button"
+                    :aria-label="`编辑 ${system.name || system.key} 的系统级权限设定`"
+                    title="编辑系统级：描述 / 登录要求 / IP 与角色白名单（影响整域）"
+                    @click.stop="openEdit(system)"
+                  >
+                    <Pencil :size="13" />
+                  </button>
                 </td>
               </tr>
 
@@ -870,6 +905,15 @@ onBeforeUnmount(() => {
                         />
                         <span class="switch__track" />
                       </label>
+                      <button
+                        class="api-edit"
+                        type="button"
+                        :aria-label="`编辑 ${group.name || group.key} 的模块级权限设定`"
+                        title="编辑模块级：描述 / 登录要求 / IP 与角色白名单（影响本组）"
+                        @click.stop="openEdit(system, group)"
+                      >
+                        <Pencil :size="13" />
+                      </button>
                     </td>
                   </tr>
 
@@ -1660,7 +1704,8 @@ onBeforeUnmount(() => {
     border-color 0.12s ease;
 }
 
-.api-row--api:hover .api-edit,
+/* 任何一行 hover 都显示出铅笔：系统/模块行也要能进"总开关与权限设定" */
+.api-row:hover .api-edit,
 .api-edit:focus-visible {
   opacity: 1;
 }
@@ -1731,6 +1776,26 @@ onBeforeUnmount(() => {
 .editor__meta code {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.editor__scope {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.editor__scope {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--mauth-surface-2);
+  color: var(--mauth-text-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
 }
 
 .editor__perm {
