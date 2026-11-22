@@ -20,6 +20,7 @@
  * @since 2026-11-15
  */
 import { computed, ref } from 'vue';
+import PersonalPage from '@/components/business/PersonalPage.vue';
 import {
   Check,
   ChevronRight,
@@ -227,261 +228,263 @@ const availPackages = computed(() =>
 </script>
 
 <template>
-  <div class="look">
-    <header class="look__head">
-      <h2 class="look__title">外观与主题</h2>
-      <p class="look__sub">背景、颜色、主题、自定义分四档配，互不干扰；选完即记住，刷新与换页都不会丢。</p>
-    </header>
+  <!-- narrow：表单型设置页铺满整屏很难读，收在 820px 内；其余三页是表格，必须通栏 -->
+  <PersonalPage
+    title="外观与主题"
+    sub="背景、颜色、主题、自定义分四档配，互不干扰；选完即记住，刷新与换页都不会丢"
+    narrow
+  >
+    <div class="look">
+      <!-- ① 背景 -->
+      <section class="panel">
+        <button class="lrow" type="button" :aria-expanded="open === 'bg'" @click="toggle('bg')">
+          <span class="lrow__ico"><Image :size="17" /></span>
+          <span class="lrow__text">
+            <b>背景</b>
+            <small>背景图像、颜色</small>
+          </span>
+          <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'bg' }" />
+        </button>
 
-    <!-- ① 背景 -->
-    <section class="panel">
-      <button class="lrow" type="button" :aria-expanded="open === 'bg'" @click="toggle('bg')">
-        <span class="lrow__ico"><Image :size="17" /></span>
-        <span class="lrow__text">
-          <b>背景</b>
-          <small>背景图像、颜色</small>
-        </span>
-        <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'bg' }" />
-      </button>
+        <div v-if="open === 'bg'" class="lrow__body">
+          <div class="tiles" role="radiogroup" aria-label="背景">
+            <button
+              v-for="item in bg.presets"
+              :key="item.id"
+              type="button"
+              role="radio"
+              :aria-checked="bg.currentId === item.id"
+              :class="['tile', { 'is-on': bg.currentId === item.id }]"
+              @click="bg.pick(item.id)"
+            >
+              <span :class="['tile__thumb', `tile__thumb--${item.id}`]" :style="thumbStyleOf(item.id)">
+                <Check v-if="bg.currentId === item.id" :size="14" class="tile__check" />
+              </span>
+              <span class="tile__name">{{ item.name }}</span>
+              <span class="tile__desc">{{ descOf(item) }}</span>
+            </button>
+          </div>
 
-      <div v-if="open === 'bg'" class="lrow__body">
-        <div class="tiles" role="radiogroup" aria-label="背景">
-          <button
-            v-for="item in bg.presets"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="bg.currentId === item.id"
-            :class="['tile', { 'is-on': bg.currentId === item.id }]"
-            @click="bg.pick(item.id)"
-          >
-            <span :class="['tile__thumb', `tile__thumb--${item.id}`]" :style="thumbStyleOf(item.id)">
-              <Check v-if="bg.currentId === item.id" :size="14" class="tile__check" />
-            </span>
-            <span class="tile__name">{{ item.name }}</span>
-            <span class="tile__desc">{{ descOf(item) }}</span>
-          </button>
-        </div>
-
-        <!--
+          <!--
           纯色可以自己挑底色：写的是 `--mauth-bg` 的**覆盖层**（和「自定义」那一档同源），
           所以换配色/切明暗都不会被抹掉，也随「全部还原」一起清掉；色块铺在整格上，
           点哪都能唤出原生取色器（同主题色那张自定义色卡）。
         -->
-        <div v-if="bg.currentId === 'none'" class="bgrow">
-          <span class="bgrow__text">
-            <b>背景色</b>
-            <small>点色块自选底色，选完即时生效</small>
-          </span>
-          <span class="bgrow__val mono">{{ isCustomBg ? bgHex.toUpperCase() : '跟随配色' }}</span>
-          <label
-            :class="['bgrow__chip', { 'bgrow__chip--auto': !isCustomBg }]"
-            :title="isCustomBg ? `当前 ${bgHex}` : '点这里挑一个底色'"
-          >
-            <input type="color" class="bgrow__color" :value="bgHex" aria-label="背景色" @input="onBgPick" />
-            <span class="bgrow__fill" :style="{ background: bgHex }"></span>
-          </label>
-          <button
-            v-if="isCustomBg"
-            type="button"
-            class="bgrow__reset"
-            title="回到当前配色自带的底色"
-            @click="resetBgColor"
-          >
-            还原
-          </button>
-        </div>
-
-        <p class="hint">「纯色」的底色可以自己挑；壁纸建议搭配深色配色，浅底上会比较抢。</p>
-      </div>
-    </section>
-
-    <!-- ② 颜色 -->
-    <section class="panel">
-      <button class="lrow" type="button" :aria-expanded="open === 'color'" @click="toggle('color')">
-        <span class="lrow__ico"><Palette :size="17" /></span>
-        <span class="lrow__text">
-          <b>颜色</b>
-          <small>主题色、透明效果、颜色主题</small>
-        </span>
-        <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'color' }" />
-      </button>
-
-      <div v-if="open === 'color'" class="lrow__body">
-        <p class="field-label">明暗</p>
-        <div class="segs" role="radiogroup" aria-label="明暗">
-          <button
-            v-for="item in MODES"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="theme.mode === item.id"
-            :class="['seg', { 'is-on': theme.mode === item.id }]"
-            @click="theme.setMode(item.id)"
-          >
-            <component :is="item.icon" :size="14" />
-            {{ item.name }}
-          </button>
-        </div>
-
-        <p class="field-label">主题色</p>
-        <div class="swatches" role="radiogroup" aria-label="主题色">
-          <button
-            v-for="item in accent.presets"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="accent.currentId === item.id"
-            :class="['swatch', { 'is-on': accent.currentId === item.id }]"
-            :title="item.name"
-            @click="accent.pick(item.id)"
-          >
-            <span
-              :class="['swatch__dot', { 'swatch__dot--auto': item.inherit }]"
-              :style="item.inherit ? undefined : { background: item.primary }"
-            >
-              <Check v-if="accent.currentId === item.id" :size="12" />
+          <div v-if="bg.currentId === 'none'" class="bgrow">
+            <span class="bgrow__text">
+              <b>背景色</b>
+              <small>点色块自选底色，选完即时生效</small>
             </span>
-            <span class="swatch__name">{{ item.name }}</span>
-          </button>
+            <span class="bgrow__val mono">{{ isCustomBg ? bgHex.toUpperCase() : '跟随配色' }}</span>
+            <label
+              :class="['bgrow__chip', { 'bgrow__chip--auto': !isCustomBg }]"
+              :title="isCustomBg ? `当前 ${bgHex}` : '点这里挑一个底色'"
+            >
+              <input type="color" class="bgrow__color" :value="bgHex" aria-label="背景色" @input="onBgPick" />
+              <span class="bgrow__fill" :style="{ background: bgHex }"></span>
+            </label>
+            <button
+              v-if="isCustomBg"
+              type="button"
+              class="bgrow__reset"
+              title="回到当前配色自带的底色"
+              @click="resetBgColor"
+            >
+              还原
+            </button>
+          </div>
 
-          <!--
+          <p class="hint">「纯色」的底色可以自己挑；壁纸建议搭配深色配色，浅底上会比较抢。</p>
+        </div>
+      </section>
+
+      <!-- ② 颜色 -->
+      <section class="panel">
+        <button class="lrow" type="button" :aria-expanded="open === 'color'" @click="toggle('color')">
+          <span class="lrow__ico"><Palette :size="17" /></span>
+          <span class="lrow__text">
+            <b>颜色</b>
+            <small>主题色、透明效果、颜色主题</small>
+          </span>
+          <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'color' }" />
+        </button>
+
+        <div v-if="open === 'color'" class="lrow__body">
+          <p class="field-label">明暗</p>
+          <div class="segs" role="radiogroup" aria-label="明暗">
+            <button
+              v-for="item in MODES"
+              :key="item.id"
+              type="button"
+              role="radio"
+              :aria-checked="theme.mode === item.id"
+              :class="['seg', { 'is-on': theme.mode === item.id }]"
+              @click="theme.setMode(item.id)"
+            >
+              <component :is="item.icon" :size="14" />
+              {{ item.name }}
+            </button>
+          </div>
+
+          <p class="field-label">主题色</p>
+          <div class="swatches" role="radiogroup" aria-label="主题色">
+            <button
+              v-for="item in accent.presets"
+              :key="item.id"
+              type="button"
+              role="radio"
+              :aria-checked="accent.currentId === item.id"
+              :class="['swatch', { 'is-on': accent.currentId === item.id }]"
+              :title="item.name"
+              @click="accent.pick(item.id)"
+            >
+              <span
+                :class="['swatch__dot', { 'swatch__dot--auto': item.inherit }]"
+                :style="item.inherit ? undefined : { background: item.primary }"
+              >
+                <Check v-if="accent.currentId === item.id" :size="12" />
+              </span>
+              <span class="swatch__name">{{ item.name }}</span>
+            </button>
+
+            <!--
             自定义色卡：与其它预设同一排、同一尺寸，点开的是原生取色器
             （取色器里自带 hex 输入，所以不再单独摆一个输入框 —— 少一行是一个）。
           -->
-          <label
-            :class="['swatch', 'swatch--custom', { 'is-on': accent.isCustom }]"
-            :title="accent.isCustom ? `自定义 ${customHex}` : '选任意颜色'"
-          >
-            <input
-              type="color"
-              class="swatch__color"
-              :value="customHex"
-              aria-label="自定义主题色"
-              @input="onCustomPick"
-            />
-            <span class="swatch__dot" :style="chipStyle">
-              <Check v-if="accent.isCustom" :size="12" />
-            </span>
-            <span class="swatch__name">自定义</span>
-          </label>
+            <label
+              :class="['swatch', 'swatch--custom', { 'is-on': accent.isCustom }]"
+              :title="accent.isCustom ? `自定义 ${customHex}` : '选任意颜色'"
+            >
+              <input
+                type="color"
+                class="swatch__color"
+                :value="customHex"
+                aria-label="自定义主题色"
+                @input="onCustomPick"
+              />
+              <span class="swatch__dot" :style="chipStyle">
+                <Check v-if="accent.isCustom" :size="12" />
+              </span>
+              <span class="swatch__name">自定义</span>
+            </label>
+          </div>
+          <p class="hint">
+            <template v-if="customInfo && customInfo.adjusted">
+              所选色直接当文字色对比度不够，已自动调整到 <b>{{ customInfo.primary }}</b> （对当前底色
+              {{ customInfo.contrast.toFixed(1) }}:1，正文需 ≥ 4.5）； 原色仍用于卡面等大面积浅底。
+            </template>
+            <template v-else-if="customInfo">
+              主色 <b>{{ customInfo.primary }}</b> · 对当前底色 {{ customInfo.contrast.toFixed(1) }}:1（正文需 ≥ 4.5）。
+            </template>
+            <template v-else>
+              点「自定义」可用任意色：主色会自动满足对比度要求，hover / 浅底 / 焦点环一并派生。
+            </template>
+          </p>
+
+          <p class="status" aria-live="polite">
+            <template v-if="accent.saveState === 'saving'">保存中…</template>
+            <template v-else-if="accent.saveState === 'saved'">已保存</template>
+            <template v-else-if="accent.saveState === 'error'">
+              <span class="status--error">保存失败：{{ accent.errorMessage }}</span>
+            </template>
+          </p>
+
+          <p class="field-label">颜色主题</p>
+          <div class="tiles tiles--color" role="radiogroup" aria-label="颜色主题">
+            <button
+              v-for="item in colorThemes"
+              :key="item.id"
+              type="button"
+              role="radio"
+              :aria-checked="currentColor === item.id"
+              :class="['tile', { 'is-on': currentColor === item.id }]"
+              @click="theme.setTheme(item.id)"
+            >
+              <span class="tile__thumb tile__thumb--color" :style="swatchOf(item.id)">
+                <Check v-if="currentColor === item.id" :size="14" class="tile__check" />
+              </span>
+              <span class="tile__name">{{ item.name }}</span>
+              <span class="tile__desc">{{ item.description }}</span>
+            </button>
+          </div>
         </div>
-        <p class="hint">
-          <template v-if="customInfo && customInfo.adjusted">
-            所选色直接当文字色对比度不够，已自动调整到 <b>{{ customInfo.primary }}</b> （对当前底色
-            {{ customInfo.contrast.toFixed(1) }}:1，正文需 ≥ 4.5）； 原色仍用于卡面等大面积浅底。
-          </template>
-          <template v-else-if="customInfo">
-            主色 <b>{{ customInfo.primary }}</b> · 对当前底色 {{ customInfo.contrast.toFixed(1) }}:1（正文需 ≥ 4.5）。
-          </template>
-          <template v-else>
-            点「自定义」可用任意色：主色会自动满足对比度要求，hover / 浅底 / 焦点环一并派生。
-          </template>
-        </p>
+      </section>
 
-        <p class="status" aria-live="polite">
-          <template v-if="accent.saveState === 'saving'">保存中…</template>
-          <template v-else-if="accent.saveState === 'saved'">已保存</template>
-          <template v-else-if="accent.saveState === 'error'">
-            <span class="status--error">保存失败：{{ accent.errorMessage }}</span>
-          </template>
-        </p>
+      <!-- ③ 主题 -->
+      <section class="panel">
+        <button class="lrow" type="button" :aria-expanded="open === 'theme'" @click="toggle('theme')">
+          <span class="lrow__ico"><Pencil :size="17" /></span>
+          <span class="lrow__text">
+            <b>主题</b>
+            <small>版式（安装、创建、管理）</small>
+          </span>
+          <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'theme' }" />
+        </button>
 
-        <p class="field-label">颜色主题</p>
-        <div class="tiles tiles--color" role="radiogroup" aria-label="颜色主题">
-          <button
-            v-for="item in colorThemes"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="currentColor === item.id"
-            :class="['tile', { 'is-on': currentColor === item.id }]"
-            @click="theme.setTheme(item.id)"
-          >
-            <span class="tile__thumb tile__thumb--color" :style="swatchOf(item.id)">
-              <Check v-if="currentColor === item.id" :size="14" class="tile__check" />
-            </span>
-            <span class="tile__name">{{ item.name }}</span>
-            <span class="tile__desc">{{ item.description }}</span>
-          </button>
+        <div v-if="open === 'theme'" class="lrow__body">
+          <p class="field-label">密度</p>
+          <div class="segs" role="radiogroup" aria-label="密度">
+            <button
+              v-for="item in density.presets"
+              :key="item.id"
+              type="button"
+              role="radio"
+              :aria-checked="density.currentId === item.id"
+              :class="['seg', { 'is-on': density.currentId === item.id }]"
+              :title="item.description"
+              @click="density.pick(item.id)"
+            >
+              {{ item.name }}
+            </button>
+          </div>
+          <p class="hint">密度只改行高与内距（一屏放多少内容），不动字号与配色，可与任意外观组合。</p>
+
+          <p class="field-label">版式</p>
+          <div class="tiles" role="radiogroup" aria-label="版式">
+            <button
+              v-for="item in availPackages"
+              :key="item.id"
+              type="button"
+              role="radio"
+              :aria-checked="theme.packageId === item.id"
+              :class="['tile', { 'is-on': theme.packageId === item.id }]"
+              @click="pickPackage(item.id)"
+            >
+              <span class="tile__thumb tile__thumb--pkg">
+                <Check v-if="theme.packageId === item.id" :size="14" class="tile__check" />
+              </span>
+              <span class="tile__name">{{ item.name }}</span>
+              <span class="tile__desc">{{ item.description }}</span>
+            </button>
+          </div>
+          <p class="hint">
+            版式列表只含<b>当前设备有后台壳版式</b>的包（桌面上不显示只有手机端的口袋版）。 版式 =
+            布局：只换颜色请用上面的「颜色主题」；安装 / 创建包需要在代码里加目录。
+          </p>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- ③ 主题 -->
-    <section class="panel">
-      <button class="lrow" type="button" :aria-expanded="open === 'theme'" @click="toggle('theme')">
-        <span class="lrow__ico"><Pencil :size="17" /></span>
-        <span class="lrow__text">
-          <b>主题</b>
-          <small>版式（安装、创建、管理）</small>
-        </span>
-        <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'theme' }" />
-      </button>
+      <!-- ④ 自定义：逐令牌覆盖 -->
+      <section class="panel">
+        <button class="lrow" type="button" :aria-expanded="open === 'custom'" @click="toggle('custom')">
+          <span class="lrow__ico"><SlidersHorizontal :size="17" /></span>
+          <span class="lrow__text">
+            <b>自定义</b>
+            <small> 逐个改颜色与尺寸{{ overrides.count ? `（已改 ${overrides.count} 项）` : '' }} </small>
+          </span>
+          <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'custom' }" />
+        </button>
 
-      <div v-if="open === 'theme'" class="lrow__body">
-        <p class="field-label">密度</p>
-        <div class="segs" role="radiogroup" aria-label="密度">
-          <button
-            v-for="item in density.presets"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="density.currentId === item.id"
-            :class="['seg', { 'is-on': density.currentId === item.id }]"
-            :title="item.description"
-            @click="density.pick(item.id)"
-          >
-            {{ item.name }}
-          </button>
+        <div v-if="open === 'custom'" class="lrow__body">
+          <p class="hint">
+            按「材质」分组，只列常用项（点底部「显示全部」看全部）。改动只影响你的账号，
+            优先级高于配色与主题色；改色时<b>半透明会被保留</b>。
+          </p>
+          <TokenEditor />
         </div>
-        <p class="hint">密度只改行高与内距（一屏放多少内容），不动字号与配色，可与任意外观组合。</p>
-
-        <p class="field-label">版式</p>
-        <div class="tiles" role="radiogroup" aria-label="版式">
-          <button
-            v-for="item in availPackages"
-            :key="item.id"
-            type="button"
-            role="radio"
-            :aria-checked="theme.packageId === item.id"
-            :class="['tile', { 'is-on': theme.packageId === item.id }]"
-            @click="pickPackage(item.id)"
-          >
-            <span class="tile__thumb tile__thumb--pkg">
-              <Check v-if="theme.packageId === item.id" :size="14" class="tile__check" />
-            </span>
-            <span class="tile__name">{{ item.name }}</span>
-            <span class="tile__desc">{{ item.description }}</span>
-          </button>
-        </div>
-        <p class="hint">
-          版式列表只含<b>当前设备有后台壳版式</b>的包（桌面上不显示只有手机端的口袋版）。 版式 =
-          布局：只换颜色请用上面的「颜色主题」；安装 / 创建包需要在代码里加目录。
-        </p>
-      </div>
-    </section>
-
-    <!-- ④ 自定义：逐令牌覆盖 -->
-    <section class="panel">
-      <button class="lrow" type="button" :aria-expanded="open === 'custom'" @click="toggle('custom')">
-        <span class="lrow__ico"><SlidersHorizontal :size="17" /></span>
-        <span class="lrow__text">
-          <b>自定义</b>
-          <small> 逐个改颜色与尺寸{{ overrides.count ? `（已改 ${overrides.count} 项）` : '' }} </small>
-        </span>
-        <ChevronRight :size="16" class="lrow__chev" :class="{ 'is-open': open === 'custom' }" />
-      </button>
-
-      <div v-if="open === 'custom'" class="lrow__body">
-        <p class="hint">
-          按「材质」分组，只列常用项（点底部「显示全部」看全部）。改动只影响你的账号，
-          优先级高于配色与主题色；改色时<b>半透明会被保留</b>。
-        </p>
-        <TokenEditor />
-      </div>
-    </section>
-  </div>
+      </section>
+    </div>
+  </PersonalPage>
 </template>
 
 <style scoped>
@@ -489,25 +492,6 @@ const availPackages = computed(() =>
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 820px;
-}
-
-.look__head {
-  padding: 4px 2px 2px;
-}
-
-.look__title {
-  margin: 0 0 4px;
-  font-size: 20px;
-  font-weight: 660;
-  letter-spacing: -0.02em;
-}
-
-.look__sub {
-  margin: 0;
-  color: var(--mauth-text-soft);
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 /* ── 三段行 ─────────────────────────────────────────────── */

@@ -53,13 +53,20 @@ const {
 
 <template>
   <div class="profile">
-    <div class="page__head">
-      <h2 class="page__title">个人设置</h2>
-    </div>
+    <!--
+      页头四个类与 `components/business/PersonalPage.vue` 完全一致：
+      版式归主题，但标题层级与间距必须与另外三个个人页对齐，否则切换页面会"跳一下"。
+    -->
+    <header class="page__head">
+      <div class="profile__heading">
+        <h1 class="page__title">个人资料</h1>
+        <p class="page__sub">头像与昵称；昵称会显示在顶栏、操作记录与通知收件人里</p>
+      </div>
+    </header>
 
     <section class="panel">
       <header class="panel__head">
-        <span class="panel__title">个人资料</span>
+        <span class="panel__title">头像与昵称</span>
       </header>
 
       <div class="panel__body">
@@ -220,7 +227,14 @@ const {
 .profile {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  min-width: 0;
+}
+
+.profile__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .hint {

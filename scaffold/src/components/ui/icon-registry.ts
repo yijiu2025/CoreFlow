@@ -13,6 +13,8 @@
  */
 import type { Component } from 'vue';
 import {
+  Bell,
+  BellRing,
   BookMarked,
   Briefcase,
   Check,
@@ -20,9 +22,11 @@ import {
   ChevronRight,
   Circle,
   Eye,
+  IdCard,
   KeyRound,
   Layers,
   LayoutDashboard,
+  LayoutGrid,
   ListTree,
   LogIn,
   LogOut,
@@ -31,6 +35,7 @@ import {
   Search,
   Sun,
   User,
+  UserCog,
   Maximize,
   Minus,
   Network,
@@ -51,12 +56,16 @@ import {
 
 /** PascalCase 图标名 → 组件（表单下拉与 AppIcon 共用这一份） */
 const ICONS: Record<string, Component> = {
+  Bell,
+  BellRing,
   LayoutDashboard,
   Settings,
   Users,
+  UserCog,
   ShieldCheck,
   Shield,
   ListTree,
+  LayoutGrid,
   Network,
   Briefcase,
   BookMarked,
@@ -79,6 +88,7 @@ const ICONS: Record<string, Component> = {
   ChevronRight,
   Circle,
   Eye,
+  IdCard,
   Maximize,
   Minus,
   Layers,

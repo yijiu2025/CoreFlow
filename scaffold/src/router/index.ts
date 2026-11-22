@@ -128,6 +128,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '接口开关', permission: 'admin:app:read', stack: true }
       },
       {
+        /*
+         * 通知配置：渠道 / 模板 / 事件订阅 / 发送记录。
+         *
+         * 权限码用 `notice:config:read`（通知中心自己的命名空间），而不是 admin:* ——
+         * 通知运维是独立职责，应该能单独授给某个人，而不是必须给整个后台管理权。
+         */
+        path: 'system/notice',
+        name: 'system-notice',
+        component: () => import('@/views/system/NoticeConfig.vue'),
+        meta: { title: '通知配置', permission: 'notice:config:read' }
+      },
+      {
         path: 'system/dept',
         name: 'system-dept',
         component: () => import('@/views/system/Depts.vue'),
@@ -162,7 +174,7 @@ const routes: RouteRecordRaw[] = [
         path: 'settings/profile',
         name: 'settings-profile',
         component: () => import('@/views/settings/Profile.vue'),
-        meta: { title: '个人设置' }
+        meta: { title: '个人资料' }
       },
       {
         // 外观与主题：三档配置（背景 / 颜色 / 版式）。不挂权限码 —— 人人可改自己的外观
@@ -176,6 +188,32 @@ const routes: RouteRecordRaw[] = [
         name: 'no-access',
         component: () => import('@/views/error/NoAccess.vue'),
         meta: { title: '无访问权限' }
+      },
+      {
+        /*
+         * 个人中心：访问令牌与第三方账号绑定。
+         *
+         * 不挂权限码 —— 每个登录用户都该能管自己的令牌，接口侧也只按
+         * `request.state.user.userId` 过滤。挂成 `user:self:*` 会与"个人接口
+         * 不需要授权"的设计打架。
+         */
+        path: 'settings/center',
+        name: 'settings-center',
+        component: () => import('@/views/user/Center.vue'),
+        meta: { title: '账号与安全' }
+      },
+      {
+        /*
+         * 通知偏好：事件 × 渠道的开关与免打扰时段。
+         *
+         * 与「通知配置」是两条链路：那条是管理员配渠道与模板（notice:config:*），
+         * 这条是每个人配自己收什么（只需登录）。不挂权限码，接口也只认
+         * `request.state.user.userId`。
+         */
+        path: 'settings/notice',
+        name: 'settings-notice',
+        component: () => import('@/views/user/NoticePrefs.vue'),
+        meta: { title: '通知偏好' }
       }
     ]
   },
