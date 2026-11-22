@@ -498,7 +498,7 @@ const {
               v-model:id="form.leaderUserId"
               strict
               :maxlength="50"
-              placeholder="搜索账号选人"
+              placeholder="搜索账号或邮箱选人"
               @pick="onLeaderPicked"
             />
             <span class="field__hint">只能从系统账号里选；负责人的邮箱会自动带到下方</span>

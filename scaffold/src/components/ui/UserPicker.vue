@@ -35,7 +35,7 @@ const props = withDefaults(
      */
     strict?: boolean;
   }>(),
-  { placeholder: '搜索账号 / 输入姓名', maxlength: 50, disabled: false, strict: false }
+  { placeholder: '搜索账号 / 邮箱', maxlength: 50, disabled: false, strict: false }
 );
 
 const model = defineModel<string>({ default: '' });
@@ -274,7 +274,14 @@ onBeforeUnmount(() => {
           @mouseenter="activeIndex = index"
           @mousedown.prevent="pick(user)"
         >
-          <span class="upick__name">{{ user.username }}</span>
+          <!--
+            姓名下面必须给邮箱：重名和"看着眼熟的人"是最常见的选错来源，
+            而邮箱在后台里唯一且能对上人。搜索也支持邮箱（后端 keyword 同时模糊 username / email）。
+          -->
+          <span class="upick__body">
+            <span class="upick__name">{{ user.username }}</span>
+            <span class="upick__email" :title="user.email || ''">{{ user.email || '未绑邮箱' }}</span>
+          </span>
           <span class="upick__meta">{{ user.dept_name || '未分配部门' }}</span>
           <span v-if="user.status === 0" class="tag tag--off">已停用</span>
         </li>
@@ -359,9 +366,30 @@ onBeforeUnmount(() => {
   background: var(--mauth-surface-2);
 }
 
+.upick__body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
 .upick__name {
   color: var(--mauth-text);
   font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 邮箱是"用来确认是谁"的第二信息：小一号、弱一级，但必须在同一行高度里读完 */
+.upick__email {
+  color: var(--mauth-text-soft);
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .upick__meta {
