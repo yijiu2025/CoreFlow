@@ -1,7 +1,7 @@
 /**
  * 系统管理接口（用户 / 角色 / 菜单 / 部门 / 岗位 / 字典 / 参数）
  *
- * 路径前缀 `/admin/console/v1`；列表统一返回 `{ rows, total, pageNum, pageSize }`。
+ * 路径前缀 `/admin/v1`；列表统一返回 `{ rows, total, pageNum, pageSize }`。
  *
  * @author yijiu2025
  * @since 2026-11-09
@@ -30,7 +30,7 @@ import type {
   UserSessionRow
 } from './types';
 
-const BASE = '/admin/console/v1';
+const BASE = '/admin/v1';
 
 /* ── 用户 ─────────────────────────────────────────────────── */
 
@@ -45,6 +45,12 @@ export interface UserQuery {
   status?: number | null;
   /** 只看「一个有效角色都没有」的账号（供超管补授权；非超管被应用域先过滤成空） */
   noRole?: boolean;
+  /**
+   * 按相关性排序（完全相等 > 账号前缀 > 邮箱前缀 > 其它模糊）
+   *
+   * 只给"先搜后选"的下拉用（负责人 / 经办人）。用户列表页不开 —— 那里要"最新的在前"。
+   */
+  rankByKeyword?: boolean;
 }
 
 /** 用户分页 */
@@ -279,7 +285,7 @@ export function permissionCatalog(): Promise<
  * 某用户的所有设备会话
  *
  * 🔴 路径**不走** `BASE`：会话管理挂在 user 域（`/admin/user/v1/sessions/*`），
- *    与 console 的 `/admin/console/v1` 是两个前缀。拼错会 404，而 404 在这里
+ *    与 console 的 `/admin/v1` 是两个前缀。拼错会 404，而 404 在这里
  *    很容易被当成"这个人没有设备"。
  *
  * @param query userId 为数字主键（后端明确拒绝 uid/UUID）
@@ -428,6 +434,13 @@ export interface AppOverview {
   description: string;
   /** 权限命名空间：角色/菜单/权限码都挂在它下面（console → admin） */
   permissionAppId: string;
+  /**
+   * 平台内置（守卫 / 通知 / 用户中心 / 授权中心）
+   *
+   * 它们的 `app_id` 是权限命名空间、接口是基础设施入口，不是"可以授权给业务用户的应用"。
+   * 列表按它分组，内置项的准入与默认角色不参与展示。
+   */
+  builtin: boolean;
   /** 授权即送的默认角色 */
   defaultRole: string;
   /** 登录准入策略（null = 不限制） */

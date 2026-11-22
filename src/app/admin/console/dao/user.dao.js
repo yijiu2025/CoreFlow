@@ -87,6 +87,14 @@ class ConsoleUserDao {
      * 用子查询而不是 LEFT JOIN：这一层只决定"留哪些行"，与投影无关。
      */
     noRole = false,
+    /**
+     * 按「相关性」排序而不是"最新在前"
+     *
+     * 用于下拉选人这类**先搜后选**的场景：用户输入一串字符，他最可能想选的是
+     * 「账号/邮箱完全等于它」或「以它开头」的那个人，而不是最近创建的那个。
+     * 用户列表页不开这个开关 —— 那里"最新的在前"才是预期。
+     */
+    rankByKeyword = false,
     dataScope = null
   }) {
     const User = getModel('User');
@@ -291,10 +299,35 @@ class ConsoleUserDao {
     }
 
     const offset = (Number(pageNum) - 1) * Number(pageSize);
+    /*
+     * 相关性排序：完全相等 > 账号前缀 > 邮箱前缀 > 其它模糊命中，同级之间仍按 id 倒序。
+     *
+     * 用户输入靠的是 `sequelize.escape` 生成字面量，不拼裸字符串 —— keyword 是自由文本。
+     * 这里的列名不带表限定：本查询没有 JOIN，限定反而会和 Sequelize 生成的别名对不上。
+     */
+    const kw = String(keyword || '').trim();
+    const escape = value => User.sequelize.escape(value);
+    const order =
+      rankByKeyword && kw
+        ? [
+            [
+              User.sequelize.literal(`CASE
+                WHEN username = ${escape(kw)} THEN 0
+                WHEN email = ${escape(kw)} THEN 1
+                WHEN username LIKE ${escape(`${kw}%`)} THEN 2
+                WHEN email LIKE ${escape(`${kw}%`)} THEN 3
+                ELSE 4
+              END`),
+              'ASC'
+            ],
+            ['id', 'DESC']
+          ]
+        : [['id', 'DESC']];
+
     const { rows: users, count } = await User.findAndCountAll({
       where,
       attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status', 'dept_id', 'rank_level', 'created_at'],
-      order: [['id', 'DESC']],
+      order,
       offset,
       limit: Number(pageSize)
     });

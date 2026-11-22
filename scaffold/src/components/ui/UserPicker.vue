@@ -86,7 +86,16 @@ async function search(kw: string): Promise<void> {
   const mine = ++seq;
   loading.value = true;
   try {
-    const page = await listUsers({ keyword: kw.trim() || undefined, pageNum: 1, pageSize: 8 });
+    /*
+     * `rankByKeyword`：先搜后选的场景里，"完全相等 / 以它开头"的那个人才是我要的，
+     * 不能按"最近创建"排 —— 否则搜 `2418` 时管理员可能被挤到第 9 条以外。
+     */
+    const page = await listUsers({
+      keyword: kw.trim() || undefined,
+      pageNum: 1,
+      pageSize: 8,
+      rankByKeyword: true
+    });
     if (mine !== seq) return;
     options.value = page.rows ?? [];
     activeIndex.value = options.value.length > 0 ? 0 : -1;
