@@ -22,6 +22,7 @@ import userDangerService from './user-danger.service.js';
 import { getActorScope, getTargetScope, appLabel, activeRoleIds } from './access-scope.service.js';
 import userDao from '../dao/user.dao.js';
 import deptDao from '../dao/dept.dao.js';
+import { OPER_ONLY_SQL } from '../dao/log.dao.js';
 
 /** 记录区展示条数（够看出"最近在忙什么"即可，完整流水在日志页） */
 const RECENT_LIMIT = 10;
@@ -229,18 +230,34 @@ class UserProfileService {
    */
   async recentOps(userId) {
     const rows = await sequelize.query(
-      `SELECT a.event, a.app_id, a.ip, a.created_at,
+      /*
+       * `details` 必须带回来：列表里只给 `DEPT_DELETE` 这种事件码，看的人无法回答
+       * "删了哪个部门、把谁从什么改成什么"。翻译交给前端 `summarizeOperEvent`（操作日志页
+       * 用的是同一份，避免两套话术）。
+       */
+      /*
+       * 🔴 必须带 `OPER_ONLY_SQL`：`audit_logs` 里同时存着登录/会话事件，
+       *    只按 user_id 过滤会把"登录成功"混进「最近操作」。
+       *    用户详情页因此出现 5 条「登录成功（该事件属登录日志，不应出现在这里）」
+       *    —— 那句文案本身就是这个漏过滤的警报，它不该有机会显示出来。
+       *    条件复用 log.dao 的那一份，不在这里另写一遍。
+       */
+      `SELECT a.event, a.app_id, a.ip, a.user_agent, a.details, a.created_at,
               JSON_UNQUOTE(JSON_EXTRACT(a.details, '$.costMs')) AS cost_ms
          FROM audit_logs a
-        WHERE a.user_id = :userId
+        WHERE a.user_id = :userId AND ${OPER_ONLY_SQL}
         ORDER BY a.created_at DESC, a.id DESC
         LIMIT ${RECENT_LIMIT}`,
       { type: QueryTypes.SELECT, replacements: { userId: Number(userId) } }
     );
     return rows.map(r => ({
       event: r.event,
-      appId: r.app_id,
+      /* 历史审计里可能还是 `console`（管理后台改名前的 id），统一归并到 `admin` */
+      appId: String(r.app_id || '') === 'console' ? 'admin' : r.app_id,
       ip: r.ip,
+      userAgent: r.user_agent || '',
+      /** 原始 details（JSON 字符串）：前端据此翻译成"删除了部门 X" */
+      detail: r.details || '',
       costMs: r.cost_ms === null ? null : Number(r.cost_ms),
       createdAt: r.created_at
     }));
@@ -254,7 +271,7 @@ class UserProfileService {
    */
   async recentLogins(userId) {
     const rows = await sequelize.query(
-      `SELECT l.event, l.app_id, l.ip, l.location, l.user_agent, l.created_at
+      `SELECT l.event, l.app_id, l.ip, l.location, l.user_agent, l.details, l.created_at
          FROM session_logs l
         WHERE l.user_id = :userId
         ORDER BY l.created_at DESC, l.id DESC
@@ -263,10 +280,12 @@ class UserProfileService {
     );
     return rows.map(r => ({
       event: r.event,
-      appId: r.app_id,
+      appId: String(r.app_id || '') === 'console' ? 'admin' : r.app_id,
       ip: r.ip,
       location: r.location || '',
       userAgent: r.user_agent || '',
+      /** 失败原因等附加信息（登录失败时前端要能说清"为什么"） */
+      detail: r.details || '',
       failed: String(r.event || '').includes('FAIL'),
       createdAt: r.created_at
     }));

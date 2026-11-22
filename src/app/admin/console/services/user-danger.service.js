@@ -173,7 +173,7 @@ async function audit(request, type, actor, details) {
     userId: actor?.id ?? null,
     ip: request.ip,
     userAgent: request.headers['user-agent'] || '',
-    appId: 'console',
+    appId: 'admin',
     details
   });
 }
@@ -228,7 +228,7 @@ class UserDangerService {
       userId: Number(actor.id) || null,
       ip: request?.ip,
       userAgent: request?.headers?.['user-agent'] || '',
-      appId: 'console',
+      appId: 'admin',
       details: {
         action,
         targetId: Number(target.id),
@@ -432,9 +432,20 @@ class UserDangerService {
       merged.set(appId, hit);
     };
 
-    for (const row of approvals) touch(row.app_id, 'authorized', row.last_auth_at);
-    for (const row of tokens) touch(row.client_id, 'has_token', row.created_at);
-    for (const row of sessions) touch(row.app_id, 'has_session', row.updated_at);
+    /**
+     * 历史应用名归并
+     *
+     * `console` 是管理后台改名前的登录应用（现在是 `admin`）。数据侧已有迁移去改会话行，
+     * 这里再兜一层：审计/审批表里若还留着旧值，列表也不会多出一条查不到名字的「console」。
+     *
+     * @param {string} appId 原始应用标识
+     * @returns {string} 归并后的应用标识
+     */
+    const normalizeApp = appId => (String(appId || '') === 'console' ? 'admin' : appId);
+
+    for (const row of approvals) touch(normalizeApp(row.app_id), 'authorized', row.last_auth_at);
+    for (const row of tokens) touch(normalizeApp(row.client_id), 'has_token', row.created_at);
+    for (const row of sessions) touch(normalizeApp(row.app_id), 'has_session', row.updated_at);
 
     const pending = await deactivationService.listPending(Number(target.id));
     const pendingApps = new Map(pending.filter(item => item.scope === 'app').map(item => [item.app_id, item]));
