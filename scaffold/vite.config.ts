@@ -60,6 +60,10 @@ export default defineConfig(({ mode }) => {
         '/admin': { target: apiTarget, changeOrigin: true },
         '/auth': { target: apiTarget, changeOrigin: true },
         '/user': { target: apiTarget, changeOrigin: true },
+        // 通知中心（/notice/v1/*）：渠道配置、模板、事件订阅、个人偏好、发送记录。
+        // 不代理的后果不是 404 —— Vite 的 SPA fallback 会回 index.html 200，
+        // 前端拿到 HTML 当 JSON 解，表现为"接口没有 data"且控制台无网络报错。
+        '/notice': { target: apiTarget, changeOrigin: true },
         // 人机挑战接口（/api/firewall/v1/challenge/*）：挑战页是独立入口，
         // 必须能直接打到它；被防火墙挡住时唯一的自救通道就是这里。
         '/api/firewall': { target: apiTarget, changeOrigin: true },

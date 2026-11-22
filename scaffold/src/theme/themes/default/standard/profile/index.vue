@@ -318,53 +318,6 @@ const {
   transform: translateX(2px);
 }
 
-.accents {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
-  gap: 10px;
-}
-
-.accent-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--mauth-border);
-  border-radius: var(--mauth-radius-sm);
-  background: var(--mauth-surface);
-  cursor: pointer;
-  text-align: left;
-  transition:
-    border-color 0.15s var(--ease),
-    box-shadow 0.15s var(--ease);
-}
-
-.accent-card:hover {
-  border-color: var(--mauth-border-strong);
-  box-shadow: var(--e1);
-}
-
-.accent-card.is-on {
-  border-color: var(--mauth-primary);
-  box-shadow: inset 0 0 0 1px var(--mauth-primary);
-}
-
-.accent-card__swatch {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  /* 主色小方块上的字母：主色亮时白字会糊 */
-  color: var(--mauth-on-primary, #fff);
-}
-
-.accent-card__name {
-  font-size: 12.5px;
-  color: var(--mauth-text);
-}
-
 /* 面板头右侧的操作键：标题/副标题在左，动作靠右 */
 .panel__action {
   margin-left: auto;
