@@ -332,7 +332,7 @@ async function submit(): Promise<void> {
 
 <template>
   <div v-if="open" class="modal-mask" v-mask-close="() => emit('close')">
-    <div class="modal import-modal">
+    <div class="modal modal--xl import-modal">
       <header class="modal__head">
         <span class="modal__title">批量导入用户</span>
         <span v-if="fileName" class="mono import-file">{{ fileName }}</span>
@@ -474,9 +474,6 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
-.import-modal {
-  width: min(880px, 100%);
-}
 
 .modal__head {
   display: flex;

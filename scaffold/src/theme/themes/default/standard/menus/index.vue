@@ -350,7 +350,7 @@ const {
     </section>
 
     <div v-if="dialogOpen" class="modal-mask" v-mask-close="() => (dialogOpen = false)">
-      <div class="modal">
+      <div class="modal modal--sm">
         <header class="modal__head">
           <span class="modal__title">{{ dialogTitle }}</span>
         </header>

@@ -379,7 +379,7 @@ async function copyIssued(): Promise<void> {
     aria-labelledby="danger-title"
     v-mask-close="onMaskClick"
   >
-    <div class="modal danger-modal">
+    <div class="modal modal--md danger-modal">
       <div class="modal__head">
         <span class="danger-icon" aria-hidden="true"><ShieldAlert :size="16" /></span>
         <span id="danger-title" class="modal__title">账号高危操作 · {{ username }}</span>
@@ -651,9 +651,6 @@ async function copyIssued(): Promise<void> {
 </template>
 
 <style scoped>
-.danger-modal {
-  width: min(640px, 100%);
-}
 
 .danger-icon {
   display: inline-flex;

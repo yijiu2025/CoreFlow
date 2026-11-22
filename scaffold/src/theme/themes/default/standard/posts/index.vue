@@ -236,7 +236,7 @@ const {
     </section>
 
     <div v-if="dialogOpen" class="modal-mask" v-mask-close="() => (dialogOpen = false)">
-      <div class="modal">
+      <div class="modal modal--sm">
         <header class="modal__head">
           <span class="modal__title">{{ editingId ? '编辑岗位' : '新建岗位' }}</span>
         </header>

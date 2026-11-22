@@ -132,7 +132,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 
 <template>
   <div v-if="filters" class="modal-mask" v-mask-close="() => !busy && emit('close')">
-    <div class="modal purge" role="dialog" aria-modal="true" aria-labelledby="purge-title">
+    <div class="modal modal--sm purge" role="dialog" aria-modal="true" aria-labelledby="purge-title">
       <header class="modal__head">
         <span id="purge-title" class="modal__title"> {{ isPurgeAll ? '删除全部' : '清除' }}{{ scopeLabel }} </span>
         <button class="purge__close" type="button" aria-label="关闭" :disabled="busy" @click="emit('close')">
@@ -206,9 +206,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
 </template>
 
 <style scoped>
-.purge {
-  width: min(560px, 100%);
-}
 
 .purge__close {
   margin-left: auto;

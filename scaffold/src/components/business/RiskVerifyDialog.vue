@@ -178,7 +178,7 @@ onUnmounted(() => {
 
 <template>
   <div class="modal-mask" role="dialog" aria-modal="true" aria-labelledby="risk-title">
-    <div class="modal risk-modal">
+    <div class="modal modal--xs risk-modal">
       <div class="modal__head">
         <span class="risk-icon" aria-hidden="true"><ShieldAlert :size="16" /></span>
         <span id="risk-title" class="modal__title">安全验证</span>
@@ -232,9 +232,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.risk-modal {
-  width: min(384px, 100%);
-}
 
 .risk-icon {
   display: inline-flex;

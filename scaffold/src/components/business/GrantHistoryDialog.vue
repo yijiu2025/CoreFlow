@@ -315,7 +315,7 @@ watch(
 
 <template>
   <div v-if="userId !== null" class="modal-mask" v-mask-close="() => emit('close')">
-    <div class="modal grant-modal">
+    <div class="modal modal--lg grant-modal">
       <header class="modal__head">
         <span class="modal__title">授权记录 · {{ username }}</span>
         <button class="grant-close" type="button" aria-label="关闭" @click="emit('close')">×</button>
@@ -462,9 +462,6 @@ watch(
 </template>
 
 <style scoped>
-.grant-modal {
-  width: min(720px, 100%);
-}
 
 .modal__head {
   display: flex;

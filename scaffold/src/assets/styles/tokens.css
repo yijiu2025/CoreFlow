@@ -29,6 +29,17 @@
   --rail-w-collapsed: 64px;
   --topbar-h: 64px;
   /*
+   * 弹窗宽度只有五档（`components.css` 的 `.modal--*` 消费）
+   *
+   * 统一在这里定义而不是散在各组件里：弹窗宽度属于「骨架」，同一类对话框宽度不一致
+   * 是最容易被一眼看出来的不专业。选档规则见 components.css 的注释，不要新增第六档。
+   */
+  --modal-w-xs: 420px;
+  --modal-w-sm: 560px;
+  --modal-w-md: 680px;
+  --modal-w-lg: 800px;
+  --modal-w-xl: 960px;
+  /*
    * 密度基准 = 标准档（`data-density="regular"`）
    *
    * 三个值一起动才有意义：行高单独变大只会让表格"发胖"，单元格内距不跟着放宽，

@@ -619,7 +619,7 @@
 }
 
 .modal {
-  width: min(560px, 100%);
+  width: min(var(--modal-w-sm), 100%);
   max-height: 86vh;
   display: flex;
   flex-direction: column;
@@ -629,6 +629,41 @@
   overflow: hidden;
   /* 从下方 8px 淡入：比"凭空出现"少了半拍突兀，也比缩放动画更不晕 */
   animation: modal-in 0.2s var(--ease-out) both;
+}
+
+/*
+ * 弹窗宽度五档（唯一来源；组件里不要再写 `width: min(...px)`）
+ *
+ * | 修饰类        | 宽度 | 用于                                        |
+ * | ------------- | ---- | ------------------------------------------- |
+ * | `.modal--xs`  | 420  | 确认框、单次验证码这类「一句话问你」         |
+ * | `.modal--sm`  | 560  | 单列表单：部门 / 岗位 / 菜单 / 清理范围      |
+ * | `.modal--md`  | 680  | 详情与中等表单：用户高危、日志详情、批量授权  |
+ * | `.modal--lg`  | 800  | 双列表单与时间线：用户编辑、授权记录          |
+ * | `.modal--xl`  | 960  | 宽表格：批量导入预览                          |
+ *
+ * 窄屏统一由 `width: min(..., 100%)` + `.modal-mask` 的 padding 兜住，不写媒体查询。
+ * 守卫：`scaffold/scripts/check-modal-widths.mjs`（`npm run check:modal`，已接入 typecheck）——
+ * 组件里私设宽度、漏写档位或写未知档位都会让它报错。
+ */
+.modal--xs {
+  width: min(var(--modal-w-xs), 100%);
+}
+
+.modal--sm {
+  width: min(var(--modal-w-sm), 100%);
+}
+
+.modal--md {
+  width: min(var(--modal-w-md), 100%);
+}
+
+.modal--lg {
+  width: min(var(--modal-w-lg), 100%);
+}
+
+.modal--xl {
+  width: min(var(--modal-w-xl), 100%);
 }
 
 @keyframes mask-in {

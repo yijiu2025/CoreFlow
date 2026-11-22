@@ -13,7 +13,7 @@
       <div v-if="confirm.pending" class="modal-mask" @click.self="confirm.settle(false)">
         <div
           ref="panel"
-          class="modal modal--confirm"
+          class="modal modal--xs"
           role="alertdialog"
           aria-labelledby="confirm-title"
           aria-describedby="confirm-message"
@@ -81,11 +81,6 @@ watch(
 </script>
 
 <style scoped>
-.modal--confirm {
-  /* 确认框不该太宽：一行字读起来才像"一句话问你" */
-  width: min(420px, 100%);
-}
-
 .confirm__text {
   margin: 0;
   color: var(--mauth-text-mid);

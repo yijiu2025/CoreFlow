@@ -8,12 +8,13 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && npm run check:sfc && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit && npm run check:sfc && npm run check:tokens && npm run check:color && npm run check:accent && npm run check:table",
+    "typecheck": "vue-tsc --noEmit && npm run check:sfc && npm run check:tokens && npm run check:color && npm run check:accent && npm run check:table && npm run check:modal",
     "check:tokens": "node scripts/check-token-manifest.mjs",
     "check:color": "node scripts/check-color.mjs",
     "check:sfc": "node scripts/check-sfc-components.mjs src",
     "check:accent": "node scripts/check-accent-tokens.mjs",
-    "check:table": "node scripts/check-table-columns.mjs"
+    "check:table": "node scripts/check-table-columns.mjs",
+    "check:modal": "node scripts/check-modal-widths.mjs"
   },
   "dependencies": {
     "axios": "^1.7.9",

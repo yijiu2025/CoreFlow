@@ -454,7 +454,7 @@ const {
 
     <!-- 角色表单（新建 / 编辑，含权限码） -->
     <div v-if="formOpen" class="modal-mask" v-mask-close="() => (formOpen = false)">
-      <div class="modal modal--wide">
+      <div class="modal modal--md">
         <header class="modal__head">
           <span class="modal__title">{{ isEditing ? `编辑角色 · ${form.name}` : '新建角色' }}</span>
         </header>
@@ -669,7 +669,7 @@ const {
 
     <!-- 菜单授权 -->
     <div v-if="dialogOpen" class="modal-mask" v-mask-close="() => (dialogOpen = false)">
-      <div class="modal">
+      <div class="modal modal--md">
         <header class="modal__head">
           <span class="modal__title">菜单授权 · {{ activeRole?.name }}</span>
         </header>
@@ -743,10 +743,7 @@ const {
   background: var(--mauth-hover);
 }
 
-/* 角色表单：权限码面板 */
-.modal--wide {
-  max-width: 720px;
-}
+/* 角色表单：权限码面板（宽度由 `.modal--md` 统一提供） */
 
 .form-hint {
   margin: 0 0 8px;

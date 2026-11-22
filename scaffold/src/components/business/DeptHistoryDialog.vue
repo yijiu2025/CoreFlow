@@ -76,7 +76,7 @@ watch(
 
 <template>
   <div v-if="deptId !== null" class="modal-mask" v-mask-close="() => emit('close')">
-    <div class="modal dept-history">
+    <div class="modal modal--md dept-history">
       <header class="modal__head">
         <span class="modal__title">变更历史 · {{ deptName }}</span>
         <button class="dept-history__close" type="button" aria-label="关闭" @click="emit('close')">×</button>
@@ -127,9 +127,6 @@ watch(
 </template>
 
 <style scoped>
-.dept-history {
-  width: min(620px, 100%);
-}
 
 .dept-history__close {
   flex: none;
