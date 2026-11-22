@@ -55,8 +55,6 @@ export interface UsersViewContext {
   /** 筛选方式：全部用户 / 按部门 */
   filterMode: Ref<'all' | 'dept'>;
   collapsedDept: Ref<Set<number>>;
-  /** 抽屉里的用户 id（null = 关闭） */
-  profileId: Ref<number | null>;
   /** 左侧部门树（已按折叠状态展平） */
   deptFlat: ComputedRef<DeptFlatItem[]>;
   /** 当前筛选部门的名称（空串 = 未按部门筛） */

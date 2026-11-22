@@ -149,7 +149,13 @@
   box-shadow: none;
 }
 
-.wx .wxbody .drawer--page .drawer__head {
+/*
+ * 页头：组件换成 `.profile-head`（原先的 `.drawer__head` 是抽屉标题栏，已随抽屉档一起删除）
+ *
+ * 这里必须留一条：`.drawer--page` 用负外边距顶出 `.wxbody` 的左右内边距，页头的
+ * 两侧留白全靠这条规则补回来，删了会让用户名贴着屏幕边缘。
+ */
+.wx .wxbody .drawer--page .profile-head {
   padding: 14px var(--wx-pad) 8px;
   border-bottom: 0;
 }
@@ -158,35 +164,28 @@
   padding: 8px var(--wx-pad) calc(96px + env(safe-area-inset-bottom));
 }
 
-/* 抽屉里的分块（个人资料 / 角色 / 权限 / 设备）一律白块 */
-.wx .wxbody .drawer--page .block {
-  margin-bottom: var(--wx-gap);
-  padding: var(--wx-pad);
-  border: 0;
-  border-radius: var(--wx-radius);
-  background: var(--mauth-surface);
-  box-shadow: none;
-}
+/*
+ * 分块：`.block`（组件自绘的白块）已换成通用 `.panel`
+ *
+ * `.panel` 在 `surfaces.css` 里本来就有微信口径（无描边、无投影、wx 圆角、白底、
+ * `margin-bottom: var(--wx-gap)`、`panel__body` 自带 wx 内边距）。所以这里**不再**重复
+ * 一份 —— 再写一遍 `padding: var(--wx-pad)` 会叠在 `panel__body` 的内边距上，白块里的
+ * 内容会多缩进一层。原 `.block__title` / `.block__note` 同理，由 `.panel__title` /
+ * `.panel__note` 承担。
+ */
 
-.wx .wxbody .drawer--page .block__title {
-  font-size: 15px;
-  font-weight: 500;
-}
-
-.wx .wxbody .drawer--page .block__note {
-  font-size: var(--wx-fs-note);
-  color: var(--mauth-text-soft);
-}
-
-/* 键值对：手机上单列（两列会把值挤成省略号） */
-.wx .wxbody .drawer--page .kv {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
+/*
+ * 键值对：手机上单列、行间发丝线
+ *
+ * 容器已是 `.fact-grid`（组件在 ≤820 就是"左标签右值"的 flex 行），这里只补微信的
+ * 行节奏。原先 `grid-template-columns` 那条是给两列 dl 用的，现在由组件自己保证单列。
+ */
+.wx .wxbody .drawer--page .fact {
   padding: 9px 0;
   border-bottom: var(--wx-hairline);
 }
 
-.wx .wxbody .drawer--page .kv:last-child {
+.wx .wxbody .drawer--page .fact:last-child {
   border-bottom: 0;
 }
 

@@ -152,13 +152,19 @@
 
 /* ── 用户详情（/system/user/:id）──────────────────────────── */
 
-.wx[data-page='system-user-detail'] .who__avatar {
+/*
+ * 身份区：组件的 `.who*` 已随详情页重构换成 `.profile-avatar` + `.page__sub`
+ *
+ * 微信这边是"56 见方、8 圆角"的头像（不是圆形），名字下副行更小更淡。
+ */
+.wx[data-page='system-user-detail'] .profile-avatar {
   width: 56px;
   height: 56px;
   border-radius: 8px;
+  font-size: 20px;
 }
 
-.wx[data-page='system-user-detail'] .who__sub {
+.wx[data-page='system-user-detail'] .profile-head__id .page__sub {
   font-size: var(--wx-fs-note);
   color: var(--mauth-text-soft);
 }
@@ -225,40 +231,41 @@
 }
 
 /*
- * 概览的键值对：**白块**
+ * 概览的键值对：行间发丝线
  *
- * 组件里 `.kv` 只是"两列 dl"，靠页面底色分层；微信必须落在一张白块上，
- * 否则一屏十几行字浮在灰底里，看不出这是一组信息。
+ * 组件里 `.fact-grid` 已经是 ≤820 的"左标签右值"单列，白块由外层 `.panel` 提供
+ * （`surfaces.css` 里有微信口径），所以这里**只补行节奏**，不再自己画一层白底 ——
+ * 再画一层会在同一个位置上叠加圆角与左右内边距。
  */
-.wx[data-page='system-user-detail'] .drawer--page .kv {
-  margin: 0;
-  padding: 0 var(--wx-pad);
-  border-radius: var(--wx-radius);
-  background: var(--mauth-surface);
-}
-
-.wx[data-page='system-user-detail'] .drawer--page .kv > div {
+.wx[data-page='system-user-detail'] .drawer--page .fact-grid > .fact {
   padding: 11px 0;
   border-bottom: var(--wx-hairline);
 }
 
-.wx[data-page='system-user-detail'] .drawer--page .kv > div:last-child {
+.wx[data-page='system-user-detail'] .drawer--page .fact-grid > .fact:last-child {
   border-bottom: 0;
 }
 
-.wx[data-page='system-user-detail'] .drawer--page .kv dt {
+.wx[data-page='system-user-detail'] .drawer--page .fact__label {
   font-size: var(--wx-fs-sub);
   color: var(--mauth-text-soft);
 }
 
-.wx[data-page='system-user-detail'] .drawer--page .kv dd {
+.wx[data-page='system-user-detail'] .drawer--page .fact__value {
   font-size: var(--wx-fs-body);
   color: var(--mauth-text);
 }
 
-/* 详情页的区块（角色 / 权限 / 设备 / 最近动态）之间留 10px */
-.wx[data-page='system-user-detail'] .drawer--page .block + .block {
-  margin-top: var(--wx-gap);
+/*
+ * 区块间距：交给 `.panel` 自己的 `margin-bottom: var(--wx-gap)`
+ *
+ * 组件用 flex/grid 的 `gap` 排块（`.panel-stack` / `.record-grid`），与 panel 的外边距
+ * 相加会变成双倍间距，所以把 gap 归零 —— 微信的块间距只留一处来源。
+ * 原 `.block + .block` 那条随 `.block` 一起删除（类已不存在）。
+ */
+.wx[data-page='system-user-detail'] .drawer--page .panel-stack,
+.wx[data-page='system-user-detail'] .drawer--page .record-grid {
+  gap: 0;
 }
 
 /* ── 角色管理（/system/role）──────────────────────────────── */

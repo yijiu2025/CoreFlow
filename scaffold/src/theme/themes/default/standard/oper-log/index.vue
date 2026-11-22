@@ -348,16 +348,20 @@ const {
       <div v-if="device !== 'mobile'" class="table-wrap">
         <table class="table oper-table">
           <colgroup>
-            <col style="width: 90px" />
-            <col style="width: 68px" />
+            <col style="width: 132px" />
+            <col style="width: 72px" />
             <col style="width: 76px" />
-            <col style="width: 120px" />
-            <col style="width: 160px" />
+            <!-- 事件列是主列：120px 装不下「修改 Notice/config/testEmail: requireLogin…」，
+                 摘要会被压成省略号后再挤到路径列上 -->
+            <col style="width: 190px" />
+            <!-- 事件码单独一列：和摘要挤在同一格必然折成两行 -->
+            <col style="width: 112px" />
+            <col style="width: 136px" />
             <!-- 结果列 62：`tag` 高 22、左右各 8px 内边距，「成功」两字共 40px，
                  52px 减去单元格左右 10px 只剩 32 ⇒ 标签被截成「成」 -->
             <col style="width: 62px" />
-            <col style="width: 124px" />
-            <col style="width: 84px" />
+            <col style="width: 118px" />
+            <col style="width: 68px" />
           </colgroup>
           <thead>
             <tr>
@@ -367,6 +371,7 @@ const {
               <th title="发起这次操作的人（audit_logs.user_id）">操作者</th>
               <th>模块</th>
               <th>事件</th>
+              <th title="后端事件码（audit_logs.event）">动作</th>
               <th>路径</th>
               <th>结果</th>
               <th>来源</th>
@@ -381,7 +386,17 @@ const {
                 <span class="oper-time__hms">{{ timeParts(row.created_at).time }}</span>
               </td>
               <!-- 悬停显示邮箱/uid：列表列宽有限，账号名重名时靠它区分 -->
-              <td :title="row.email || row.uid || ''">{{ row.username || '—' }}</td>
+              <!--
+                没有操作者 ≠ 数据缺失：`guard` 的「放宽被拒」是**启动期**从 DB/代码同步配置时
+                判定的（`guard-config.js` 里 `userId: null`），那时没有请求上下文。
+                显示「系统」并说明原因，比一个 `—` 更像"查清楚了"。
+              -->
+              <td
+                class="oper-actor"
+                :title="row.email || row.uid || (row.user_id ? '' : '系统事件：启动期配置同步，无关联账号')"
+              >
+                {{ row.username || (row.user_id ? '—' : '系统') }}
+              </td>
               <td class="oper-module" :title="row.module">{{ row.module }}</td>
               <!--
                 事件列：**中文摘要为主、事件码为辅**。
@@ -389,9 +404,12 @@ const {
                 满屏都是大写码，看不出到底做了什么；码对排查有用，但它是次要信息。
               -->
               <td class="oper-event">
-                <span class="oper-event__summary">{{ summarizeOperEvent(row) }}</span>
-                <span class="mono oper-event__code" :title="row.action">{{ row.action }}</span>
+                <span class="oper-event__summary" :title="summarizeOperEvent(row)">{{
+                  summarizeOperEvent(row)
+                }}</span>
               </td>
+              <!-- 事件码独立成列：等宽小字，扫表时可以只看它对齐后端日志 -->
+              <td class="mono oper-event__code" :title="row.action">{{ row.action }}</td>
               <!-- 方法徽标进路径列：扫表时能直接分出读/写，不额外占一列。
                    路径按 300px 截断（完整值在 title 与详情弹窗里）—— 9 列表格里
                    一条长 API 路径会把 IP 与详情按钮顶出容器 -->
@@ -413,7 +431,6 @@ const {
                 <span v-if="row.device_id" class="mono oper-origin__dev" :title="row.device_id">{{
                   shortDevice(row.device_id)
                 }}</span>
-                <span v-else class="oper-origin__dev is-empty" title="该记录未采集设备码">无设备码</span>
               </td>
               <td class="oper-col-act">
                 <button
@@ -427,7 +444,7 @@ const {
               </td>
             </tr>
             <tr v-if="!loading && rows.length === 0">
-              <td colspan="8"><div class="empty">该条件下没有操作记录</div></td>
+              <td colspan="9"><div class="empty">该条件下没有操作记录</div></td>
             </tr>
           </tbody>
         </table>
@@ -621,14 +638,19 @@ const {
 
 /* 时间两行：日期 / 时分秒（单行要 141px，两行 90px 就够） */
 .oper-time {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  line-height: 1.2;
+  /*
+   * 🔴 不要给 `<td>` 写 `display: flex`：一旦 td 变成 flex 容器，它就不再是
+   *    table-cell，`vertical-align: middle` 完全失效 —— 表现就是"时间没竖直居中"。
+   *    这里只用 inline 排布（两个 span 天然一行），竖直居中交给单元格本身。
+   */
+  line-height: 1.25;
   font-size: 11.5px;
+  /* 日期与时分秒一行：两行会把行高抬高，读起来像两条记录 */
+  white-space: nowrap;
 }
 
 .oper-time__hms {
+  margin-left: 6px;
   color: var(--mauth-text-soft);
 }
 
@@ -639,31 +661,58 @@ const {
   padding: 0 10px;
 }
 
-/* 事件列两行：上行事件码（等宽，便于对照后端），下行人话摘要。
-   摘要允许折到两行再截断 —— 一行 340px 会把"授予了谁、从什么改成什么"正好切掉，
-   而那正是这条日志唯一值钱的部分。 */
+/*
+ * 🔴 行高必须交给内容，不能沿用全局的固定 `height: var(--row-h)`
+ *
+ * `.table td { height: 44px }` 是**固定值**：只要某格内容比它高（时间 + 事件码、
+ * 两行来源），文字就会溢出到下一行，而边框仍画在固定高度处 —— 视觉上就是
+ * "分割线断开、每行没对齐"。这里改成 auto + 统一上下内边距，行高由内容决定，
+ * 边框永远落在本行底部。
+ */
+.oper-table td {
+  height: auto;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  vertical-align: middle;
+}
+
+/* 行与行之间的线画在 tr 上：单靠每个 td 的 border 在内容高度不一时会拼不齐 */
+.oper-table tbody tr {
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 78%, transparent);
+}
+
+.oper-table tbody td {
+  border-bottom: 0;
+}
+
+/* 事件列：摘要一行截断（全文进 title），事件码一行小字垫在下方 —— 行高才稳定 */
+/* 操作者是正文内容，不是链接/强调：整列发蓝会让人以为可以点 */
+.oper-actor {
+  color: var(--mauth-text);
+}
+
 .oper-event {
   vertical-align: middle;
 }
 
 /* 摘要为主：正文色、可读字号，最多两行 */
 .oper-event__summary {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  max-width: 320px;
+  /* 单行 + 省略号：两行会让行高参差，扫表时很难对齐；全文在 title 里 */
+  display: block;
+  -webkit-line-clamp: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* 限宽交给列宽决定：写死 320px 会在 236px 的列里溢出到路径列 */
+  max-width: 100%;
   overflow: hidden;
-  white-space: normal;
   font-family: inherit;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--mauth-text);
 }
 
-/* 事件码为辅：等宽小字，留给排查时对日志用 */
+/* 事件码现在是独立列（td）：等宽小字，长码截断 + title */
 .oper-event__code {
-  display: block;
-  margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

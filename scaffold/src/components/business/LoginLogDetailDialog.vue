@@ -21,8 +21,9 @@
  * @since 2026-11-12
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Check, Copy, X } from 'lucide-vue-next';
-import { describeLoginEvent, loginEventLabel } from '@/utils/loginLogSummary';
+import { Check, Code2, Copy, X } from 'lucide-vue-next';
+import { describeLoginEvent, loginEventLabel, shortUserAgent } from '@/utils/loginLogSummary';
+import { payloadLabelOf } from '@/utils/operLogSummary';
 import type { LoginLogRow } from '@/api/types';
 
 const props = defineProps<{
@@ -80,16 +81,34 @@ const accountTag = computed(() => {
 const copyState = ref<'idle' | 'ok' | 'fail'>('idle');
 
 /** 载荷逐键展开（按写入顺序，不排序 —— 顺序本身是线索） */
+/**
+ * 载荷字段的中文名
+ *
+ * 只收录**确认语义**的键：`details` 是各写入点自己拼的 JSON，同一个键在不同事件里
+ * 可能含义不同 —— 没把握的一律原样显示英文键，不硬翻（翻错比不翻更难查）。
+ */
 const entries = computed(() => {
   const details = props.row?.details;
   if (!details || typeof details !== 'object') return [];
   return Object.entries(details).map(([key, value]) => ({
     key,
+    label: payloadLabelOf(key),
     text: valueOf(value),
     multiline: value !== null && typeof value === 'object',
     // 布尔值单独标出来，渲染成胶囊而不是一整行文字
     bool: typeof value === 'boolean'
   }));
+});
+
+/**
+ * 摘要里"状态词之后"的部分
+ *
+ * `describeLoginEvent` 的句子以「登录成功，…」「登录失败（原因）。」开头，
+ * 状态词已经单独渲染成彩色标签，这里把它剥掉，避免同一句里出现两次。
+ */
+const summaryRest = computed(() => {
+  const text = props.row ? describeLoginEvent(props.row) : '';
+  return text.replace(/^登录(成功|失败)[，。]?\s*/, '');
 });
 
 /** 原始 JSON 文本（展开段丢掉了嵌套结构，留一份原文） */
@@ -148,6 +167,38 @@ async function copyPayload(): Promise<void> {
   window.setTimeout(() => (copyState.value = 'idle'), 1800);
 }
 
+/** 哪个字段刚被复制（`ua` / `deviceId` / 空）：按钮各自闪各自的 */
+const copiedKey = ref('');
+
+/**
+ * 复制一个长字段值
+ *
+ * 报障时最常被要求提供的就是 UA 与设备标识，两者都长到无法手选（必漏字符）。
+ *
+ * @param key 字段标识（用于按钮反馈）
+ * @param text 待复制文本
+ * @returns {Promise<void>} 无
+ */
+async function copyField(key: string, text: string): Promise<void> {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    copiedKey.value = key;
+    window.setTimeout(() => {
+      if (copiedKey.value === key) copiedKey.value = '';
+    }, 1600);
+  } catch {
+    /* 剪贴板不可用（非安全上下文）：静默失败，title 里已给出全文 */
+  }
+}
+
+/**
+ * 附加信息视图：字段表 / 原始 JSON **互斥**
+ *
+ * 两者摆一起没意义（原文是字段表的超集），切换查看才符合"排查时想换一种视角"的心智。
+ */
+const showRaw = ref(false);
+
 /**
  * Esc 关闭
  *
@@ -169,14 +220,15 @@ watch(
 
 <template>
   <div v-if="row" class="modal-mask" v-mask-close="() => emit('close')">
-    <div class="modal sess-detail" role="dialog" aria-modal="true" aria-labelledby="sess-detail-title">
+    <div class="modal modal--md sess-detail" role="dialog" aria-modal="true" aria-labelledby="sess-detail-title">
       <header class="modal__head">
         <span id="sess-detail-title" class="modal__title">登录详情</span>
-        <!-- 单号只是索引：等宽小字贴在标题后，不和标题抢字号 -->
-        <span class="sess-id mono">#{{ row.id }}</span>
+        <!-- 成功/失败紧贴标题：它是这条记录的**结论**，不该被单号隔开 -->
         <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
           {{ row.status === 1 ? '成功' : '失败' }}
         </span>
+        <!-- 单号只是索引：右推、弱化，不与标题抢位置 -->
+        <span class="sess-id mono">#{{ row.id }}</span>
         <button class="sess-detail__close" type="button" aria-label="关闭" @click="emit('close')">
           <X :size="16" />
         </button>
@@ -186,7 +238,13 @@ watch(
         <!-- ① 概览：先给一句人话，再列字段 -->
         <section class="sess-block">
           <h3 class="sess-block__title">概览</h3>
-          <p class="sess-summary">{{ describeLoginEvent(row) }}</p>
+          <p class="sess-summary">
+            <!-- 状态词单独着色：红/绿是这张弹窗里唯一"一眼定性"的信息，正文保持中性 -->
+            <span class="sess-summary__state" :class="row.status === 1 ? 'is-ok' : 'is-fail'">
+              {{ row.status === 1 ? '登录成功' : '登录失败' }}
+            </span>
+            <span v-if="summaryRest" class="sess-summary__rest"> · {{ summaryRest }}</span>
+          </p>
           <dl class="sess-kv">
             <div>
               <dt>时间</dt>
@@ -225,13 +283,6 @@ watch(
             </div>
           </dl>
 
-          <!-- 口径说明：不写这一行，读的人会拿它和操作日志的「操作者 / 被操作账号」
-               对照，以为这里只是省略了另一半 -->
-          <p class="sess-caption">
-            「登录账号」是这条记录的**当事人**（谁被记录了）。多数事件当事人就是操作者本人； 被管理员踢下线这类事件不是
-            —— 那时「操作者」会单独列在下面，别把两者混成一件事。
-          </p>
-
           <!-- 说明这段只对已注销账号出现：读日志的人看到「注销-xxx」必须知道这个名字
                是从哪儿来的（它已经不在用户表里了），否则会去搜一个搜不到的账号 -->
           <p v-if="row.user_status === -1" class="sess-note">
@@ -262,20 +313,53 @@ watch(
               <dd>{{ locationText }}</dd>
             </div>
           </dl>
-          <p class="sess-ua" :title="row.user_agent">
-            {{ row.user_agent || '未记录 User-Agent' }}
-          </p>
+          <dl class="sess-kv">
+            <div class="is-wide">
+              <dt>User-Agent</dt>
+              <dd class="mono sess-ua-cell" :title="row.user_agent">
+                <span class="sess-ua-text">{{ row.user_agent ? shortUserAgent(row.user_agent) : '未记录 User-Agent' }}</span>
+                <button
+                  v-if="row.user_agent"
+                  class="sess-copy sess-copy--inline"
+                  type="button"
+                  :title="copiedKey === 'ua' ? '已复制' : '复制 User-Agent'"
+                  aria-label="复制 User-Agent"
+                  @click="copyField('ua', row.user_agent)"
+                >
+                  <Check v-if="copiedKey === 'ua'" :size="12" />
+                  <Copy v-else :size="12" />
+                </button>
+              </dd>
+            </div>
+          </dl>
         </section>
 
         <!-- ③ 载荷：真正回答"为什么" -->
         <section class="sess-block">
           <h3 class="sess-block__title">
-            载荷
+            附加信息
+            <!--
+              视图切换放在标题右侧：这两个动作（复制 / 换一种看法）都是"对整个区块"的操作，
+              悬在底部的按钮会让人先读完整张表才发现它。
+            -->
+            <button
+              v-if="rawPretty && entries.length"
+              class="sess-copy"
+              type="button"
+              :title="showRaw ? '回到字段列表' : '查看 session_logs.details 原文'"
+              :aria-pressed="showRaw"
+              @click="showRaw = !showRaw"
+            >
+              <Code2 :size="12" />
+              {{ showRaw ? '查看字段' : '原始 JSON' }}
+            </button>
             <button
               v-if="rawPretty"
               class="sess-copy"
               type="button"
               :disabled="copyState === 'ok'"
+              title="复制原始 JSON（贴给后端排查用）"
+              aria-label="复制载荷 JSON"
               @click="copyPayload"
             >
               <Check v-if="copyState === 'ok'" :size="12" />
@@ -284,26 +368,41 @@ watch(
             </button>
           </h3>
 
-          <dl v-if="entries.length" class="sess-kv sess-kv--payload">
-            <div v-for="item in entries" :key="item.key" :class="{ 'is-wide': item.multiline }">
-              <dt class="mono">{{ item.key }}</dt>
-              <dd :class="{ mono: true, 'is-block': item.multiline }">
-                <span v-if="item.bool" class="sess-bool" :class="{ 'is-on': item.text === '是' }">
-                  {{ item.text }}
-                </span>
-                <template v-else>{{ item.text }}</template>
-              </dd>
-            </div>
-          </dl>
+          <!-- 字段表与原文互斥：原文是字段表的超集，同时显示只会让人两处来回看 -->
+          <template v-if="entries.length">
+            <dl v-if="!showRaw" class="sess-kv sess-kv--payload">
+              <div v-for="item in entries" :key="item.key" :class="{ 'is-wide': item.multiline }">
+                <dt>
+                  <span v-if="item.label">{{ item.label }}</span>
+                  <code class="sess-kv__en">{{ item.key }}</code>
+                </dt>
+                <dd :class="{ mono: true, 'is-block': item.multiline }">
+                  <span v-if="item.bool" class="sess-bool" :class="{ 'is-on': item.text === '是' }">
+                    {{ item.text }}
+                  </span>
+                  <template v-else>{{ item.text }}</template>
+                  <!-- 长串（设备标识等）就地可复制：手选必漏字符 -->
+                  <button
+                    v-if="!item.multiline && item.text.length >= 12 && item.text !== '—'"
+                    class="sess-copy sess-copy--inline"
+                    type="button"
+                    :title="copiedKey === item.key ? '已复制' : `复制 ${item.key}`"
+                    :aria-label="`复制 ${item.key}`"
+                    @click="copyField(item.key, item.text)"
+                  >
+                    <Check v-if="copiedKey === item.key" :size="11" />
+                    <Copy v-else :size="11" />
+                  </button>
+                </dd>
+              </div>
+            </dl>
+
+            <pre v-else class="sess-json">{{ rawPretty }}</pre>
+          </template>
 
           <p v-else class="sess-empty">
             这条事件没有附带载荷（session_logs.details 为空）。事件码本身已经说明了结果， 没有更多可展开的细节。
           </p>
-
-          <details v-if="rawPretty && entries.length" class="sess-raw">
-            <summary>原始 JSON</summary>
-            <pre>{{ rawPretty }}</pre>
-          </details>
         </section>
       </div>
     </div>
@@ -319,19 +418,61 @@ watch(
  * 一屏里堆成噪音，反而看不出哪句是重点。
  */
 
-/* 比默认弹窗宽一档：载荷是键值对，560px 会把值挤成竖排 */
-.sess-detail {
-  width: min(680px, 100%);
+/* 原始 JSON：与字段表同高上限，内部滚动，不把弹窗撑长 */
+.sess-json {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--mauth-radius-sm);
+  background: color-mix(in srgb, var(--mauth-text) 4%, transparent);
+  font-family: var(--mauth-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
+
+/* 状态词：成功绿 / 失败红；字重 600 让它先被读到 */
+.sess-summary__state {
+  font-weight: 600;
+}
+
+.sess-summary__state.is-ok {
+  color: var(--mauth-success, #15803d);
+}
+
+.sess-summary__state.is-fail {
+  color: var(--mauth-danger, #dc2626);
+}
+
+.sess-summary__rest {
+  color: var(--mauth-text-mid, var(--mauth-text));
+}
+
+/* ── 标题栏：16/24 的内边距是呼吸感的来源，压到 10px 会显得"挤在框里" ── */
+.sess-detail :deep(.modal__head) {
+  padding: 16px 24px;
+}
+
+.sess-detail :deep(.modal__title) {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* 宽度由 `.modal--md` 统一提供（载荷是键值对，560px 会把值挤成竖排） */
 
 /* 单号：等宽小字贴标题，只做索引，不参与标题层级 */
 .sess-id {
-  font-size: 12px;
-  color: var(--mauth-text-faint);
+  /* 单号只是索引：推到右侧弱化位，别夹在标题和状态之间 */
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--mauth-text-faint, #9ca3af);
 }
 
 .sess-detail__close {
-  margin-left: auto;
+  /* #id 已经 auto 推到右边，这里只需常规间距 */
+  margin-left: 6px;
   display: grid;
   place-items: center;
   width: 28px;
@@ -352,18 +493,28 @@ watch(
 }
 
 .sess-detail__body {
-  gap: 16px;
-  padding-bottom: 20px;
+  /* 区块之间靠纯空白分层，不用横线 */
+  gap: 24px;
+  /* 🔴 必须写全四边：上一版用 padding 简写把 modal__body 的 18px 上下左右全吃掉了，
+     表现为内容贴边、整体被压扁 */
+  /*
+   * 四边统一 24：与左右内边距对齐，卡片四周的呼吸感才对称（原来上 18 / 下 20 显得上紧下松）。
+   * 🔴 必须写全四边：曾在上一版用简写把 modal__body 的 18px 全吃掉，导致内容贴边、弹窗被压扁。
+   */
+  padding: 24px;
 }
 
 /* 摘要：整张弹窗最该被先读到的一句。极浅底承载，不加左侧竖条 —— 那会读成"引用块" */
 .sess-summary {
-  margin: 0 0 2px;
-  padding: 10px 12px;
-  border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, var(--mauth-text) 4%, transparent);
-  color: var(--mauth-text);
+  /* 一条"摘要栏"：极浅底 + 圆角，和下方字段表区分开；字重保持 400，不抢标题 */
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--mauth-surface-2, #f8fafc);
+  /* 用正文色：摘要要"读得清"，靠字号(13px)/字重(400)与下方字段区分，不靠把字变灰 */
+  color: var(--mauth-text, #334155);
   font-size: 13px;
+  font-weight: 400;
   line-height: 1.65;
   overflow-wrap: anywhere;
 }
@@ -379,17 +530,27 @@ watch(
   align-items: center;
   gap: 10px;
   margin: 0 0 10px;
-  font-size: 12px;
+  padding-left: 10px;
+  position: relative;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--mauth-text-mid);
+  color: var(--mauth-text);
 }
 
-.sess-block__title::after {
+/* 蓝色小竖条：与标题文字等高（14px），比左侧 border 更可控 */
+.sess-block__title::before {
   content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--mauth-border);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--mauth-primary, #2563eb);
+  transform: translateY(-50%);
 }
+
+
 
 /* 注销说明：中性浅底，别用警示色 —— 注销是正常业务，不是错误 */
 .sess-note {
@@ -439,7 +600,8 @@ watch(
   gap: 4px;
   margin-left: 2px;
   padding: 0 8px;
-  height: 20px;
+  height: 24px;
+  font-size: 12px;
   border: 1px solid var(--mauth-border-strong);
   border-radius: 999px;
   background: transparent;
@@ -453,6 +615,48 @@ watch(
 }
 
 .sess-copy:hover:not(:disabled) {
+  color: var(--mauth-text);
+  background: var(--mauth-hover);
+}
+
+/* UA 很长：允许换行，复制按钮贴身但不挤压文字 */
+.sess-ua-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* 复制按钮不要贴到弹窗右边线：留一格内边距，视觉上跟着文字走 */
+  padding-right: 8px;
+}
+
+.sess-ua-text {
+  min-width: 0;
+  word-break: break-all;
+}
+
+.sess-copy--inline {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* 「查看原始 JSON」要像按钮，而不是一行带下划线的文字 */
+.sess-raw summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--mauth-border);
+  border-radius: 999px;
+  color: var(--mauth-text-soft);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.sess-raw summary::-webkit-details-marker {
+  display: none;
+}
+
+.sess-raw summary:hover {
   color: var(--mauth-text);
   background: var(--mauth-hover);
 }
@@ -543,16 +747,17 @@ watch(
   align-items: center;
   height: 18px;
   padding: 0 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mauth-text) 7%, transparent);
+  border-radius: 4px;
+  /* 圆角胶囊读起来像"可点的徽标"；这里只是陈述一个取值，用方角底片更像状态 */
+  background: color-mix(in srgb, var(--mauth-text) 6%, transparent);
   color: var(--mauth-text-mid);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .sess-bool.is-on {
-  background: var(--mauth-primary-soft);
-  color: var(--mauth-primary);
+  background: color-mix(in srgb, var(--mauth-success) 14%, transparent);
+  color: var(--mauth-success);
 }
 
 /* User-Agent：最长的一条无关信息，压到两行以内，完整内容看 title */
@@ -601,6 +806,43 @@ watch(
   font-size: 11.5px;
   line-height: 1.6;
   white-space: pre;
+}
+
+/* 载荷键值：行距 10px（12 偏松，键值表要紧凑） */
+.sess-kv--payload {
+  row-gap: 10px;
+}
+
+/* 英文键：淡一档 + 等宽，紧跟中文名之后 */
+.sess-kv__en {
+  margin-left: 6px;
+  font-family: var(--mauth-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--mauth-text-faint, #94a3b8);
+}
+
+/* 底部"换视角"按钮：浅底 + 细边，稳在左下角，距内容 20px */
+.sess-raw-actions {
+  margin-top: 20px;
+}
+
+.sess-raw-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--mauth-border);
+  border-radius: 6px;
+  background: var(--mauth-surface-2, #f8fafc);
+  color: var(--mauth-text-soft, #475569);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sess-raw-toggle:hover {
+  color: var(--mauth-text);
+  background: var(--mauth-hover);
 }
 
 .sess-empty {

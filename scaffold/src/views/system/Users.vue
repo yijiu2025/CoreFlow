@@ -6,7 +6,7 @@
  * 批量授权 / 导出 CSV。所有写操作按权限码隐藏按钮，但真正的拦截在后端。
  *
  * 🔴 **没有「删除用户」和「重置密码」**：停用走冻结（可逆、留痕、会话立即失效），
- *    密码只能本人改。理由与风险见后端 `api/admin/console/v1/users.js` 文件头。
+ *    密码只能本人改。理由与风险见后端 `api/admin/v1/users.js` 文件头。
  *
  * @author yijiu2025
  * @since 2026-11-09
@@ -60,8 +60,6 @@ const deptTrees = ref<DeptNode[]>([]);
 const filterMode = ref<'all' | 'dept'>('all');
 /** 收起的部门（默认全展开） */
 const collapsedDept = ref<Set<number>>(new Set());
-/** 详情抽屉当前展示的用户（null = 关闭） */
-const profileId = ref<number | null>(null);
 
 /**
  * 部门树扁平化（带缩进层级）
@@ -149,19 +147,14 @@ function pickDept(deptId: number | null): void {
 /**
  * 打开用户详情
  *
+ * 统一走独立页面，不再用右侧抽屉：抽屉宽度只有 560（信息挤成两行就换行）、
+ * 不在浏览器历史里（返回键会直接跳出用户管理），换了设备宽度也没法自适应。
+ * 路由 `meta.stack` 会让外壳顶栏出现返回箭头，返回即回到列表并保留筛选条件。
+ *
  * @param row 用户行
  */
 function openProfile(row: UserRow): void {
-  /*
-   * 手机端不走抽屉：抽屉盖住半屏、右侧滑出，在 390px 上左右都不留余量，
-   * 而且「退回去」只能点遮罩 —— 不是 App 的手感。改成压栈进详情页，
-   * 顶栏会出现返回箭头（路由 `meta.stack`，见 AppShell）。
-   */
-  if (device.value === 'mobile') {
-    router.push({ name: 'system-user-detail', params: { id: row.id } });
-    return;
-  }
-  profileId.value = row.id;
+  router.push({ name: 'system-user-detail', params: { id: row.id } });
 }
 
 /**
@@ -670,7 +663,7 @@ onMounted(async () => {
  */
 const ctx: UsersViewContext = {
   device, rows, total, loading, errorMessage, query, options, filterMode, collapsedDept,
-  profileId, deptFlat, currentDeptName, selected, allSelected, someSelected, selectedUsers,
+  deptFlat, currentDeptName, selected, allSelected, someSelected, selectedUsers,
   grantTarget, dangerTarget, batchOpen, importOpen, editingTarget, dialogOpen, pageCount,
   grantAdjustable,
   canCreate: auth.hasPermission('admin:user:create'),

@@ -240,13 +240,24 @@ export interface UserProfile {
   apps: UserAppRow[];
   /** 个人策略（按应用）：单独允许 / 拒绝的权限码 */
   inline: Array<{ appId: string; appLabel: string; allow: string[]; deny: string[] }>;
-  recentOps: Array<{ event: string; appId: string; ip: string; costMs: number | null; createdAt: string }>;
+  recentOps: Array<{
+    event: string;
+    appId: string;
+    ip: string;
+    /** details 原始 JSON 串：前端翻译成"删除了部门 X"（与操作日志页同一份话术） */
+    detail?: string;
+    userAgent?: string;
+    costMs: number | null;
+    createdAt: string;
+  }>;
   recentLogins: Array<{
     event: string;
     appId: string;
     ip: string;
     location: string;
     userAgent: string;
+    /** 失败原因等附加信息 */
+    detail?: string;
     failed: boolean;
     createdAt: string;
   }>;
@@ -670,7 +681,10 @@ export interface DeptNode {
   /** 祖先链，形如 `0,1,3`（根为 0）；由后端维护，前端不自行拼接 */
   ancestors: string;
   name: string;
+  /** 负责人显示名（用户名快照；历史数据里也可能是手填的人名） */
   leader: string | null;
+  /** 负责人用户主键（NULL = 未绑定，只有人名） */
+  leader_user_id?: number | null;
   phone: string | null;
   email: string | null;
   sort: number;

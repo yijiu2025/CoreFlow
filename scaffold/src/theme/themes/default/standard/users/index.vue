@@ -14,7 +14,6 @@ import AppIcon from '@/components/ui/AppIcon.vue';
 import GrantHistoryDialog from '@/components/business/GrantHistoryDialog.vue';
 import BatchGrantDialog from '@/components/business/BatchGrantDialog.vue';
 import UserDangerDialog from '@/components/business/UserDangerDialog.vue';
-import UserProfileDrawer from '@/components/business/UserProfileDrawer.vue';
 import UserEditDialog from '@/components/business/UserEditDialog.vue';
 import UserImportDialog from '@/components/business/UserImportDialog.vue';
 import type { UsersViewContext } from '@/theme/views/users';
@@ -27,7 +26,7 @@ const props = defineProps<{ ctx: UsersViewContext }>();
  */
 const {
   device, rows, total, loading, errorMessage, query, options, filterMode, collapsedDept,
-  profileId, deptFlat, currentDeptName, selected, allSelected, someSelected, selectedUsers,
+  deptFlat, currentDeptName, selected, allSelected, someSelected, selectedUsers,
   grantTarget, dangerTarget, batchOpen, importOpen, editingTarget, dialogOpen, pageCount,
   grantAdjustable, canCreate, canUpdate, canExport, canImport, canGrants, canRead,
   canDeleteUser, canTempPassword, canDeactivateApp, canOpenDanger,
@@ -407,8 +406,7 @@ const {
       </div>
     </div>
 
-    <!-- 用户详情：点行打开，职级可见性由后端判 -->
-    <UserProfileDrawer :user-id="profileId" @close="profileId = null" @changed="load" />
+    <!-- 用户详情走独立页面（`/system/user/:id`），这里不再挂抽屉 -->
 
     <!-- 用户表单：新建 / 编辑共用，详情页也用同一个组件（见 UserEditDialog） -->
     <UserEditDialog

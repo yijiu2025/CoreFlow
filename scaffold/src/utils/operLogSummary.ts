@@ -23,6 +23,37 @@ export interface OperSummaryInput {
   detail?: string;
 }
 
+/**
+ * 载荷字段的中文名
+ *
+ * 只收录**确认语义**的键。`details` 是各写入点自己拼的 JSON，同一个键在不同事件里
+ * 可能含义不同 —— 没把握的原样显示英文键，不硬翻。
+ */
+const PAYLOAD_LABELS: Record<string, string> = {
+  rememberMe: '记住登录',
+  deviceId: '设备标识',
+  deviceType: '设备类型',
+  reason: '原因',
+  method: '验证方式',
+  costMs: '耗时(ms)',
+  action: '动作',
+  path: '路径',
+  code: '码',
+  timestamp: '时间戳',
+  targetId: '目标 ID',
+  targetUsername: '目标账号'
+};
+
+/**
+ * 载荷键 → 中文名（未收录返回空串，调用方只显示英文）
+ *
+ * @param key 原始键名
+ * @returns 中文名或空串
+ */
+export function payloadLabelOf(key: string): string {
+  return PAYLOAD_LABELS[key] || '';
+}
+
 /** 二次验证方式的中文名 */
 const STEPUP_METHOD: Record<string, string> = { password: '密码', email: '邮箱验证码' };
 
@@ -48,7 +79,7 @@ const APP_LABEL: Record<string, string> = {
  * @param id 应用标识
  * @returns 中文名或原标识
  */
-function appText(id: string): string {
+export function appText(id: string): string {
   if (!id) return '';
   return APP_LABEL[id] || id;
 }
@@ -329,6 +360,26 @@ export function summarizeOperEvent(row: OperSummaryInput): string {
       const list = Array.isArray(details.changes) ? details.changes.map(changeText).filter(Boolean) : [];
       return list.length ? `修改岗位「${who}」：${list.join('；')}` : `修改岗位「${who}」`;
     }
+    /* ── 部门新建：不给这一条，列表会退回 `DEPT_CREATE: deptId=29, name=…` 的键值倾倒 ── */
+    case 'DEPT_CREATE': {
+      const name = pick(details, ['name', 'targetName']);
+      const parent = pick(details, ['parentId']);
+      const head = name ? `新建部门「${name}」` : '新建部门';
+      return parent && parent !== '0' ? `${head}（上级 #${parent}）` : head;
+    }
+
+    /* ── 部门删除：`details.name` 就是被删的部门名 ── */
+    case 'DEPT_DELETE': {
+      const name = pick(details, ['name', 'targetName']);
+      return name ? `删除部门「${name}」` : '删除部门';
+    }
+
+    /* ── 用户注销（记录里留的是最终态，不是"发起申请"） ── */
+    case 'USER_DELETE': {
+      const who = pick(details, ['targetUsername', 'username']) || target;
+      return who ? `注销账号「${who}」` : '注销账号';
+    }
+
     case 'POST_DELETE': {
       const who = pick(details, ['targetName']) || '该岗位';
       return `删除岗位「${who}」`;

@@ -375,7 +375,7 @@ const {
                 <span v-if="locationText(row) !== '—'" class="log-net__region">{{ locationText(row) }}</span>
               </td>
               <td>
-                <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">{{
+                <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'login-tag--fail'">{{
                   row.status === 1 ? '成功' : '失败'
                 }}</span>
               </td>
@@ -431,7 +431,7 @@ const {
                 <span>{{ row.app_id || '—' }}</span>
               </span>
             </div>
-            <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
+            <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'login-tag--fail'">
               {{ row.status === 1 ? '成功' : '失败' }}
             </span>
           </div>
@@ -463,6 +463,13 @@ const {
 </template>
 
 <style scoped>
+/* 失败：固定用危险色。`tag--off` 在部分主题里是"停用/中性"灰，
+   拿它渲染登录失败会让红绿对比消失，扫表时看不出哪几条是异常。 */
+.login-tag--fail {
+  background: var(--mauth-danger-soft, color-mix(in srgb, var(--mauth-danger) 14%, transparent));
+  color: var(--mauth-danger);
+}
+
 .log-code {
   margin-left: 6px;
   font-size: 11px;
@@ -497,13 +504,26 @@ const {
   color: var(--mauth-text-faint);
 }
 
-/* 时间两行：日期 / 时分秒 —— 单行要 145px，两行只要 100px */
+/*
+ * 时间两行：日期 / 时分秒 —— 单行要 145px，两行只要 100px
+ *
+ * 🔴 不要在 `<td>` 上写 `display: flex`：一旦单元格不再是 `table-cell`，
+ *    外层会套一个匿名单元格把样式打断 —— `vertical-align` 失效（时间贴顶）、
+ *    行高与相邻格对不上（分割线错位）。两行用内部 span 各自成块实现，
+ *    td 本身保持 table-cell，竖直居中交给 `.log-row td`。
+ */
 .log-time {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
   line-height: 1.2;
   font-size: 11.5px;
+}
+
+.log-time > span {
+  display: block;
+}
+
+/* td 的默认竖直对齐随浏览器 UA 样式而异，这里显式钉住；行高仍用全局 44px */
+.log-row td {
+  vertical-align: middle;
 }
 
 .log-time__hms {

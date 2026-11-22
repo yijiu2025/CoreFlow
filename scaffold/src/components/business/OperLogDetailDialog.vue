@@ -24,8 +24,9 @@
  * @since 2026-11-11
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Check, Copy, X } from 'lucide-vue-next';
-import { summarizeOperEvent } from '@/utils/operLogSummary';
+import { Check, Code2, Copy, X } from 'lucide-vue-next';
+import { appText, payloadLabelOf, summarizeOperEvent } from '@/utils/operLogSummary';
+import { shortUserAgent } from '@/utils/loginLogSummary';
 import type { OperLogRow } from '@/api/types';
 
 const props = defineProps<{
@@ -155,6 +156,26 @@ const targetIsSelf = computed(() => {
   return Boolean(name) && name === props.row?.username;
 });
 
+/** UA 复制反馈（与载荷复制分开，两个按钮各自闪） */
+const uaCopied = ref(false);
+
+/**
+ * 复制 User-Agent
+ *
+ * @returns {Promise<void>} 无
+ */
+async function copyUa(): Promise<void> {
+  const ua = props.row?.user_agent;
+  if (!ua) return;
+  try {
+    await navigator.clipboard.writeText(ua);
+    uaCopied.value = true;
+    window.setTimeout(() => (uaCopied.value = false), 1600);
+  } catch {
+    /* 剪贴板不可用：静默失败，title 里仍有全文 */
+  }
+}
+
 /** 原始 JSON 文本（解析失败时就是原文） */
 const rawDetail = computed(() => props.row?.detail || '');
 const rawPretty = computed(() => {
@@ -163,7 +184,14 @@ const rawPretty = computed(() => {
 });
 
 /** 是否值得展示"原始 JSON"一段（能和展开段区分开才有意义） */
-const showRaw = computed(() => Boolean(rawDetail.value));
+/**
+ * 字段视图 / 原文视图的切换开关
+ *
+ * 🔴 这里必须用 `ref`：曾经写成 `computed(() => Boolean(rawDetail.value))` ——
+ *    那是**只读**的，`showRaw = !showRaw` 会被静默忽略（按钮"点不动"），
+ *    而且只要有 details 就恒为 true，等于默认展开原文。
+ */
+const showRaw = ref(false);
 
 /**
  * 时间
@@ -251,13 +279,14 @@ watch(
 
 <template>
   <div v-if="row" class="modal-mask" v-mask-close="() => emit('close')">
-    <div class="modal oper-detail" role="dialog" aria-modal="true" aria-labelledby="oper-detail-title">
+    <div class="modal modal--md oper-detail" role="dialog" aria-modal="true" aria-labelledby="oper-detail-title">
       <header class="modal__head">
         <span id="oper-detail-title" class="modal__title">操作详情</span>
-        <span class="oper-id mono">#{{ row.id }}</span>
         <span class="tag" :class="row.status === 1 ? 'tag--ok' : 'tag--off'">
           {{ row.status === 1 ? '成功' : '失败' }}
         </span>
+        <!-- 单号是索引不是正文：右推 + 弱化，别夹在标题和状态之间 -->
+        <span class="oper-id mono">#{{ row.id }}</span>
         <button class="oper-detail__close" type="button" aria-label="关闭" @click="emit('close')">
           <X :size="16" />
         </button>
@@ -312,7 +341,7 @@ watch(
             </div>
             <div>
               <dt>模块</dt>
-              <dd>{{ row.module || '—' }}</dd>
+              <dd :title="row.module || ''">{{ appText(row.module) || '—' }}</dd>
             </div>
             <div>
               <dt>事件</dt>
@@ -344,7 +373,21 @@ watch(
               </dd>
             </div>
           </dl>
-          <p class="oper-ua" :title="row.user_agent">{{ row.user_agent || '未记录 User-Agent' }}</p>
+          <p class="oper-ua" :title="row.user_agent">
+            <span class="oper-ua__label">User-Agent</span>
+            <span>{{ row.user_agent ? shortUserAgent(row.user_agent) : '未记录 User-Agent' }}</span>
+            <button
+              v-if="row.user_agent"
+              class="oper-copy"
+              type="button"
+              :title="uaCopied ? '已复制' : '复制 User-Agent'"
+              aria-label="复制 User-Agent"
+              @click="copyUa"
+            >
+              <Check v-if="uaCopied" :size="12" />
+              <Copy v-else :size="12" />
+            </button>
+          </p>
         </section>
 
         <!-- ③ 请求：方法与路径拼在一行，读起来就是一条 HTTP 请求 -->
@@ -365,13 +408,29 @@ watch(
             <span v-if="entries.length || changes.length" class="oper-block__note">
               {{ entries.length + (changes.length ? 1 : 0) }} 个字段
             </span>
-            <button v-if="showRaw" class="oper-copy" type="button" :disabled="copyState === 'ok'" @click="copyPayload">
+            <button
+              v-if="entries.length || changes.length"
+              class="oper-copy"
+              type="button"
+              :title="showRaw ? '回到字段列表' : '查看 details 原文'"
+              :aria-pressed="showRaw"
+              @click="showRaw = !showRaw"
+            >
+              <Code2 :size="12" />
+              {{ showRaw ? '查看字段' : '原始 JSON' }}
+            </button>
+            <button class="oper-copy" type="button" :disabled="copyState === 'ok'" @click="copyPayload">
               <Check v-if="copyState === 'ok'" :size="12" />
               <Copy v-else :size="12" />
               {{ copyState === 'ok' ? '已复制' : copyState === 'fail' ? '复制失败' : '复制' }}
             </button>
           </h3>
 
+          <!--
+            字段视图 / 原文视图**彻底互斥**：字段视图 = 变更明细 + 逐键字段；原文视图 = 一整段 JSON。
+            之前 `changes` 横幅写在判定之外，切到"原文"时它还挂着，于是屏幕上同时有摘要条 + JSON，看着就乱。
+          -->
+          <template v-if="!showRaw">
           <!-- 变更明细：把 `changes` 数组渲染成「字段：旧 → 新」，这是排查时第一眼要看的 -->
           <ul v-if="changes.length" class="oper-changes">
             <li v-for="(item, i) in changes" :key="`${item.field || item.label || i}`">
@@ -384,23 +443,21 @@ watch(
 
           <dl v-if="entries.length" class="oper-kv oper-kv--payload">
             <div v-for="item in entries" :key="item.key" :class="{ 'is-wide': item.multiline }">
-              <dt class="mono">{{ item.key }}</dt>
+              <dt>
+                <span v-if="payloadLabelOf(item.key)">{{ payloadLabelOf(item.key) }}</span>
+                <code class="oper-kv__en">{{ item.key }}</code>
+              </dt>
               <dd :class="{ mono: true, 'is-block': item.multiline }">{{ item.text }}</dd>
             </div>
           </dl>
 
-          <pre v-else-if="showRaw && !changes.length" class="oper-raw">{{ rawDetail }}</pre>
-
-          <p v-else-if="!changes.length" class="oper-empty">
+          <p v-if="!entries.length && !changes.length" class="oper-empty">
             这条记录没有附带载荷（只有由业务显式写入 details 的操作才有，例如新建、改配、授权）
           </p>
+          </template>
 
-          <!-- 原始 JSON 折叠：展开后的键值对便于阅读，原文用于核对嵌套/顺序，
-               两者同时铺开会把弹窗拉成两屏，所以默认收起 -->
-          <details v-if="showRaw" class="oper-fold">
-            <summary>原始 JSON</summary>
-            <pre class="oper-raw oper-raw--fold">{{ rawPretty }}</pre>
-          </details>
+          <!-- 原文视图 -->
+          <pre v-else class="oper-raw">{{ rawPretty }}</pre>
         </section>
       </div>
     </div>
@@ -408,19 +465,19 @@ watch(
 </template>
 
 <style scoped>
-/* 比默认弹窗宽一档：载荷是键值对，560px 会把值挤成竖排 */
-.oper-detail {
-  width: min(680px, 100%);
-}
+/* 宽度由 `.modal--md` 统一提供（载荷是键值对，560px 会把值挤成竖排） */
 
 /* 单号靠标题、独立成小号等宽字：它只是索引，不该和标题抢字号 */
 .oper-id {
-  font-size: 12px;
-  color: var(--mauth-text-faint);
+  /* 与登录详情同口径：单号右推、13px、更淡 */
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--mauth-text-faint, #9ca3af);
 }
 
 .oper-detail__close {
-  margin-left: auto;
+  /* #id 已 auto 推到右边，这里只需常规间距 */
+  margin-left: 6px;
   display: grid;
   place-items: center;
   width: 28px;
@@ -441,8 +498,9 @@ watch(
 }
 
 .oper-detail__body {
-  gap: 16px;
-  padding-bottom: 20px;
+  /* 与登录详情同一口径：区块靠 24px 纯空白分层，四边内边距 24 保持对称 */
+  gap: 24px;
+  padding: 24px;
 }
 
 /* 摘要：整张弹窗最该被先读到的一句。用一整块极浅底承载，**不加左侧装饰竖线**
@@ -482,17 +540,25 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 0 10px;
-  font-size: 12px;
+  margin: 0 0 12px;
+  padding-left: 10px;
+  position: relative;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--mauth-text-mid);
+  color: var(--mauth-text);
 }
 
-.oper-block__title::after {
+/* 蓝色小竖条：3×14、圆角 2，与标题文字等高；替代原来的 1px 横线（横线会让弹窗显碎） */
+.oper-block__title::before {
   content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--mauth-border);
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--mauth-primary, #2563eb);
+  transform: translateY(-50%);
 }
 
 /* 字段数：附在标题后的小计数，帮助判断"载荷是不是被截断了" */
@@ -508,11 +574,13 @@ watch(
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto;
+  /* 与登录详情一致：按钮紧跟标题成组，不再用 auto 推到最右边（两个按钮会被拆成两头） */
+  margin-left: 2px;
   padding: 0 8px;
-  height: 20px;
-  border: 1px solid var(--mauth-border-strong);
-  border-radius: 999px;
+  height: 24px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
   color: var(--mauth-text-soft);
   font-size: 10.5px;
@@ -680,20 +748,51 @@ watch(
   font-weight: 700;
 }
 
-/* 多行值（对象/数组）独占一行：和标量并排会把网格拉得很难看 */
-.oper-kv--payload {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-}
-
 /*
- * 载荷：一行一个字段，像表格一样读
+ * 载荷：一行一个字段（标签定宽 150px + 值占余下）
  *
- * 🔴 键列用 `max-content` 而不是固定 168px：定宽会把短值推到很右边、中间留白，
- *    看着像缺了内容。行间用细实线而不是每行一块灰底 —— 字段多时灰底会碎成色块。
+ * 🔴 这里曾有两段重复的 `.oper-kv--payload`（一段 `minmax(0,1fr)` + gap 8，
+ *    一段 gap: 0），叠在 `max-content` 键列上，渲染出来就是"标签底色块 + 值乱飘"。
+ *    现在只留一份：标签列定宽，值列 `minmax(0,1fr)`，行间一条细线。
  */
 .oper-kv--payload {
-  gap: 0;
+  display: block;
+}
+
+.oper-kv--payload > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--mauth-border) 60%, transparent);
+}
+
+.oper-kv--payload > div:last-child {
+  border-bottom: 0;
+}
+
+.oper-kv--payload dt {
+  min-width: 0;
+  color: var(--mauth-text-soft);
+  font-size: 12.5px;
+}
+
+.oper-kv--payload dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 英文键：淡一档 + 等宽，跟在中文名后面，中英混排才不会参差 */
+.oper-kv__en {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--mauth-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--mauth-text-faint, #94a3b8);
 }
 
 .oper-kv--payload > div {
@@ -779,6 +878,12 @@ watch(
 }
 
 /* User-Agent：最长的一条无关信息，压到两行以内，完整内容看 title */
+.oper-ua__label {
+  margin-right: 8px;
+  color: var(--mauth-text-faint);
+  font-size: 11.5px;
+}
+
 .oper-ua {
   margin: 10px 0 0;
   display: -webkit-box;
@@ -807,10 +912,10 @@ watch(
 }
 
 .oper-empty {
+  /* 一句说明而已：不做成灰底块。整张弹窗里已经有两个"块"（摘要条 / 原文），
+     再来一块会让人误以为是可操作区域。 */
   margin: 0;
-  padding: 12px;
-  border-radius: var(--mauth-radius-sm);
-  background: color-mix(in srgb, var(--mauth-text) 3%, transparent);
+  padding: 0;
   color: var(--mauth-text-faint);
   font-size: 12px;
   line-height: 1.6;

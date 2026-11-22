@@ -86,19 +86,61 @@ function str(source: Record<string, unknown>, key: string): string {
  * @param row 含事件码与 details 的行
  * @returns 说明文案（永不返回空串）
  */
+/**
+ * UA 的短标签（`Chrome 157 · Windows 10`）
+ *
+ * 完整 UA 有 120+ 字符，在详情里占两行还看不出重点。这里只取"内核 + 系统"，
+ * 全文仍保留在 `title` 与复制按钮里 —— 需要原文时随时可取。
+ *
+ * @param ua User-Agent 原文
+ * @returns 短标签；解析不出时返回原文前 40 字
+ */
+export function shortUserAgent(ua: string): string {
+  const raw = String(ua || '').trim();
+  if (!raw) return '';
+  const browser =
+    /Edg\/(\d+)/.exec(raw)?.[1]
+      ? `Edge ${/Edg\/(\d+)/.exec(raw)?.[1]}`
+      : /Firefox\/(\d+)/.exec(raw)?.[1]
+        ? `Firefox ${/Firefox\/(\d+)/.exec(raw)?.[1]}`
+        : /Chrome\/(\d+)/.exec(raw)?.[1]
+          ? `Chrome ${/Chrome\/(\d+)/.exec(raw)?.[1]}`
+          : /Version\/(\d+)[\d.]* Safari/.exec(raw)?.[1]
+            ? `Safari ${/Version\/(\d+)/.exec(raw)?.[1]}`
+            : '';
+  const os = /Windows NT 10/.test(raw)
+    ? 'Windows 10/11'
+    : /Windows NT 6\.[13]/.test(raw)
+      ? 'Windows 7/8'
+      : /Mac OS X/.test(raw)
+        ? 'macOS'
+        : /Android/.test(raw)
+          ? 'Android'
+          : /iPhone|iPad/.test(raw)
+            ? 'iOS'
+            : /Linux/.test(raw)
+              ? 'Linux'
+              : '';
+  const label = [browser, os].filter(Boolean).join(' · ');
+  return label || raw.slice(0, 40);
+}
+
 export function describeLoginEvent(row: LoginSummaryInput): string {
   const details = row.details || {};
   const reason = str(details, 'reason');
   const event = row.event;
 
   if (event === 'LOGIN' || event === 'LOGIN_SUCCESS') {
-    const parts = ['登录成功，已创建新会话'];
+    /*
+     * 一句话只回答"发生了什么"：登录成功 + 会话已建立 + 客户端是什么。
+     * `deviceId` 是排查用的长串，放进载荷里即可 —— 塞进摘要会把句子读成日志。
+     * 措辞用陈述句（"已勾选"而非"勾选了"），这是运维文档的口径，不是聊天。
+     */
+    const bits = ['登录成功，已创建新会话'];
     const device = str(details, 'deviceType');
-    if (device) parts.push(`设备 ${DEVICE_TYPES[device] || device}`);
-    const deviceId = str(details, 'deviceId');
-    if (deviceId) parts.push(`标识 ${deviceId}`);
-    if (details.rememberMe === true) parts.push('勾选了记住登录');
-    return `${parts.join('，')}。`;
+    if (device) bits.push(`客户端：${DEVICE_TYPES[device] || device}`);
+    if (details.rememberMe === true) bits.push('记住登录已勾选');
+    return bits.join(' · ');
   }
 
   if (event === 'LOGIN_FAILED') {
