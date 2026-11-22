@@ -44,6 +44,34 @@ const filtered = computed(() => {
   return apps.value.filter(app => app.appId.toLowerCase().includes(key) || app.name.toLowerCase().includes(key));
 });
 
+/**
+ * 按「业务应用 / 平台内置」分组
+ *
+ * 守卫 / 通知 / 用户中心 / 授权中心 的 `app_id` 是权限命名空间、接口是基础设施入口，
+ * 和"可以授权给业务用户的应用"不是一类东西。混在一张表里，运维会误以为它们也能
+ * 配默认角色与会话准入 —— 而且它们的 0 角色 / 0 菜单看起来像"没配好"。
+ * 分组后业务应用在前（默认关心的），内置项收在后面并标明不可授权。
+ *
+ * @returns {{key:'business'|'builtin', label:string, note:string, apps:AppOverview[]}[]} 分组（空组不返回）
+ */
+const appGroups = computed(() => {
+  const groups = [
+    {
+      key: 'business' as const,
+      label: '业务应用',
+      note: '可授权给用户、有独立角色与菜单的应用',
+      apps: filtered.value.filter(app => !app.builtin)
+    },
+    {
+      key: 'builtin' as const,
+      label: '平台内置',
+      note: '认证 / 通知 / 守卫等基础设施，不作为可授权应用；仅接口开关可管',
+      apps: filtered.value.filter(app => app.builtin)
+    }
+  ];
+  return groups.filter(group => group.apps.length > 0);
+});
+
 /** 是否存在"命名空间与 appId 不同"的应用（console → admin），用于决定是否显示提示 */
 const hasNamespaceAlias = computed(() => apps.value.some(app => app.permissionAppId !== app.appId));
 
@@ -58,6 +86,9 @@ const hasNamespaceAlias = computed(() => apps.value.some(app => app.permissionAp
 function accessSummary(app: AppOverview): string {
   if (!app.access) return '不限';
   const parts = [...app.access.anyPermission, ...app.access.anyRole.map(role => `@${role}`)];
+  // 自助区准入是"准入条件的**放宽**"，跟在条件后面而不是替换它们：
+  // 写成替换会让人以为原本的权限要求被取消了。
+  if (app.access.selfService) parts.push('+ 登录即可进自助区');
   return parts.length > 0 ? parts.join(' · ') : '不限';
 }
 
@@ -170,48 +201,63 @@ onMounted(() => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="app in filtered" :key="app.appId">
-              <td>
-                <span class="apps__name">{{ app.name }}</span>
-                <span class="mono apps__id">{{ app.appId }}</span>
-                <span v-if="app.hosts.length > 0" class="tag" :title="app.hosts.join('\n')">
-                  {{ app.hosts.length }} 域名
-                </span>
-              </td>
-              <td class="mono">{{ app.permissionAppId }}</td>
-              <td>
-                <span
-                  :class="['tag', app.access ? 'tag--info' : '']"
-                  :title="app.access ? accessSummary(app) : '任何已注册账号都能登录'"
-                >
-                  {{ app.access ? '受限' : '不限' }}
-                </span>
-              </td>
-              <td>
-                <span
-                  class="apps__stats"
-                  :title="`角色 ${statsOf(app).roles} · 菜单 ${statsOf(app).menus} · 权限码 ${statsOf(app).codes} · 客户端 ${statsOf(app).clients}`"
-                >
-                  <span class="mono">{{ statsOf(app).roles }}</span
-                  ><i>角色</i> <span class="mono">{{ statsOf(app).menus }}</span
-                  ><i>菜单</i> <span class="mono">{{ statsOf(app).codes }}</span
-                  ><i>权限码</i> <span class="mono">{{ statsOf(app).clients }}</span
-                  ><i>客户端</i>
-                </span>
-              </td>
-              <td class="mono">{{ app.defaultRole || '—' }}</td>
-              <td class="col-actions">
-                <button
-                  class="btn btn--ghost btn--sm btn--icon"
-                  type="button"
-                  :title="`打开 ${app.name} 的接口开关（${app.apis?.total ?? 0} 个接口）`"
-                  :aria-label="`打开 ${app.name} 的接口开关`"
-                  @click="router.push({ name: 'system-app-apis', params: { appId: app.appId } })"
-                >
-                  <SlidersHorizontal :size="15" />
-                </button>
-              </td>
-            </tr>
+            <template v-for="group in appGroups" :key="group.key">
+              <tr class="apps__group">
+                <td colspan="6">
+                  <span class="apps__group-label">{{ group.label }}</span>
+                  <span class="apps__group-n mono">{{ group.apps.length }}</span>
+                  <span class="apps__group-note">{{ group.note }}</span>
+                </td>
+              </tr>
+              <tr v-for="app in group.apps" :key="app.appId" :class="{ 'is-builtin': app.builtin }">
+                <td>
+                  <span class="apps__name">{{ app.name }}</span>
+                  <span class="mono apps__id">{{ app.appId }}</span>
+                  <span v-if="app.builtin" class="tag tag--off" title="平台内置：不能授权给业务用户">内置</span>
+                  <span v-if="app.hosts.length > 0" class="tag" :title="app.hosts.join('\n')">
+                    {{ app.hosts.length }} 域名
+                  </span>
+                </td>
+                <td class="mono">{{ app.permissionAppId }}</td>
+                <td>
+                  <span v-if="app.builtin" class="apps__na" title="内置应用不是登录入口，不走会话准入">—</span>
+                  <span
+                    v-else
+                    :class="['tag', app.access ? 'tag--info' : '']"
+                    :title="app.access ? accessSummary(app) : '任何已注册账号都能登录'"
+                  >
+                    {{ app.access ? '受限' : '不限' }}
+                  </span>
+                </td>
+                <td>
+                  <span
+                    class="apps__stats"
+                    :title="`角色 ${statsOf(app).roles} · 菜单 ${statsOf(app).menus} · 权限码 ${statsOf(app).codes} · 客户端 ${statsOf(app).clients}`"
+                  >
+                    <span class="mono">{{ statsOf(app).roles }}</span
+                    ><i>角色</i> <span class="mono">{{ statsOf(app).menus }}</span
+                    ><i>菜单</i> <span class="mono">{{ statsOf(app).codes }}</span
+                    ><i>权限码</i> <span class="mono">{{ statsOf(app).clients }}</span
+                    ><i>客户端</i>
+                  </span>
+                </td>
+                <td class="mono">
+                  <span v-if="app.builtin" class="apps__na" title="内置应用没有默认角色">—</span>
+                  <template v-else>{{ app.defaultRole || '—' }}</template>
+                </td>
+                <td class="col-actions">
+                  <button
+                    class="btn btn--ghost btn--sm btn--icon"
+                    type="button"
+                    :title="`打开 ${app.name} 的接口开关（${app.apis?.total ?? 0} 个接口）`"
+                    :aria-label="`打开 ${app.name} 的接口开关`"
+                    @click="router.push({ name: 'system-app-apis', params: { appId: app.appId } })"
+                  >
+                    <SlidersHorizontal :size="15" />
+                  </button>
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
@@ -231,6 +277,42 @@ onMounted(() => {
 }
 
 /* 应用列：名称（主）+ 标识（次，等宽）+ 域名标签 */
+/* ── 分组行（业务应用 / 平台内置） ─────────────────────────
+   内置项是基础设施，收在后面并标明不可授权；它们的准入与默认角色显示破折号，
+   而不是"不限" —— 后者会被读成"任何人都能登录"。 */
+.apps__group > td {
+  padding: 8px 14px;
+  border-top: 1px solid var(--mauth-border);
+  background: color-mix(in srgb, var(--mauth-surface-2) 55%, var(--mauth-surface));
+}
+
+/* 第一组紧接表头，表头自带下边线，这里不再画一条 */
+.apps__group:first-child > td {
+  border-top: 0;
+}
+
+.apps__group-label {
+  color: var(--mauth-text);
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.apps__group-n {
+  margin-left: 6px;
+  color: var(--mauth-text-soft);
+  font-size: 10.5px;
+}
+
+.apps__group-note {
+  margin-left: 10px;
+  color: var(--mauth-text-soft);
+  font-size: 11.5px;
+}
+
+.apps__na {
+  color: var(--mauth-text-faint);
+}
+
 .apps__name {
   font-weight: 600;
 }

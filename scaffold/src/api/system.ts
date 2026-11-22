@@ -444,7 +444,13 @@ export interface AppOverview {
   /** 授权即送的默认角色 */
   defaultRole: string;
   /** 登录准入策略（null = 不限制） */
-  access: { anyPermission: string[]; anyRole: string[]; denyMessage: string } | null;
+  access: {
+    anyPermission: string[];
+    anyRole: string[];
+    /** 自助区准入：true = 登录即可进（只看得见个人设置） */
+    selfService: boolean;
+    denyMessage: string;
+  } | null;
   /** 应用声明的 Host（多域名部署用） */
   hosts: string[];
   /** 授权数据规模 */

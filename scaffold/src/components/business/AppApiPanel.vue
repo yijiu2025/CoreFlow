@@ -1473,27 +1473,18 @@ onBeforeUnmount(() => {
 }
 
 /*
- * 层级用"缩进 + 左侧竖线"表达：比只靠箭头更容易一眼看出谁属于谁。
+ * 层级只靠缩进表达，**不再画左侧竖线**。
  *
- * 🔴 用 `background-image` 画线，不用 `::before` + absolute：td 上 `overflow: hidden`
- *    与 `position: relative` 在真实表格里并不保证生效（上一版就是这样"线不显示"的）。
- *    背景图不依赖定位，hover 时只改 `background-color` 也不会把它盖掉。
+ * 上一版在名称列用 `background-image` 画了 1px 导引线（组 10px / 接口 26px），
+ * 在满屏行里看起来像表格多了几条竖分隔线，反而比缩进更吵；而且颜色是硬编码的
+ * `rgba(15,23,42,.24)`，深色主题下会发蓝。
  */
-.api-row--group .api-table__name,
-.api-row--api .api-table__name {
-  background-image: linear-gradient(to bottom, rgba(15, 23, 42, 0.24), rgba(15, 23, 42, 0.24));
-  background-repeat: no-repeat;
-  background-size: 1px 100%;
-}
-
 .api-row--group .api-table__name {
   padding-left: 20px;
-  background-position: 10px 0;
 }
 
 .api-row--api .api-table__name {
   padding-left: 38px;
-  background-position: 26px 0;
 }
 
 /* 名称列右侧的小锁：表示"这条要求登录"，hover 有说明 */
