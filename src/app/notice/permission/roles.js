@@ -23,9 +23,10 @@ defineRoles([
           Effect: 'Allow',
           Action: [
             NOTICE_PERMISSIONS.CONFIG.READ,
-            NOTICE_PERMISSIONS.CONFIG.WRITE,
+            NOTICE_PERMISSIONS.CONFIG.UPDATE,
             NOTICE_PERMISSIONS.TEMPLATE.READ,
-            NOTICE_PERMISSIONS.TEMPLATE.WRITE
+            NOTICE_PERMISSIONS.TEMPLATE.WRITE,
+            NOTICE_PERMISSIONS.SEND.EXECUTE
           ]
         }
       ]

@@ -8,6 +8,8 @@
 const noticeConfig = {
   app_id: 'notice',
   name: '通知中心',
+  /** 平台内置：所有业务应用共用（邮件 / 企业微信 / Webhook 下发），不面向外部授权 */
+  builtin: true,
   description: '统一通知服务中心，负责邮件、钉钉、微信等多种通道的配置与下发',
 
   /**

@@ -7,14 +7,7 @@
 import { getModel } from '../../../framework/persistence/db/index.js';
 import Logger from '../../../framework/support/log/index.js';
 import { encryptSecret, decryptSecret, isMasked } from '../../../framework/security/crypto/symmetric.js';
-
-/** 默认通道配置 */
-const DEFAULT_CHANNELS = [
-  { id: 'email', name: '邮件通知', enabled: true },
-  { id: 'dingtalk', name: '钉钉机器人', enabled: false },
-  { id: 'wechat', name: '微信推送', enabled: false },
-  { id: 'sms', name: '短信通知', enabled: false }
-];
+import { NOTICE_CHANNELS, getChannel } from '../constants.js';
 
 /** 默认邮件模板 */
 const DEFAULT_TEMPLATES = {
@@ -55,11 +48,11 @@ class NoticeDao {
   /**
    * 获取通知配置（凭据字段为**明文**，仅供本进程发信/校验使用）
    *
-   * 🔴 任何 HTTP 出参都必须先掩码 —— 路由层已把 `pass` 替换为 `SMTP_PASS_MASK`
-   * （见 `api/notice/v1/config.js`）。本函数不自己做掩码，是因为保存端要靠
-   * "前端回传的就是那个固定掩码"来判断"用户没改密码"，两处必须同一口径。
+   * 🔴 任何 HTTP 出参都必须先掩码 —— 路由层已按 `constants.js` 的 secret 字段清单
+   * 把凭据替换为 `SMTP_PASS_MASK`（见 `api/notice/v1/config.js`）。本函数不自己做掩码，
+   * 是因为保存端要靠"前端回传的就是那个固定掩码"来判断"用户没改密码"，两处必须同一口径。
    *
-   * @param {string} type 'email' | 'dingtalk' | 'wechat' | 'sms'
+   * @param {string} type 渠道 id（email / wecom / dingtalk / feishu / webhook / sms）
    * @returns {Promise<object>}
    */
   async getConfig(type) {
@@ -79,7 +72,84 @@ class NoticeDao {
         secure: (await NoticeConfig.getVal('smtp_use_ssl', 'true')) === 'true'
       };
     }
-    return {};
+
+    // 其余渠道统一按 `<渠道>_<字段>` 存取，字段清单来自常量（保存白名单同源）
+    return this.readChannelConfig(type);
+  }
+
+  /**
+   * 读取未接入渠道的配置
+   *
+   * @param {string} type 渠道 id
+   * @returns {Promise<object>} 按字段声明还原类型（布尔/数字/文本）
+   */
+  async readChannelConfig(type) {
+    const channel = getChannel(type);
+    if (!channel) return {};
+    const NoticeConfig = getModel('NoticeConfig');
+
+    const config = {};
+    for (const field of channel.fields) {
+      const raw = await NoticeConfig.getVal(`${type}_${field.key}`, null);
+      if (raw === null || raw === undefined || raw === '') {
+        config[field.key] = field.type === 'boolean' ? false : '';
+        continue;
+      }
+      if (field.type === 'boolean') {
+        config[field.key] = raw === 'true' || raw === '1';
+      } else if (field.type === 'number') {
+        const parsed = parseInt(raw, 10);
+        config[field.key] = Number.isNaN(parsed) ? null : parsed;
+      } else {
+        config[field.key] = field.secret ? decryptSecret(raw) : raw;
+      }
+    }
+    return config;
+  }
+
+  /**
+   * 保存未接入渠道的配置
+   *
+   * 只认常量里声明过的字段（不把请求体原样落库）：前端多传一个键不应变成
+   * 新配置项，否则配置表会被调用方的临时字段悄悄撑大。
+   *
+   * @param {string} type 渠道 id
+   * @param {object} config 配置对象
+   * @returns {Promise<boolean>}
+   */
+  async saveChannelConfig(type, config) {
+    const channel = getChannel(type);
+    if (!channel) throw new Error(`未知通知渠道: ${type}`);
+    const NoticeConfig = getModel('NoticeConfig');
+
+    for (const field of channel.fields) {
+      if (config[field.key] === undefined) continue;
+
+      let value = config[field.key];
+      if (field.type === 'boolean') {
+        value = value ? 'true' : 'false';
+      } else if (field.type === 'number') {
+        if (value === null || value === '') continue;
+        const parsed = Number(value);
+        if (!Number.isFinite(parsed)) throw new Error(`${field.label} 必须是数字`);
+        value = String(parsed);
+      } else {
+        value = value === null || value === undefined ? '' : String(value);
+      }
+
+      // 掩码回传 = 沿用旧值（与 email 的 pass 同一口径）
+      if (field.secret && isMasked(value)) continue;
+      if (field.secret && value) {
+        try {
+          value = encryptSecret(value);
+        } catch (err) {
+          throw new Error(`NOTICE_CONFIG_FAILED:${err.message}`, { cause: err });
+        }
+      }
+
+      await NoticeConfig.setVal(`${type}_${field.key}`, value, field.label, type);
+    }
+    return true;
   }
 
   /**
@@ -123,28 +193,24 @@ class NoticeDao {
           await NoticeConfig.setVal(key, value, '', 'email');
         }
       }
+    } else {
+      await this.saveChannelConfig(type, config);
     }
     return true;
   }
 
   /**
-   * 获取所有可用的通知通道（从 DB 读取，支持动态启用/禁用）
-   * @returns {Promise<Array<{id: string, name: string, enabled: boolean}>>}
+   * 获取所有通知通道（能力清单来自代码常量）
+   *
+   * 为什么不再读 DB 里的 `notification_channels`：渠道清单现在是**代码声明**的
+   * （`constants.js` 是唯一来源），DB 里那份历史 JSON 只会让"代码里有的渠道
+   * 面板上看不到"或反过来 —— 两者分叉时没人说得清哪个算数。历史键保留不删，
+   * 避免误删运维数据，但不再参与判定。
+   *
+   * @returns {Promise<Array<{id: string, label: string, implemented: boolean, description: string, fields: Array}>>}
    */
   async getAvailableChannels() {
-    const NoticeConfig = getModel('NoticeConfig');
-    if (!NoticeConfig) return DEFAULT_CHANNELS;
-
-    // 尝试从 DB 读取通道配置
-    const channelsConfig = await NoticeConfig.getVal('notification_channels', null);
-    if (channelsConfig) {
-      try {
-        return JSON.parse(channelsConfig);
-      } catch {
-        // 配置损坏时使用默认值
-      }
-    }
-    return DEFAULT_CHANNELS;
+    return NOTICE_CHANNELS.map(channel => ({ ...channel, fields: channel.fields.map(field => ({ ...field })) }));
   }
 
   /**

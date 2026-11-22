@@ -21,23 +21,21 @@ import {
   closeRl
 } from '../../../framework/support/cli/index.js';
 import { logStdout } from '../../../framework/support/log/index.js';
+import { NOTICE_CHANNELS } from '../constants.js';
 
 /**
  * 查看通知通道
+ *
+ * 清单来自 `constants.js`（唯一来源）：CLI 自己再抄一份渠道表，
+ * 加渠道时就会出现"面板上有、命令行里没有"的分叉。
  */
 async function listChannels() {
-  const channels = [
-    { id: 'email', name: '邮件通知', icon: '📧' },
-    { id: 'dingtalk', name: '钉钉机器人', icon: '🔔' },
-    { id: 'wechat', name: '微信推送', icon: '💬' },
-    { id: 'sms', name: '短信通知', icon: '📱' }
-  ];
-
   logStdout('\n📮 通知通道：');
   printLine();
-  channels.forEach(ch => {
-    logStdout(`  ${ch.icon} ${ch.id.padEnd(12)} ${ch.name}`);
-  });
+  for (const channel of NOTICE_CHANNELS) {
+    const status = channel.implemented ? '' : '（待接入）';
+    logStdout(`  ${channel.id.padEnd(12)} ${channel.label}${status}`);
+  }
   printLine();
 }
 
