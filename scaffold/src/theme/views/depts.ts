@@ -25,6 +25,8 @@ export interface DeptForm {
   parentId: number;
   name: string;
   leader: string;
+  /** 负责人绑定的用户主键（null = 只存了人名，未绑定） */
+  leaderUserId: number | null;
   phone: string;
   email: string;
   sort: number;
@@ -103,6 +105,13 @@ export interface DeptsViewContext {
   toggle: (id: number) => void;
   expandAll: () => void;
   collapseAll: () => void;
+  /**
+   * 选中负责人后的副作用（把负责人邮箱带进表单）
+   *
+   * 版式只负责"选了谁"；"部门邮箱就是负责人邮箱"这条业务约定在容器里，
+   * 不写进版式 —— 换皮肤时不该重新实现一遍。
+   */
+  onLeaderPicked: (user: UserRow) => void;
   openCreate: (parent?: DeptNode) => void;
   openEdit: (node: DeptNode) => void;
   submit: () => Promise<void>;

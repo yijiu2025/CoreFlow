@@ -58,6 +58,7 @@ const {
   collapseAll,
   openCreate,
   openEdit,
+  onLeaderPicked,
   submit,
   remove
 } = props.ctx;
@@ -465,7 +466,7 @@ const {
     </section>
 
     <div v-if="dialogOpen" class="modal-mask" v-mask-close="() => (dialogOpen = false)">
-      <div class="modal">
+      <div class="modal modal--sm">
         <header class="modal__head">
           <span class="modal__title">{{ editingId ? '编辑部门' : '新建部门' }}</span>
         </header>
@@ -488,12 +489,19 @@ const {
           <div class="field">
             <span class="field__label">负责人</span>
             <!--
-              从系统里选人，不再是"凭记忆手打一个名字"：下拉里给账号 + 部门做辨认，
-              但**仍允许自由输入** —— 历史数据存的是真名，也有"临时负责人还没建账号"的情况，
-              一律禁止手填会把已有数据逼成脏值。
+              必须从系统账号里选（`strict`）：负责人要能反查到具体的人 ——
+              部门邮箱由他带出、通知发给他、离职时也要能一眼看出哪个部门要换人。
+              允许手打名字的结果是"名单上有个查无此人的负责人"，比留空更糟。
             -->
-            <UserPicker v-model="form.leader" :maxlength="50" placeholder="搜索账号选人，或直接输入姓名" />
-            <span class="field__hint">存的是用户账号（登录名）；选不到人时可以直接填写姓名</span>
+            <UserPicker
+              v-model="form.leader"
+              v-model:id="form.leaderUserId"
+              strict
+              :maxlength="50"
+              placeholder="搜索账号选人"
+              @pick="onLeaderPicked"
+            />
+            <span class="field__hint">只能从系统账号里选；负责人的邮箱会自动带到下方</span>
           </div>
           <label class="field">
             <span class="field__label">联系电话</span>
@@ -502,7 +510,21 @@ const {
           </label>
           <label class="field">
             <span class="field__label">邮箱</span>
-            <input v-model="form.email" class="input" type="email" maxlength="100" placeholder="选填" />
+            <!--
+              邮箱属于负责人，不另填一份：手填的地址系统里可能查无此人，
+              既发不出通知也反查不到人。选完负责人自动带出，他只绑了手机号就留空。
+            -->
+            <input
+              v-model="form.email"
+              class="input"
+              type="email"
+              readonly
+              :disabled="!form.leaderUserId"
+              :placeholder="form.leaderUserId ? '取自负责人账号' : '选择负责人后自动带出'"
+            />
+            <span class="field__hint">
+              {{ form.leaderUserId ? '来自负责人账号；为空说明该账号还没绑邮箱，可在用户管理里补' : '选好负责人后自动带出' }}
+            </span>
             <span v-if="errors.email" class="field__error">{{ errors.email }}</span>
           </label>
           <label class="field">

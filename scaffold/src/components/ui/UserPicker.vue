@@ -26,11 +26,36 @@ const props = withDefaults(
     maxlength?: number;
     /** 禁用 */
     disabled?: boolean;
+    /**
+     * 严格模式：只能从候选里选，**不接受自由文本**
+     *
+     * 用于"负责人 / 经办人"这类必须能在系统里反查到人的字段。
+     * 输入不算数（不写 model），失焦时未选中就回滚 —— 否则会出现
+     * "看着填了个名字，其实系统里没有这个人"，之后既发不了通知也查不到他名下的事。
+     */
+    strict?: boolean;
   }>(),
-  { placeholder: '搜索账号 / 输入姓名', maxlength: 50, disabled: false }
+  { placeholder: '搜索账号 / 输入姓名', maxlength: 50, disabled: false, strict: false }
 );
 
 const model = defineModel<string>({ default: '' });
+
+/**
+ * 选中某人时抛出完整用户对象
+ *
+ * 父组件要的不只是名字：部门表单里的「邮箱」就是从这里带出来的
+ * （邮箱属于那个人，不该让人另填一份可能对不上的）。
+ */
+const emit = defineEmits<{ (e: 'pick', user: UserRow): void }>();
+
+/**
+ * 选中用户的**主键**（`v-model:id`）
+ *
+ * 与 `model`（显示名）分开是有意的：改名、重名、离职都不该影响绑定关系。
+ * 🔴 自由输入时这里必须是 `null` —— 否则会出现"显示 A、绑定 B"的半吊子状态；
+ *    后端拿到 null 就只存文本（历史数据与"还没建账号的人"仍能登记）。
+ */
+const pickedId = defineModel<number | null>('id', { default: null });
 
 /** 输入框里的文字（= model，但允许"输入中"与 model 短暂不同步） */
 const keyword = ref(model.value);
@@ -80,7 +105,13 @@ async function search(kw: string): Promise<void> {
 function onInput(event: Event): void {
   const value = (event.target as HTMLInputElement).value;
   keyword.value = value;
-  model.value = value;
+  // 严格模式：输入只是搜索词，选中之前不进 model（否则父表单会拿到一个"不存在的人"）
+  if (!props.strict) model.value = value;
+  /*
+   * 手输 = 不再指向刚选中的那个人 ⇒ 立刻解绑。
+   * 否则"选了管理员、又把字改成张三"会绑着管理员却显示张三 —— 后端拿到的 id 才是真的。
+   */
+  if (pickedId.value !== null && options.value.every(u => u.username !== value)) pickedId.value = null;
   open.value = true;
   if (timer) clearTimeout(timer);
   timer = setTimeout(() => void search(value), 220);
@@ -89,13 +120,16 @@ function onInput(event: Event): void {
 /** 选中某人：回填 username（与用户列表同一口径） */
 function pick(user: UserRow): void {
   model.value = user.username;
+  pickedId.value = Number(user.id);
   keyword.value = user.username;
   open.value = false;
   activeIndex.value = -1;
+  emit('pick', user);
 }
 
 /** 清空 */
 function clear(): void {
+  pickedId.value = null;
   model.value = '';
   keyword.value = '';
   options.value = [];
@@ -144,6 +178,14 @@ function onDocMousedown(event: MouseEvent): void {
   // 列表被 teleport 到 body，不在 root 里：点在列表上不算"点外面"
   if (listEl.value?.contains(target)) return;
   open.value = false;
+  /*
+   * 严格模式：没选中就回滚 —— 输入框里残留的半截名字会被当成"已填负责人"，
+   * 而它对应不到任何账号。
+   */
+  if (props.strict && pickedId.value === null) {
+    keyword.value = '';
+    if (model.value) model.value = '';
+  }
 }
 
 /**
@@ -256,14 +298,17 @@ onBeforeUnmount(() => {
 
 .upick__input {
   width: 100%;
-  padding-right: 26px;
+  /* 给清除按钮留出 8px 内边距 + 20px 按钮：原来只留 26px，按钮离边框仅 4px，看着贴边 */
+  padding-right: 34px;
 }
 
 .upick__clear {
   position: absolute;
-  right: 4px;
-  width: 18px;
-  height: 18px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   border: 0;
   border-radius: 50%;
   background: var(--mauth-surface-2);
@@ -271,9 +316,13 @@ onBeforeUnmount(() => {
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease);
 }
 
 .upick__clear:hover {
+  background: var(--mauth-border);
   color: var(--mauth-text);
 }
 

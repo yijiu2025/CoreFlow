@@ -72,6 +72,7 @@ const form = reactive({
   parentId: 0,
   name: '',
   leader: '',
+  leaderUserId: null as number | null,
   phone: '',
   email: '',
   sort: 10,
@@ -362,6 +363,8 @@ function openCreate(parent?: DeptNode): void {
     parentId: parent?.id ?? 0,
     name: '',
     leader: '',
+    // 🔴 必须一起重置：漏了它，新建时会带上一次编辑过的那位负责人
+    leaderUserId: null,
     phone: '',
     email: '',
     sort: 10,
@@ -382,6 +385,7 @@ function openEdit(node: DeptNode): void {
     parentId: node.parent_id,
     name: node.name,
     leader: node.leader ?? '',
+    leaderUserId: node.leader_user_id ?? null,
     phone: node.phone ?? '',
     email: node.email ?? '',
     sort: node.sort,
@@ -389,6 +393,35 @@ function openEdit(node: DeptNode): void {
   });
   dialogOpen.value = true;
 }
+
+/**
+ * 选中负责人：把他的邮箱带过来
+ *
+ * 部门邮箱在这套后台里就是"负责人邮箱"——邮箱属于那个人，让人另填一份只会
+ * 填出系统里查无此人的地址（既发不了通知，也没法反查到人）。
+ * 负责人没绑邮箱时留空，提示"可后补"，不在部门表单里另造一个。
+ *
+ * @param user 选中的用户
+ */
+function onLeaderPicked(user: UserRow): void {
+  form.email = user.email ?? '';
+  delete errors.email;
+}
+
+/**
+ * 解绑负责人 → 邮箱失去来源，一起清掉
+ *
+ * 否则会留下"负责人为空、邮箱却是某人的"这种自相矛盾的数据。
+ */
+watch(
+  () => form.leaderUserId,
+  id => {
+    if (!id) {
+      form.email = '';
+      errors.email = '';
+    }
+  }
+);
 
 /** 校验（只挡明显错误，真正的约束仍在后端 schema） */
 function validate(): boolean {
@@ -414,6 +447,7 @@ async function submit(): Promise<void> {
       parentId: Number(form.parentId) || 0,
       name: form.name.trim(),
       leader: form.leader.trim(),
+      leaderUserId: form.leaderUserId,
       phone: form.phone.trim(),
       email: form.email.trim(),
       sort: Number(form.sort) || 0,
@@ -511,6 +545,7 @@ const ctx: DeptsViewContext = {
   collapseAll,
   openCreate,
   openEdit,
+  onLeaderPicked,
   submit,
   remove
 };
