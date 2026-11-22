@@ -97,15 +97,7 @@ class DashboardService {
          ((SELECT COUNT(*) FROM audit_logs a WHERE DATE(a.created_at) = CURDATE()
              AND ${OPER_ONLY_SQL})
            + (SELECT COALESCE(SUM(total), 0) FROM log_stats_hourly
-               WHERE scope = 'oper' AND DATE(bucket_start) = CURDATE())) AS today_ops,
-         /*
-          * 活跃用户 = 近 24 小时**成功登录**过的不同账号。
-          *
-          * 🔴 必须限定 event = 'LOGIN'。session_logs 里还有 KICK（被顶/被踢）、
-          *    SESSION_REFRESH、LOGIN_FAIL —— 之前不筛事件，等于把"被踢下线"也算成
-          *    "活跃"：一次踢出就多一个"在线用户"，数字只会虚高（实测 4 个全是 KICK 行）。
-          */
-         (SELECT COUNT(*) FROM session_logs WHERE 1 = 0) AS active_users`,
+               WHERE scope = 'oper' AND DATE(bucket_start) = CURDATE())) AS today_ops`,
       { type: QueryTypes.SELECT }
     );
 

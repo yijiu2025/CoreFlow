@@ -85,7 +85,17 @@ const {
         <p class="side__value mono"><Odometer :value="onlineCount" /><small> 人</small></p>
         <div class="side__foot">
           <span class="side__hint">{{ data.onlineUsers === null ? '近 24 小时登录' : '当前有会话' }}</span>
-          <span class="side__hint mono">共 {{ data.users }} 位</span>
+          <!--
+            🔴 页脚右侧必须是**同一口径的对照值**。
+            原来这里写的是 `共 {{ data.users }} 位`（账号总数），和左边的大数字（在线数）
+            并排读起来就是"3 个账号里 2 个在线"—— 实际两个数毫无关系。
+            现在给「近 24h 活跃」：在线与活跃可以互相解释（在线但超过 24h 没登录 = 只在线不活跃）。
+            日志权限被隐去时 activeUsers 恒为 0，这时退回账号总数，别显示"活跃 0"。
+          -->
+          <span v-if="data.logDataLocked || data.onlineUsers === null" class="side__hint mono">
+            共 {{ data.users }} 个账号
+          </span>
+          <span v-else class="side__hint mono">近 24h 活跃 {{ data.activeUsers }}</span>
         </div>
       </section>
 
@@ -516,11 +526,7 @@ const {
       color-mix(in srgb, var(--mauth-dash-today) 18%, transparent) 0 1.5px,
       transparent 1.5px 6px
     ),
-    linear-gradient(
-      180deg,
-      var(--mauth-dash-today),
-      color-mix(in srgb, var(--mauth-dash-today) 72%, #ffffff)
-    );
+    linear-gradient(180deg, var(--mauth-dash-today), color-mix(in srgb, var(--mauth-dash-today) 72%, #ffffff));
   box-shadow: 0 6px 18px color-mix(in srgb, var(--mauth-dash-today) 12%, transparent);
 }
 
