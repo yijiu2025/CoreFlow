@@ -24,14 +24,11 @@ import {
   uploadAvatar
 } from '@/api/session';
 import type { MyDeviceRow } from '@/api/types';
-import { useAccentStore } from '@/stores/accent';
 import { useAuthStore } from '@/stores/auth';
 import { useRenderDevice } from '@/views/device/useRenderDevice';
 import { ThemeView } from 'skinsuite/vue';
 import type { ProfileViewContext } from '@/theme/views/profile';
 import { useConfirmStore } from '@/stores/confirm';
-
-const accentStore = useAccentStore();
 
 /**
  * 界面风格（主题包）选择器
