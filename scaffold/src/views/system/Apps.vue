@@ -17,7 +17,7 @@
  * @since 2026-11-21
  */
 import { computed, onMounted, ref } from 'vue';
-import { ChevronRight, LayoutGrid, RefreshCw, Search } from 'lucide-vue-next';
+import { LayoutGrid, RefreshCw, SlidersHorizontal } from 'lucide-vue-next';
 import { listApps, type AppOverview } from '@/api/system';
 import { useRouter } from 'vue-router';
 
@@ -72,6 +72,24 @@ const countText = computed(() =>
   keyword.value.trim() ? `${filtered.value.length} / ${apps.value.length}` : String(apps.value.length)
 );
 
+/**
+ * 授权数据的单行文案
+ *
+ * 表格里一行一个应用，四个数字横排比 2×2 更贴合本框架的表格密度（行高 30px）；
+ * 具体口径写在表头与 `title` 里，不占单元格。
+ *
+ * @param app 应用行
+ * @returns {{roles:number, menus:number, codes:number, clients:number}} 四项计数
+ */
+function statsOf(app: AppOverview): { roles: number; menus: number; codes: number; clients: number } {
+  return {
+    roles: app.counts.roles,
+    menus: app.counts.menus,
+    codes: app.counts.permissionCodes,
+    clients: app.counts.oauthClients
+  };
+}
+
 /** 拉取清单 */
 async function load(): Promise<void> {
   loading.value = true;
@@ -94,30 +112,28 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="apps">
-    <header class="apps__head">
-      <div class="apps__heading">
-        <h2 class="apps__title">应用管理</h2>
-        <p class="apps__sub">
-          应用由代码声明（<code>src/app/&lt;app&gt;/config.js</code>），这里的清单是只读的 ——
-          新增或调整准入策略要走代码评审。
-        </p>
+  <div>
+    <div class="page__head">
+      <h2 class="page__title">应用管理</h2>
+      <span class="page__sub">共 {{ countText }} 个</span>
+    </div>
+
+    <div class="filterbar">
+      <input
+        v-model="keyword"
+        class="input apps__search"
+        type="search"
+        placeholder="搜索应用标识或名称"
+        aria-label="搜索应用"
+      />
+      <div class="filterbar__actions">
+        <button class="btn btn--sm" type="button" :disabled="loading" @click="load">
+          <RefreshCw :size="15" :class="{ 'is-spinning': loading }" /> 刷新
+        </button>
       </div>
-      <button class="btn btn--sm" type="button" :disabled="loading" @click="load">
-        <RefreshCw :size="15" :class="{ 'is-spinning': loading }" /> 刷新
-      </button>
-    </header>
+    </div>
 
     <section class="panel">
-      <div class="panel__head">
-        <span class="panel__title">已接入应用</span>
-        <span class="apps__count">{{ countText }}</span>
-        <label class="apps__search">
-          <Search :size="14" />
-          <input v-model="keyword" type="search" placeholder="搜索应用标识或名称" />
-        </label>
-      </div>
-
       <div v-if="error && apps.length === 0" class="apps__state">
         <p class="apps__state-title">加载失败</p>
         <p class="apps__state-desc">{{ error }}</p>
@@ -133,86 +149,66 @@ onMounted(() => {
         <p class="apps__state-desc">{{ apps.length === 0 ? '还没有登记任何应用' : '没有匹配的应用' }}</p>
       </div>
 
-      <!-- 桌面：定宽表格（列宽由 colgroup 决定，翻页/筛选时列不跳） -->
       <div v-else class="table-wrap">
-        <table class="table apps__table">
+        <table class="table">
           <colgroup>
-            <col style="width: 25%" />
-            <col style="width: 13%" />
-            <col style="width: 17%" />
-            <col style="width: 25%" />
-            <col style="width: 10%" />
-            <col style="width: 10%" />
+            <col style="width: 26%" />
+            <col style="width: 14%" />
+            <col style="width: 14%" />
+            <col style="width: 26%" />
+            <col style="width: 12%" />
+            <col style="width: 8%" />
           </colgroup>
           <thead>
             <tr>
               <th>应用</th>
               <th>权限命名空间</th>
               <th>登录准入</th>
-              <th>授权数据</th>
+              <th title="角色 / 菜单 / 权限码 / 客户端">授权数据</th>
               <th>默认角色</th>
-              <th>接口</th>
+              <th class="col-actions">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="app in filtered" :key="app.appId">
               <td>
-                <div class="apps__app">
-                  <span class="apps__avatar" aria-hidden="true">{{ app.name.slice(0, 1) }}</span>
-                  <span class="apps__ident">
-                    <span class="apps__name">{{ app.name }}</span>
-                    <code class="apps__id">{{ app.appId }}</code>
-                  </span>
-                  <span v-if="app.hosts.length > 0" class="apps__hosts" :title="app.hosts.join('\n')">
-                    {{ app.hosts.length }} 域名
-                  </span>
-                </div>
+                <span class="apps__name">{{ app.name }}</span>
+                <span class="mono apps__id">{{ app.appId }}</span>
+                <span v-if="app.hosts.length > 0" class="tag" :title="app.hosts.join('\n')">
+                  {{ app.hosts.length }} 域名
+                </span>
               </td>
+              <td class="mono">{{ app.permissionAppId }}</td>
               <td>
-                <code
-                  v-if="app.permissionAppId !== app.appId"
-                  class="apps__ns"
-                  :title="'角色/菜单/权限码挂在 admin 命名空间'"
+                <span
+                  :class="['tag', app.access ? 'tag--info' : '']"
+                  :title="app.access ? accessSummary(app) : '任何已注册账号都能登录'"
                 >
-                  {{ app.permissionAppId }}
-                </code>
-                <span v-else class="apps__mut">同应用</span>
-              </td>
-              <td>
-                <span :class="['apps__policy', { 'is-open': !app.access }]" :title="app.access?.denyMessage || ''">
-                  {{ accessSummary(app) }}
+                  {{ app.access ? '受限' : '不限' }}
                 </span>
               </td>
               <td>
-                <span class="apps__stats">
-                  <span :class="{ 'is-muted': app.counts.roles === 0 }"
-                    ><b>{{ app.counts.roles }}</b> 角色</span
-                  >
-                  <span :class="{ 'is-muted': app.counts.menus === 0 }"
-                    ><b>{{ app.counts.menus }}</b> 菜单</span
-                  >
-                  <span :class="{ 'is-muted': app.counts.permissionCodes === 0 }"
-                    ><b>{{ app.counts.permissionCodes }}</b> 权限码</span
-                  >
-                  <span :class="{ 'is-muted': app.counts.oauthClients === 0 }"
-                    ><b>{{ app.counts.oauthClients }}</b> 客户端</span
-                  >
+                <span
+                  class="apps__stats"
+                  :title="`角色 ${statsOf(app).roles} · 菜单 ${statsOf(app).menus} · 权限码 ${statsOf(app).codes} · 客户端 ${statsOf(app).clients}`"
+                >
+                  <span class="mono">{{ statsOf(app).roles }}</span
+                  ><i>角色</i> <span class="mono">{{ statsOf(app).menus }}</span
+                  ><i>菜单</i> <span class="mono">{{ statsOf(app).codes }}</span
+                  ><i>权限码</i> <span class="mono">{{ statsOf(app).clients }}</span
+                  ><i>客户端</i>
                 </span>
               </td>
-              <td>
-                <code v-if="app.defaultRole" class="apps__ns">{{ app.defaultRole }}</code>
-                <span v-else class="apps__mut" title="该应用没有声明默认角色">—</span>
-              </td>
-              <td>
+              <td class="mono">{{ app.defaultRole || '—' }}</td>
+              <td class="col-actions">
                 <button
-                  class="apps__apis"
+                  class="btn btn--ghost btn--sm btn--icon"
                   type="button"
-                  :title="`打开 ${app.name} 的接口开关`"
+                  :title="`打开 ${app.name} 的接口开关（${app.apis?.total ?? 0} 个接口）`"
+                  :aria-label="`打开 ${app.name} 的接口开关`"
                   @click="router.push({ name: 'system-app-apis', params: { appId: app.appId } })"
                 >
-                  {{ app.apis?.total ?? 0 }} 个
-                  <span v-if="app.apis?.disabled" class="apps__apis-off">{{ app.apis.disabled }} 关</span>
-                  <ChevronRight :size="13" class="apps__apis-arrow" />
+                  <SlidersHorizontal :size="15" />
                 </button>
               </td>
             </tr>
@@ -220,77 +216,48 @@ onMounted(() => {
         </table>
       </div>
 
-      <p v-if="hasNamespaceAlias" class="apps__note">
-        权限命名空间与 appId 不同时（如 console → admin），角色 / 菜单 / 权限码挂在**命名空间**下，
-        统计已算进这一行；命名空间本身不单独成行（它不是可登录的应用）。
+      <p class="apps__note">
+        应用由代码声明（<code>src/app/&lt;app&gt;/config.js</code>），清单只读；新增应用或调整准入策略走代码评审。
+        「权限命名空间」与「默认角色」也是代码级声明 —— 授权数据统计已算进这一行；命名空间本身不单独成行。
       </p>
     </section>
   </div>
 </template>
 
 <style scoped>
-.apps {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.apps__head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.apps__heading {
-  flex: 1;
-  min-width: 0;
-}
-
-.apps__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 620;
-  letter-spacing: -0.01em;
-}
-
-.apps__sub {
-  margin: 4px 0 0;
-  color: var(--mauth-text-soft);
-  font-size: 12.5px;
-  line-height: 1.6;
-}
-
-.apps__sub code {
-  padding: 1px 4px;
-  border-radius: 4px;
-  background: var(--mauth-surface-2);
-  font-size: 12px;
-}
-
-/* 搜索框贴右：与「共 N 个」同一行，避免再开一条工具栏 */
+/* 搜索框：本框架的工具条里统一用 `.input`，宽度单独给（其余按组件默认） */
 .apps__search {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  padding: 5px 10px;
-  border: 1px solid var(--mauth-border);
-  border-radius: 999px;
-  background: var(--mauth-surface);
+  width: 240px;
+}
+
+/* 应用列：名称（主）+ 标识（次，等宽）+ 域名标签 */
+.apps__name {
+  font-weight: 600;
+}
+
+.apps__id {
+  margin-left: 8px;
   color: var(--mauth-text-faint);
+  font-size: 11.5px;
 }
 
-.apps__search input {
-  width: 180px;
-  border: 0;
-  outline: 0;
-  background: none;
+/* 授权数据：一行四项，数字等宽、标签小号灰 —— 与表头同一行高度，不撑高行 */
+.apps__stats {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 12px;
   color: var(--mauth-text);
-  font: inherit;
-  font-size: 12.5px;
 }
 
-/* 四态：加载 / 失败 / 空 —— 都在面板内部，不撑出整页高度 */
+.apps__stats i {
+  margin-right: 14px;
+  color: var(--mauth-text-faint);
+  font-size: 11px;
+  font-style: normal;
+}
+
+/* 四态：加载 / 失败 / 空 */
 .apps__state {
   display: flex;
   flex-direction: column;
@@ -316,179 +283,6 @@ onMounted(() => {
   font-size: 12.5px;
 }
 
-/* 分组计数：`3 / 5` 一眼看出"筛选后还剩几个" */
-.apps__count {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--mauth-surface-2);
-  color: var(--mauth-text-mid);
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── 应用列：头像 + 名称/标识 + 域名 ────────────────────── */
-.apps__app {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-}
-
-/* 字母头像：一列里全是文字时，它是最省事的"视觉锚点" */
-.apps__avatar {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--mauth-primary) 10%, var(--mauth-surface));
-  color: var(--mauth-primary);
-  font-size: 12.5px;
-  font-weight: 600;
-}
-
-.apps__ident {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-  line-height: 1.25;
-}
-
-.apps__name {
-  overflow: hidden;
-  font-weight: 600;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.apps__id {
-  width: fit-content;
-  color: var(--mauth-text-faint);
-  font-size: 11.5px;
-  letter-spacing: 0.2px;
-}
-
-.apps__hosts {
-  margin-left: 6px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--mauth-surface-2);
-  color: var(--mauth-text-faint);
-  font-size: 11.5px;
-}
-
-.apps__ns {
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--mauth-primary-soft);
-  color: var(--mauth-primary);
-  font-size: 12px;
-}
-
-.apps__mut {
-  color: var(--mauth-text-faint);
-  font-size: 12px;
-}
-
-/* 准入：不限制时用"淡"的样式，别让人误以为配了什么 */
-.apps__policy {
-  display: inline-block;
-  max-width: 100%;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--mauth-surface-2);
-  color: var(--mauth-text-mid);
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.apps__policy.is-open {
-  color: var(--mauth-text-faint);
-}
-
-/*
- * 四个统计用两列网格，不用"数字 + 圆点"横排：
- * 列宽固定后横排必然在窄屏折行，折出来的行首会留一个孤零零的圆点。
- * 两列网格无论宽度多少都是整齐的 2×2，数字还能靠右对齐形成一列。
- */
-.apps__stats {
-  line-height: 1.35;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px 12px;
-  color: var(--mauth-text-soft);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.apps__stats > span {
-  white-space: nowrap;
-}
-
-.apps__stats b {
-  margin-right: 3px;
-  color: var(--mauth-text);
-  font-weight: 620;
-}
-
-.apps__stats .is-muted {
-  color: var(--mauth-text-faint);
-}
-
-.apps__stats .is-muted b {
-  color: var(--mauth-text-faint);
-}
-
-.apps__apis {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  white-space: nowrap;
-  padding: 2px 8px;
-  border: 1px solid var(--mauth-border);
-  border-radius: 999px;
-  background: var(--mauth-surface);
-  color: var(--mauth-text-mid);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.apps__apis:hover {
-  border-color: var(--mauth-primary);
-  color: var(--mauth-primary);
-}
-
-.apps__apis-off {
-  color: var(--mauth-danger, #d9534f);
-  font-size: 11px;
-}
-
-.apps__apis-arrow {
-  margin-left: -2px;
-  color: var(--mauth-text-faint);
-  transition: transform 0.12s ease;
-}
-
-.apps__apis:hover .apps__apis-arrow {
-  color: var(--mauth-primary);
-  transform: translateX(1px);
-}
-
-.apps__note {
-  margin: 0;
-  padding: 10px 16px 14px;
-  color: var(--mauth-text-soft);
-  font-size: 12px;
-  line-height: 1.65;
-}
-
 .is-spinning {
   animation: apps-spin 0.9s linear infinite;
 }
@@ -499,52 +293,25 @@ onMounted(() => {
   }
 }
 
-/* ── 窄屏：表格收成卡片 ─────────────────────────────────── */
-/*
- * 定宽表格在手机上只能横向滚动，扫读时列标题会滚出视野。窄屏把一个应用折成
- * 一张卡：第一行名称 + 标识，第二行四个计数，第三行准入与命名空间。
- */
-@media (max-width: 720px) {
-  .apps__sub {
-    font-size: 12px;
-  }
+.apps__note {
+  margin: 0;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--mauth-border);
+  color: var(--mauth-text-soft);
+  font-size: 12px;
+  line-height: 1.7;
+}
 
+.apps__note code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--mauth-surface-2);
+  font-size: 11.5px;
+}
+
+@media (max-width: 760px) {
   .apps__search {
     width: 100%;
-    margin: 8px 0 0;
-  }
-
-  .apps__search input {
-    width: 100%;
-  }
-
-  .apps__table thead {
-    display: none;
-  }
-
-  .apps__table,
-  .apps__table tbody,
-  .apps__table tr,
-  .apps__table td {
-    display: block;
-    width: 100%;
-  }
-
-  .apps__table tr {
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--mauth-border);
-  }
-
-  .apps__table td {
-    height: auto;
-    padding: 0;
-    border: 0;
-    white-space: normal;
-  }
-
-  .apps__stats {
-    margin-top: 6px;
-    flex-wrap: wrap;
   }
 }
 </style>
