@@ -63,7 +63,7 @@ async function submit(): Promise<void> {
 
 <template>
   <div class="modal-mask" v-mask-close="() => emit('close')">
-    <div class="modal batch-modal">
+    <div class="modal modal--md batch-modal">
       <header class="modal__head">
         <span class="modal__title">批量授权 · 已选 {{ users.length }} 人</span>
       </header>
@@ -79,8 +79,10 @@ async function submit(): Promise<void> {
           <button type="button" role="tab" :aria-selected="mode === 'remove'" :class="['tab', { 'is-on': mode === 'remove' }]" @click="mode = 'remove'">移除角色</button>
         </div>
 
+        <!-- 外层不再自己滚：滚动交给选择器内部的列表（列表自带 max-height 与底部渐隐），
+             两层滚动条叠在一起时，滚轮会先滚外层的空档，看起来像卡住 -->
         <div class="batch-scroll">
-          <RolePicker v-model="picked" :roles="roles" />
+          <RolePicker v-model="picked" class="batch-picker" :roles="roles" />
         </div>
 
         <p v-if="errorMessage" class="field__error">{{ errorMessage }}</p>
@@ -88,6 +90,8 @@ async function submit(): Promise<void> {
 
       <footer class="modal__foot">
         <span class="batch-summary mono">已选 {{ pickedCount }} 个角色</span>
+        <!-- 按钮禁用时给一句原因：灰掉的按钮不解释自己为什么灰 -->
+        <span v-if="pickedCount === 0" class="batch-hint">请先选择角色</span>
         <button class="btn btn--ghost" type="button" @click="emit('close')">取消</button>
         <button class="btn btn--primary" type="button" :disabled="submitting || pickedCount === 0" @click="submit">
           {{ submitting ? '提交中…' : mode === 'add' ? '追加授权' : '移除授权' }}
@@ -98,9 +102,6 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
-.batch-modal {
-  width: min(680px, 100%);
-}
 
 .batch-note {
   margin: 0;
@@ -108,16 +109,26 @@ async function submit(): Promise<void> {
   color: var(--mauth-text-soft);
 }
 
-/* 角色多时只让这一块滚动，弹窗本身不跟着长 */
+/* 选择器容器：**不**设 max-height / overflow —— 滚动归内部列表，
+   两层滚动条会让滚轮先滚外层空档（看起来像卡住）。这里只留一点右侧余量。 */
 .batch-scroll {
-  max-height: 320px;
-  overflow-y: auto;
-  padding-right: 2px;
+  padding-right: 0;
+}
+
+/* 批量授权是"一次动一批人"的弹窗，列表比编辑弹窗再收一档：240 ≈ 5 行角色 */
+.batch-picker {
+  --rp-list-max: 240px;
 }
 
 .batch-summary {
   margin-right: auto;
   font-size: 12px;
   color: var(--mauth-text-faint);
+}
+
+/* 禁用按钮旁边的原因：贴着按钮（右对齐），不抢"已选 N 个"的位置 */
+.batch-hint {
+  font-size: 11.5px;
+  color: var(--mauth-text-soft);
 }
 </style>
