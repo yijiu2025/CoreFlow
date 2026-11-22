@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 个人中心（访问令牌 / 第三方账号）
+ * 个人中心（访问令牌 / 修改密码 / 第三方账号）
  *
- * 两个页签都是**只动自己**的数据：接口按会话里的 userId 过滤，页面不传用户参数，
+ * 三个页签都是**只动自己**的数据：接口按会话里的 userId 过滤，页面不传用户参数，
  * 因此这里不做任何"是不是我"的判断，也不出现用户选择器。
  *
  * === 令牌明文的处理 ===
@@ -18,21 +18,7 @@
  * @since 2026-11-22
  */
 import { computed, onMounted, ref } from 'vue';
-import {
-  AlertTriangle,
-  Check,
-  Copy,
-  Globe,
-  KeyRound,
-  Link2,
-  Lock,
-  LogOut,
-  Monitor,
-  Plus,
-  ShieldCheck,
-  Trash2,
-  Unlink
-} from 'lucide-vue-next';
+import { AlertTriangle, Check, Copy, Globe, KeyRound, Link2, Lock, Plus, Trash2, Unlink } from 'lucide-vue-next';
 import { createMyToken, listMyIdentities, listMyTokens, revokeMyToken, unbindMyIdentity } from '@/api/user-center';
 import type {
   ApiTokenCreated,
@@ -41,13 +27,12 @@ import type {
   IdentityProviderOption,
   TokenScopeOption
 } from '@/api/user-center';
-import { changePassword, kickMyDevice, kickOtherDevices, myDevices, pruneMyRevokedDevices } from '@/api/session';
-import type { MyDeviceRow } from '@/api/types';
+import { changePassword } from '@/api/session';
 import PersonalPage from '@/components/business/PersonalPage.vue';
 import { useConfirmStore } from '@/stores/confirm';
 import { useToastStore } from '@/stores/toast';
 
-type Tab = 'tokens' | 'security' | 'identities';
+type Tab = 'tokens' | 'password' | 'identities';
 
 const toast = useToastStore();
 const confirmStore = useConfirmStore();
@@ -58,8 +43,8 @@ const tab = ref<Tab>('tokens');
 /**
  * 切页签
  *
- * 第三方绑定与设备都是低频数据，首次切过去才请求；令牌是默认页，进页面就拉。
- * 设备必须懒加载：它在服务端要扫会话表，进页面就拉等于每次打开都多两次查询。
+ * 第三方绑定是低频数据，首次切过去才请求；令牌是默认页，进页面就拉。
+ * 改密是纯表单，不需要预加载。
  *
  * @param next 目标页签
  */
@@ -67,9 +52,6 @@ function selectTab(next: Tab): void {
   tab.value = next;
   if (next === 'identities' && !identitiesLoaded.value && !identitiesLoading.value) {
     void loadIdentities();
-  }
-  if (next === 'security' && !devicesLoaded.value && !devicesLoading.value) {
-    void loadDevices();
   }
 }
 
@@ -302,153 +284,14 @@ async function askUnbind(row: BoundIdentityRow): Promise<void> {
   }
 }
 
-/* ── 登录与安全（修改密码 / 登录设备） ───────────────────────
+/* ── 修改密码 ───────────────────────────────────────────────
  *
- * 两块都只动自己：改密走 `PUT /session/password`（服务端按会话里的 userId 取凭证，
- * 页面不发用户参数），设备走 `/user/v1/sessions*`（服务端强制按 userId 过滤）。
- * 因此这里不做任何"是不是我"的判断。
+ * 只动自己：`PUT /session/password` 由服务端按会话里的 userId 取凭证，页面不发用户参数。
+ *
+ * 🔴 登录设备**不在这里**：主题版式（`themes/<包>/<设备>/profile/`）已经在「个人资料」
+ *    里承载了设备列表与踢下线，而且手机版式也必须能用。在账号与安全页再放一份，
+ *    就是两套 UI 做同一件事 —— 改一处漏一处，用户还会疑惑"哪份是真的"。
  */
-
-const devices = ref<MyDeviceRow[]>([]);
-const devicesLoading = ref(false);
-const devicesError = ref('');
-const devicesLoaded = ref(false);
-const kickingId = ref<number | null>(null);
-const kickingAll = ref(false);
-const pruning = ref(false);
-
-/**
- * 拉取我的登录设备
- *
- * @returns {Promise<void>}
- */
-async function loadDevices(): Promise<void> {
-  devicesLoading.value = true;
-  devicesError.value = '';
-  try {
-    const data = await myDevices();
-    devices.value = data.devices;
-    devicesLoaded.value = true;
-  } catch (err) {
-    devicesError.value = err instanceof Error ? err.message : '设备列表加载失败';
-  } finally {
-    devicesLoading.value = false;
-  }
-}
-
-/**
- * 设备的一行描述
- *
- * UA 原串太长，直接铺在表格里会把其它列挤没；截到平台 + 浏览器两个语义片段即可，
- * 完整串放 `title`，需要排查时鼠标悬停能看到。
- *
- * @param row 设备行
- * @returns 简短描述
- */
-function deviceLabel(row: MyDeviceRow): string {
-  const ua = row.userAgent || '';
-  if (!ua) return '未知客户端';
-  const os = /Windows/i.test(ua)
-    ? 'Windows'
-    : /Mac OS X|Macintosh/i.test(ua)
-      ? 'macOS'
-      : /Android/i.test(ua)
-        ? 'Android'
-        : /iPhone|iPad|iOS/i.test(ua)
-          ? 'iOS'
-          : /Linux/i.test(ua)
-            ? 'Linux'
-            : '未知系统';
-  const browser = /Edg\//i.test(ua)
-    ? 'Edge'
-    : /Chrome\//i.test(ua)
-      ? 'Chrome'
-      : /Firefox\//i.test(ua)
-        ? 'Firefox'
-        : /Safari\//i.test(ua)
-          ? 'Safari'
-          : '其他';
-  return `${os} · ${browser}`;
-}
-
-/**
- * 踢掉某一台设备
- *
- * 服务器踢到当前设备时会返回 `current: true`，此后本页所有请求都会 401 ——
- * 所以先确认、再提示"需要重新登录"，而不是让用户对着一个空页面猜发生了什么。
- *
- * @param row 设备行
- * @returns {Promise<void>}
- */
-async function askKick(row: MyDeviceRow): Promise<void> {
-  if (kickingId.value !== null) return;
-  const ok = await confirmStore.ask({
-    title: '让该设备下线',
-    message: `确认让「${deviceLabel(row)}」下线？该设备上的登录会话会立即失效。`,
-    confirmText: '下线',
-    danger: true
-  });
-  if (!ok) return;
-
-  kickingId.value = row.id;
-  try {
-    const res = await kickMyDevice(row.id);
-    toast.push(res.current ? '当前设备已下线，请重新登录' : '该设备已下线');
-    if (!res.current) await loadDevices();
-  } catch (err) {
-    toast.pushError(err, '下线失败');
-  } finally {
-    kickingId.value = null;
-  }
-}
-
-/**
- * 退出其它所有设备（保留当前会话）
- *
- * @returns {Promise<void>}
- */
-async function askKickOthers(): Promise<void> {
-  if (kickingAll.value) return;
-  const ok = await confirmStore.ask({
-    title: '退出其它设备',
-    message: '除了当前这台设备，其它所有登录会话都会失效。确定继续？',
-    confirmText: '全部退出',
-    danger: true
-  });
-  if (!ok) return;
-
-  kickingAll.value = true;
-  try {
-    const res = await kickOtherDevices();
-    toast.push(res.kicked > 0 ? `已退出 ${res.kicked} 个设备` : '没有其它在线设备');
-    await loadDevices();
-  } catch (err) {
-    toast.pushError(err, '操作失败');
-  } finally {
-    kickingAll.value = false;
-  }
-}
-
-/**
- * 清理已下线的历史记录（不动任何在线会话）
- *
- * @returns {Promise<void>}
- */
-async function askPruneDevices(): Promise<void> {
-  if (pruning.value) return;
-  pruning.value = true;
-  try {
-    const res = await pruneMyRevokedDevices();
-    toast.push(res.removed > 0 ? `已清理 ${res.removed} 条记录` : '没有需要清理的记录');
-    await loadDevices();
-  } catch (err) {
-    toast.pushError(err, '清理失败');
-  } finally {
-    pruning.value = false;
-  }
-}
-
-/* ── 修改密码 ─────────────────────────────────────────────── */
 
 const oldPassword = ref('');
 const newPassword = ref('');
@@ -562,11 +405,11 @@ onMounted(loadTokens);
       <button
         type="button"
         role="tab"
-        :aria-selected="tab === 'security'"
-        :class="['tab', { 'is-on': tab === 'security' }]"
-        @click="selectTab('security')"
+        :aria-selected="tab === 'password'"
+        :class="['tab', { 'is-on': tab === 'password' }]"
+        @click="selectTab('password')"
       >
-        登录与安全
+        修改密码
       </button>
       <button
         type="button"
@@ -671,130 +514,59 @@ onMounted(loadTokens);
       </div>
     </section>
 
-    <!-- ── 登录与安全（改密 / 设备） ─────────────────────────── -->
-    <div v-else-if="tab === 'security'" class="panel-stack">
-      <section class="panel">
-        <header class="panel__head">
-          <span class="panel__title">修改密码</span>
-          <span class="panel__note">改密后其它设备仍保持登录；要一并退出请用下方「退出其它设备」</span>
-        </header>
-        <div class="panel__body">
-          <div class="pwd-grid">
-            <label class="field">
-              <span class="field__label">当前密码</span>
-              <input v-model="oldPassword" class="input" type="password" autocomplete="current-password" />
-            </label>
-            <label class="field">
-              <span class="field__label">新密码</span>
-              <input
-                v-model="newPassword"
-                class="input"
-                type="password"
-                autocomplete="new-password"
-                placeholder="至少 8 位"
-              />
-            </label>
-            <label class="field">
-              <span class="field__label">确认新密码</span>
-              <input
-                v-model="confirmPassword"
-                class="input"
-                type="password"
-                autocomplete="new-password"
-                @keyup.enter="submitPassword"
-              />
-              <span v-if="pwdMismatch" class="field__error">两次输入的新密码不一致</span>
-            </label>
-          </div>
+    <!-- ── 修改密码 ─────────────────────────────────────────── -->
+    <section v-else-if="tab === 'password'" class="panel">
+      <header class="panel__head">
+        <span class="panel__title">修改密码</span>
+        <span class="panel__note">改密后其它设备仍保持登录，需要强制下线请在「个人资料」里操作</span>
+      </header>
 
-          <p v-if="pwdError" class="field__error">{{ pwdError }}</p>
-
-          <div class="pwd-foot">
-            <button class="btn btn--primary btn--sm" type="button" :disabled="changingPwd" @click="submitPassword">
-              <Lock :size="14" aria-hidden="true" />
-              {{ changingPwd ? '提交中…' : '更新密码' }}
-            </button>
-            <span class="field__hint">密码强度规则由服务端判定（长度 / 字符类型），这里只挡两次不一致。</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <header class="panel__head">
-          <span class="panel__title">登录设备</span>
-          <span class="panel__note">{{ devices.length }} 条记录</span>
-          <div class="panel__actions">
-            <button class="btn btn--sm" type="button" :disabled="pruning" @click="askPruneDevices">
-              <Trash2 :size="13" aria-hidden="true" />
-              清理已下线
-            </button>
-            <button class="btn btn--danger btn--sm" type="button" :disabled="kickingAll" @click="askKickOthers">
-              <LogOut :size="13" aria-hidden="true" />
-              退出其它设备
-            </button>
-          </div>
-        </header>
-
-        <div class="table-wrap">
-          <table class="table device-table">
-            <thead>
-              <tr>
-                <th>设备</th>
-                <th>IP</th>
-                <th>最近活跃</th>
-                <th>状态</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="row in devices" :key="row.id">
-                <td :title="row.userAgent || ''">
-                  <span class="provider-cell">
-                    <Monitor :size="14" aria-hidden="true" />
-                    {{ deviceLabel(row) }}
-                    <span v-if="row.isCurrent" class="tag tag--ok">当前设备</span>
-                  </span>
-                </td>
-                <td class="mono">{{ row.ip || '—' }}</td>
-                <td class="mono">{{ when(row.lastActive) }}</td>
-                <td>
-                  <span v-if="row.revoked" class="tag tag--off">已下线</span>
-                  <span v-else-if="row.stale" class="tag tag--off">可能已过期</span>
-                  <span v-else class="tag tag--ok">在线</span>
-                </td>
-                <td>
-                  <button
-                    class="btn btn--danger btn--sm"
-                    type="button"
-                    :disabled="Boolean(row.revoked) || kickingId === row.id"
-                    @click="askKick(row)"
-                  >
-                    {{ kickingId === row.id ? '处理中…' : '下线' }}
-                  </button>
-                </td>
-              </tr>
-
-              <tr v-if="devicesLoading">
-                <td colspan="5">
-                  <div class="empty">设备列表加载中…</div>
-                </td>
-              </tr>
-              <tr v-else-if="!devices.length && !devicesError">
-                <td colspan="5" class="table-empty-cell">
-                  <div class="table-empty">
-                    <ShieldCheck :size="24" aria-hidden="true" />
-                    <p class="table-empty__title">没有登录记录</p>
-                    <span class="table-empty__sub">登录过的设备会出现在这里，可随时让某一台下线</span>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="panel__body">
+        <div class="pwd-grid">
+          <label class="field">
+            <span class="field__label">当前密码</span>
+            <input v-model="oldPassword" class="input" type="password" autocomplete="current-password" />
+          </label>
+          <label class="field">
+            <span class="field__label">新密码</span>
+            <input
+              v-model="newPassword"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              placeholder="至少 8 位"
+            />
+          </label>
+          <label class="field">
+            <span class="field__label">确认新密码</span>
+            <input
+              v-model="confirmPassword"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              @keyup.enter="submitPassword"
+            />
+            <span v-if="pwdMismatch" class="field__error">两次输入的新密码不一致</span>
+          </label>
         </div>
 
-        <p v-if="devicesError" class="field__error identity-error">{{ devicesError }}</p>
-      </section>
-    </div>
+        <p v-if="pwdError" class="field__error">{{ pwdError }}</p>
+
+        <div class="pwd-foot">
+          <button class="btn btn--primary btn--sm" type="button" :disabled="changingPwd" @click="submitPassword">
+            <Lock :size="14" aria-hidden="true" />
+            {{ changingPwd ? '提交中…' : '更新密码' }}
+          </button>
+          <span class="field__hint">密码强度由服务端判定（长度 / 字符类型）；这里只挡"两次不一致"这类明显错误。</span>
+        </div>
+
+        <p class="hint hint--foot">
+          登录设备与会话下线在
+          <RouterLink to="/settings/profile">个人资料</RouterLink>
+          页管理 —— 那里同时有手机版式，跨端都能用。
+        </p>
+      </div>
+    </section>
 
     <!-- ── 第三方账号 ───────────────────────────────────────── -->
     <div v-else class="panel-stack">
@@ -996,7 +768,17 @@ onMounted(loadTokens);
   gap: 12px 16px;
 }
 
-/* 提交按钮与说明同一行：说明是"为什么前端不校验强度"，贴着按钮才好读 */
+/* 说明文字里的跳转：默认链接色，别让它在灰字里"消失" */
+.hint a {
+  color: var(--mauth-primary);
+  text-decoration: none;
+}
+
+.hint a:hover {
+  text-decoration: underline;
+}
+
+/* 提交按钮与说明同一行：说明是"前端为什么只管两次不一致"，贴着按钮才好读 */
 .pwd-foot {
   display: flex;
   align-items: center;
