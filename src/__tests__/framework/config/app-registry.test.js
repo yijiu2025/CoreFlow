@@ -18,7 +18,7 @@ import {
 describe('resolveAppByPath：路径 → 应用', () => {
   it('前缀命中，返回登记的应用', () => {
     registerApiBinding('/__t/admin', 'console');
-    expect(resolveAppByPath('/__t/admin/console/v1/users')).toBe('console');
+    expect(resolveAppByPath('/__t/admin/v1/users')).toBe('console');
   });
 
   it('边界不能误伤：/__t/admin 不命中 /__t/administrator', () => {

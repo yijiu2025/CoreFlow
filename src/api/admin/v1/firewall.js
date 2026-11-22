@@ -1,9 +1,9 @@
 /**
  * 防火墙只读监控接口
  *
- * GET /admin/console/v1/firewall/summary    —— 流量与拦截汇总
- * GET /admin/console/v1/firewall/blocks     —— 生效中的封禁名单（分页）
- * GET /admin/console/v1/firewall/whitelist  —— 生效中的白名单
+ * GET /admin/v1/firewall/summary    —— 流量与拦截汇总
+ * GET /admin/v1/firewall/blocks     —— 生效中的封禁名单（分页）
+ * GET /admin/v1/firewall/whitelist  —— 生效中的白名单
  *
  * 只读：写操作（加黑 / 解封 / 改策略）由防火墙配置接口承担，
  * 这里不复制一套写入口，避免两处策略状态不一致。
@@ -23,11 +23,11 @@
  * @since 2026-11-09
  * @since 2026-11-21 汇总改读 framework 遥测；封禁记录归一为 kind/value
  */
-import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import { getSummary } from '../../../../framework/ingress/firewall/telemetry/store.js';
-import { getActiveBlocks, getActiveWhitelist } from '../../../../framework/ingress/firewall/block-manager.js';
-import { withFail } from '../../../../app/admin/console/utils/respond.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../app/admin/permission/index.js';
+import { getSummary } from '../../../framework/ingress/firewall/telemetry/store.js';
+import { getActiveBlocks, getActiveWhitelist } from '../../../framework/ingress/firewall/block-manager.js';
+import { withFail } from '../../../app/admin/console/utils/respond.js';
 
 /**
  * 把底层维度记录归一成前端视图
@@ -64,7 +64,7 @@ async function registerConsoleFirewallRoutes(fastify) {
     name: 'adminFirewall',
     alias: '管理后台防火墙监控',
     description: '防火墙汇总、封禁名单、白名单（只读）',
-    prefix: '/console/v1',
+    prefix: '/v1',
     enabled: true,
     requireLogin: true
   });

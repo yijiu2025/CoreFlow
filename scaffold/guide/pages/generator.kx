@@ -83,13 +83,13 @@
   @state previewFiles: object[] = []
   @state form: object = {}
 
-  @api GET /admin/console/v1/gen/tables -> genTables
-  @api GET /admin/console/v1/gen/tables/importable -> importableTables
-  @api POST /admin/console/v1/gen/tables/import (body: { tableNames })
-  @api PUT /admin/console/v1/gen/tables/:id (bind: id, body: { businessName, moduleName, author, remark })
-  @api GET /admin/console/v1/gen/tables/:id/columns (bind: id) -> columns
-  @api GET /admin/console/v1/gen/tables/:id/preview (bind: id) -> previewFiles
-  @api POST /admin/console/v1/gen/tables/:id/generate (bind: id)
+  @api GET /admin/v1/gen/tables -> genTables
+  @api GET /admin/v1/gen/tables/importable -> importableTables
+  @api POST /admin/v1/gen/tables/import (body: { tableNames })
+  @api PUT /admin/v1/gen/tables/:id (bind: id, body: { businessName, moduleName, author, remark })
+  @api GET /admin/v1/gen/tables/:id/columns (bind: id) -> columns
+  @api GET /admin/v1/gen/tables/:id/preview (bind: id) -> previewFiles
+  @api POST /admin/v1/gen/tables/:id/generate (bind: id)
 
   @note 二期功能：首期只交付其余模块，本页先占位并在菜单中标记为未启用
   @note 生成模板必须是本仓形态：Sequelize 模型 + 迁移 + DAO + Service + registerSecureRoute + Vue 页面

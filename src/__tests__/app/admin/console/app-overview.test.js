@@ -72,12 +72,20 @@ describe('normalizeAccess', () => {
     expect(mod.normalizeAccess({ anyPermission: [], anyRole: [] })).toBeNull();
   });
 
-  it('声明了就三项俱在（缺的补空，避免前端出现 undefined 分支）', () => {
+  it('声明了就四项俱在（缺的补空，避免前端出现 undefined 分支）', () => {
     expect(mod.normalizeAccess({ anyRole: ['superadmin'] })).toEqual({
       anyPermission: [],
       anyRole: ['superadmin'],
+      selfService: false,
       denyMessage: ''
     });
+  });
+
+  it('自助区准入只认严格 true（字符串 / 数字一律当关闭）', () => {
+    // 这个开关被误开等于"任何注册用户都能进后台"，类型宽松就是给配置错误开门
+    expect(mod.normalizeAccess({ anyPermission: ['admin:*'], selfService: true }).selfService).toBe(true);
+    expect(mod.normalizeAccess({ anyPermission: ['admin:*'], selfService: 'true' }).selfService).toBe(false);
+    expect(mod.normalizeAccess({ anyPermission: ['admin:*'], selfService: 1 }).selfService).toBe(false);
   });
 });
 

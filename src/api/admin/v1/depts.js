@@ -1,22 +1,23 @@
 /**
  * 部门管理接口
  *
- * GET    /admin/console/v1/depts/tree    —— 部门树（含成员数）
- * GET    /admin/console/v1/depts/options —— 扁平选项（启用项）
- * POST   /admin/console/v1/depts         —— 新建部门
- * PUT    /admin/console/v1/depts/:id     —— 编辑部门（父级变化时重写下级 ancestors）
- * DELETE /admin/console/v1/depts/:id     —— 删除部门（有子部门或成员时拒绝）
- * GET    /admin/console/v1/depts/:id/history —— 变更历史（读审计：谁改了什么）
+ * GET    /admin/v1/depts/tree    —— 部门树（含成员数）
+ * GET    /admin/v1/depts/options —— 扁平选项（启用项）
+ * POST   /admin/v1/depts         —— 新建部门
+ * PUT    /admin/v1/depts/:id     —— 编辑部门（父级变化时重写下级 ancestors）
+ * DELETE /admin/v1/depts/:id     —— 删除部门（有子部门或成员时拒绝）
+ * GET    /admin/v1/depts/:id/history —— 变更历史（读审计：谁改了什么）
  *
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import deptDao, { DEPT_AUDIT_TYPES } from '../../../../app/admin/console/dao/dept.dao.js';
-import { logAuditEvent } from '../../../../framework/security/auth/index.js';
-import { withFail } from '../../../../app/admin/console/utils/respond.js';
-import { resolveDataScope, filterDeptTree } from '../../../../app/admin/console/services/data-scope.service.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../app/admin/permission/index.js';
+import deptDao, { DEPT_AUDIT_TYPES } from '../../../app/admin/console/dao/dept.dao.js';
+import userDao from '../../../app/admin/console/dao/user.dao.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
+import { withFail } from '../../../app/admin/console/utils/respond.js';
+import { resolveDataScope, filterDeptTree } from '../../../app/admin/console/services/data-scope.service.js';
 
 /** 参与 diff 的字段与中文名（历史里"改了什么"必须能读懂，不能是一串列名） */
 const TRACKED_FIELDS = [
@@ -111,6 +112,14 @@ const deptBodySchema = {
     parentId: { type: 'integer', minimum: 0 },
     name: { type: 'string', minLength: 1, maxLength: 50 },
     leader: { type: 'string', maxLength: 50 },
+    /*
+     * 负责人绑定（用户主键）。与 `leader` 的关系：
+     *   · 传了 `leaderUserId` → 后端按它取用户、把 username 回写进 `leader`（快照），
+     *     两列一起写，保证"显示名"和"绑定"永远同源；
+     *   · 只传 `leader` 文本（历史数据 / 还没建账号的人）→ 只写文本，`leader_user_id` 置空，
+     *     避免出现"绑了 A 却显示 B"的半吊子状态。
+     */
+    leaderUserId: { type: ['integer', 'null'], minimum: 1 },
     phone: { type: 'string', maxLength: 20 },
     email: { type: 'string', maxLength: 100 },
     sort: { type: 'integer', minimum: 0, maximum: 9999 },
@@ -129,6 +138,9 @@ function toModelFields(body) {
   if (body.parentId !== undefined) payload.parent_id = body.parentId;
   if (body.name !== undefined) payload.name = body.name;
   if (body.leader !== undefined) payload.leader = body.leader;
+  if (body.leaderUserId !== undefined) {
+    payload.leader_user_id = body.leaderUserId === null ? null : Number(body.leaderUserId);
+  }
   if (body.phone !== undefined) payload.phone = body.phone;
   if (body.email !== undefined) payload.email = body.email;
   if (body.sort !== undefined) payload.sort = body.sort;
@@ -136,12 +148,47 @@ function toModelFields(body) {
   return payload;
 }
 
+/**
+ * 把「负责人用户 ID」落成"绑定 + 显示快照"两列
+ *
+ * 🔴 两列必须同源：只写 id 不写 leader，旧版列表与导出会显示空白；只写 leader 不写 id，
+ *    就退回纯文本，反查与改名同步都做不到。传了 id 就按该用户**当前** username 回写，
+ *    顺带修好"用户改名后部门上还挂着旧名"的老问题。
+ *
+ * @param {object} fields toModelFields() 的结果（就地修改）
+ * @returns {Promise<object>} 处理后的字段
+ * @throws {Error} `INVALID_PARAM:负责人不存在` —— 不静默降级成"只存文本"，否则前端以为绑上了
+ */
+async function withLeaderSnapshot(fields) {
+  if (fields.leader_user_id === undefined || fields.leader_user_id === null) {
+    /* 纯文本模式：清掉绑定，避免"解绑后仍指向旧用户" */
+    if (fields.leader !== undefined) fields.leader_user_id = null;
+    return fields;
+  }
+  const user = await userDao.findBrief(fields.leader_user_id, ['id', 'username', 'email']);
+  if (!user) throw new Error('INVALID_PARAM:负责人不存在（请重新选择）');
+  fields.leader = user.username;
+  fields.leader_user_id = Number(user.id);
+  /*
+   * 邮箱是"负责人的邮箱"，不是部门自己的一份：绑了人就以他的为准。
+   *
+   * 前端表单里那格是只读的（选完人自动带出），所以正常路径本来就一致；
+   * 这里兜一次是为了**其它调用方** —— 导入、脚本、以后可能有的移动端，
+   * 少传一层就会出现"部门邮箱写着 A、负责人却是 B"。
+   * 他没绑邮箱时留空（可后补），不编造一个。
+   */
+  if (fields.email === undefined || fields.email === null || fields.email === '') {
+    fields.email = user.email || null;
+  }
+  return fields;
+}
+
 async function registerDeptRoutes(fastify) {
   registerGroupMetadata({
     name: 'adminDept',
     alias: '管理后台部门',
     description: '组织架构维护',
-    prefix: '/console/v1',
+    prefix: '/v1',
     enabled: true,
     requireLogin: true
   });
@@ -185,7 +232,8 @@ async function registerDeptRoutes(fastify) {
     requirePermission: ADMIN_PERMISSIONS.DEPT.CREATE,
     schema: { body: { ...deptBodySchema, required: ['name'] } },
     handler: withFail(async (request, reply) => {
-      const dept = await deptDao.create(toModelFields(request.body));
+      const fields = await withLeaderSnapshot(toModelFields(request.body));
+      const dept = await deptDao.create(fields);
       await audit(request, DEPT_AUDIT_TYPES.CREATE, {
         deptId: Number(dept.id),
         name: dept.name,
@@ -211,7 +259,7 @@ async function registerDeptRoutes(fastify) {
       // 先取旧值：审计要的是"从什么改成什么"，改完再读就只能记一条"改过"
       const before = await deptDao.findById(request.params.id);
       if (!before) throw new Error('NOT_FOUND:部门不存在');
-      const ok = await deptDao.update(request.params.id, toModelFields(request.body));
+      const ok = await deptDao.update(request.params.id, await withLeaderSnapshot(toModelFields(request.body)));
       if (!ok) throw new Error('NOT_FOUND:部门不存在');
 
       const after = await deptDao.findById(request.params.id);

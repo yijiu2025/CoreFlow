@@ -1,7 +1,7 @@
 /**
  * 管理后台「防火墙监控」视图归一测试
  *
- * 被测对象：`api/admin/console/v1/firewall.js` 的 `toBlockView`
+ * 被测对象：`api/admin/v1/firewall.js` 的 `toBlockView`
  *
  * 为什么单测这个函数：底层封禁记录按维度给出 `ip / fingerprint / deviceId`，
  * 而管理前端（scaffold 的 firewall 版式）只认 `kind` + `value`，且 `createdAt`
@@ -13,7 +13,7 @@
  */
 import { describe, test, expect } from '@jest/globals';
 
-const { toBlockView } = await import('../../api/admin/console/v1/firewall.js');
+const { toBlockView } = await import('../../api/admin/v1/firewall.js');
 
 const CREATED_AT = Date.UTC(2026, 10, 21, 3, 0, 0);
 

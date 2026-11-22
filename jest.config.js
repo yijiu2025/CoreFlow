@@ -61,7 +61,7 @@ export default {
    *    继续挂在 44/42/44/45 只会让 CI 长期红，红着就没有人看 —— 那才是门禁真正失效的样子。
    *    所以按实测值重定基（取本地与 CI 的较小值再留一点抖动空间）。
    *
-   * ⚠️ **恢复目标**：给 `app/console/services/*` 与 `api/admin/console/v1/*` 补上用例后，
+   * ⚠️ **恢复目标**：给 `app/console/services/*` 与 `api/admin/v1/*` 补上用例后，
    *    把四个数字推回 44/42/44/45（新代码覆盖率上来就往上提，别再往下调）。
    */
   coverageThreshold: {

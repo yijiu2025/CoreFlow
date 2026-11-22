@@ -17,7 +17,7 @@
 import { describe, expect, test } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 
-const DIR = new URL('../../api/admin/console/v1/', import.meta.url);
+const DIR = new URL('../../api/admin/v1/', import.meta.url);
 
 /** 模块 → 该模块内必须留痕的写接口（路由 name → 事件码/常量） */
 const MODULES = [

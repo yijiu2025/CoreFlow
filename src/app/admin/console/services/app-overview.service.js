@@ -45,11 +45,11 @@ function permissionCodeCounts() {
 /**
  * 访问策略的对外形状
  *
- * 三个字段都可能没声明（未声明 = 不限制）。原样透传会让前端出现 `undefined` 分支，
- * 这里统一收敛成"要么全空，要么三项俱在"。
+ * 四个字段都可能没声明（未声明 = 不限制）。原样透传会让前端出现 `undefined` 分支，
+ * 这里统一收敛成"要么全空，要么四项俱在"。
  *
  * @param {object|undefined} access 应用配置里的 `access`
- * @returns {{anyPermission: string[], anyRole: string[], denyMessage: string}|null} 策略
+ * @returns {{anyPermission: string[], anyRole: string[], selfService: boolean, denyMessage: string}|null} 策略
  */
 function normalizeAccess(access) {
   if (!access || typeof access !== 'object') return null;
@@ -57,7 +57,13 @@ function normalizeAccess(access) {
   const anyRole = Array.isArray(access.anyRole) ? access.anyRole : [];
   const denyMessage = typeof access.denyMessage === 'string' ? access.denyMessage : '';
   if (anyPermission.length === 0 && anyRole.length === 0) return null;
-  return { anyPermission, anyRole, denyMessage };
+  /*
+   * `selfService` 必须透出：它把"准入"从"必须有角色"改成"登录即可进"，
+   * 不带这一项时应用管理页会把一个半开放的应用显示成封闭的 —— 管理员据此判断
+   * "这个后台谁能登录"，看错就是安全判断看错。
+   */
+  const selfService = access.selfService === true;
+  return { anyPermission, anyRole, selfService, denyMessage };
 }
 
 /**
@@ -155,6 +161,13 @@ async function listAppsOverview(actor) {
         appId,
         name: config.name || appId,
         description: config.description || '',
+        /**
+         * 平台内置（守卫 / 通知 / 用户中心 / 授权中心）
+         *
+         * 它们的 `app_id` 是权限命名空间、接口是基础设施入口，不该被当成
+         * "可以授权给业务用户的应用"。前端据此分组，并禁掉准入 / 默认角色。
+         */
+        builtin: config.builtin === true,
         /** 权限命名空间（与 appId 不同时才值得在界面上单独标出来） */
         permissionAppId: namespace,
         defaultRole: config.default_role || '',

@@ -93,13 +93,13 @@
   @state userOptions: object = {}
   @state selectedIds: number[] = []
 
-  @api GET /admin/console/v1/users (query: pageNum, pageSize, keyword, deptId, status) -> userPage
-  @api GET /admin/console/v1/users/options -> userOptions
-  @api POST /admin/console/v1/users (body: { username, email, password, deptId, status, roleIds, postIds })
-  @api PUT /admin/console/v1/users/:id (bind: id, body: { username, email, deptId, status, roleIds, postIds })
-  @api PUT /admin/console/v1/users/:id/status (bind: id, body: { status })
-  @api PUT /admin/console/v1/users/:id/password (bind: id, body: { password })
-  @api DELETE /admin/console/v1/users/:id (bind: id)
+  @api GET /admin/v1/users (query: pageNum, pageSize, keyword, deptId, status) -> userPage
+  @api GET /admin/v1/users/options -> userOptions
+  @api POST /admin/v1/users (body: { username, email, password, deptId, status, roleIds, postIds })
+  @api PUT /admin/v1/users/:id (bind: id, body: { username, email, deptId, status, roleIds, postIds })
+  @api PUT /admin/v1/users/:id/status (bind: id, body: { status })
+  @api PUT /admin/v1/users/:id/password (bind: id, body: { password })
+  @api DELETE /admin/v1/users/:id (bind: id)
 
   @sync boardColumns = groupByStatus(userPage.rows)
 

@@ -63,10 +63,10 @@
   @state form: object = {}
   @state dirtyKeys: string[] = []
 
-  @api GET /admin/console/v1/configs (query: pageNum, pageSize, keyword, type) -> configPage
-  @api POST /admin/console/v1/configs (body: { configKey, configValue, type, remark })
-  @api PUT /admin/console/v1/configs/:id (bind: id, body: { configValue, remark })
-  @api DELETE /admin/console/v1/configs/:id (bind: id)
+  @api GET /admin/v1/configs (query: pageNum, pageSize, keyword, type) -> configPage
+  @api POST /admin/v1/configs (body: { configKey, configValue, type, remark })
+  @api PUT /admin/v1/configs/:id (bind: id, body: { configValue, remark })
+  @api DELETE /admin/v1/configs/:id (bind: id)
 
   @sync groups = groupByPrefix(configPage.rows)
 

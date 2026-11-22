@@ -458,7 +458,7 @@ function unwrap<T>(response: AxiosResponse<Envelope<T>>): T {
 /**
  * GET 请求
  *
- * @param url 路径（如 `/admin/console/v1/users`）
+ * @param url 路径（如 `/admin/v1/users`）
  * @param params 查询参数
  * @returns 解包后的数据
  */

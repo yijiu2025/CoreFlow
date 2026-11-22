@@ -59,7 +59,11 @@ const ALLOWED_EDGES = new Set([
   // 真正的注销与凭据生命周期由用户域负责（缓冲期、清理范围都在那边）；
   // 反向依赖（user → console）会让人域为了后台的管理规则而绑死后台，故只保留这一条单向边。
   'admin/console/services/user-danger.service.js -> user/services/deactivation.service.js',
-  'admin/console/services/user-danger.service.js -> user/services/temp-password.service.js'
+  'admin/console/services/user-danger.service.js -> user/services/temp-password.service.js',
+  // 个人访问令牌的作用域就是 OAuth scope（同一套语义、同一份注册表）：
+  // 签发令牌时要按 scope 注册表校验用户选的作用域，user 域只**只读**引用它。
+  // 反向依赖不存在（oauth21 不认识 user 的令牌表），所以这是一条明确的单向边。
+  'user/services/token.service.js -> oauth21/config/scope-registry.js'
 ]);
 
 /** 提取源码里全部 import/export-from 的模块说明符 */
@@ -75,7 +79,6 @@ function extractImportSpecs(src) {
 }
 
 const relFromApp = f => path.relative(APP_DIR, f).replace(/\\/g, '/');
-
 
 /**
  * 解析一个 import 说明符，若指向「另一个应用」则返回跨应用边

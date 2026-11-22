@@ -12,12 +12,12 @@ import type { CurrentUser, MenuNode, MyDeviceRow } from './types';
 
 /** 当前用户信息（含角色与扁平权限码） */
 export function fetchMe(): Promise<CurrentUser> {
-  return get<CurrentUser>('/admin/console/v1/session/me');
+  return get<CurrentUser>('/admin/v1/session/me');
 }
 
 /** 当前用户可见菜单树 */
 export function fetchRoutes(): Promise<MenuNode[]> {
-  return get<MenuNode[]>('/admin/console/v1/session/routes');
+  return get<MenuNode[]>('/admin/v1/session/routes');
 }
 
 /**
@@ -27,7 +27,7 @@ export function fetchRoutes(): Promise<MenuNode[]> {
  * @param newPassword 新密码
  */
 export function changePassword(oldPassword: string, newPassword: string): Promise<null> {
-  return put<null>('/admin/console/v1/session/password', { oldPassword, newPassword });
+  return put<null>('/admin/v1/session/password', { oldPassword, newPassword });
 }
 
 /**
@@ -50,7 +50,7 @@ export function savePreferences(payload: {
    */
   overrides?: Record<string, string>;
 }): Promise<Record<string, string>> {
-  return put<Record<string, string>>('/admin/console/v1/session/preferences', payload);
+  return put<Record<string, string>>('/admin/v1/session/preferences', payload);
 }
 
 /**
@@ -63,7 +63,7 @@ export function saveProfile(payload: {
   nickname?: string;
   avatar?: string;
 }): Promise<{ nickname: string; avatar: string }> {
-  return put<{ nickname: string; avatar: string }>('/admin/console/v1/session/profile', payload);
+  return put<{ nickname: string; avatar: string }>('/admin/v1/session/profile', payload);
 }
 
 /**
@@ -78,12 +78,12 @@ export function saveProfile(payload: {
 export function uploadAvatar(file: File): Promise<{ avatar: string }> {
   const form = new FormData();
   form.append('file', file);
-  return post<{ avatar: string }>('/admin/console/v1/session/avatar', form);
+  return post<{ avatar: string }>('/admin/v1/session/avatar', form);
 }
 
 /** 退出登录（清 Cookie） */
 export function logout(): Promise<null> {
-  return post<null>('/admin/console/v1/session/logout');
+  return post<null>('/admin/v1/session/logout');
 }
 
 /* ── 我的登录设备（自服务） ───────────────────────────────────
@@ -147,4 +147,54 @@ export function bindSession(sessionToken: string): Promise<{
   user?: Partial<CurrentUser>;
 }> {
   return post('/auth/v1/bind-session', { session_token: sessionToken });
+}
+
+/* ── 我的操作日志（自助） ───────────────────────────────────────
+ *
+ * 与管理端的 `/admin/v1/oper-logs` 不是同一个接口：那条要 `admin:log:read` 且叠数据范围，
+ * 这条只认会话里的 userId —— 请求里带 `userId` 也不会生效。字段是后端
+ * `normalizeOperRow` 的 snake_case 口径（`cost_ms` / `created_at` / `status`）。
+ */
+
+/** 我的操作日志行 */
+export interface MyLogRow {
+  id: number;
+  module: string;
+  action: string;
+  method: string;
+  path: string;
+  cost_ms: number;
+  ip: string;
+  device_id: string;
+  user_agent: string;
+  /** 详情 JSON 原文（后端已保证不再二次转义） */
+  detail: string;
+  /** 1 = 成功，0 = 失败 */
+  status: number;
+  created_at: string;
+}
+
+/** 我的操作日志查询参数 */
+export interface MyLogQuery {
+  pageNum?: number;
+  pageSize?: number;
+  /** 关键词：动作 / IP / 模块 / 设备码（后端同一条 OR） */
+  keyword?: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+/**
+ * 查询我自己的操作记录
+ *
+ * @param params 分页与筛选
+ * @returns 分页结果
+ */
+export function myLogs(params: MyLogQuery = {}): Promise<{
+  rows: MyLogRow[];
+  total: number;
+  pageNum: number;
+  pageSize: number;
+}> {
+  return get('/admin/v1/my-logs', params);
 }

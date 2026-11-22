@@ -1,24 +1,25 @@
 /**
  * 菜单管理接口
  *
- * GET    /admin/console/v1/menus/tree   —— 菜单树
- * POST   /admin/console/v1/menus        —— 新建菜单
- * PUT    /admin/console/v1/menus/:id    —— 编辑菜单
- * DELETE /admin/console/v1/menus/:id    —— 删除菜单（有子菜单或角色引用时拒绝）
- * GET    /admin/console/v1/menus/export —— 导出 CSV
+ * GET    /admin/v1/menus/tree   —— 菜单树
+ * POST   /admin/v1/menus        —— 新建菜单
+ * PUT    /admin/v1/menus/:id    —— 编辑菜单
+ * DELETE /admin/v1/menus/:id    —— 删除菜单（有子菜单或角色引用时拒绝）
+ * GET    /admin/v1/menus/export —— 导出 CSV
  *
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import { actionMetaRegistry } from '../../../../framework/security/pbac/index.js';
-import menuDao from '../../../../app/admin/console/dao/menu.dao.js';
-import { getActorScope } from '../../../../app/admin/console/services/access-scope.service.js';
-import { appNameOf, canConfigureApp } from '../../../../app/admin/console/services/menu-scope.service.js';
-import { invalidateButtonGrants } from '../../../../app/admin/console/services/button-grant.service.js';
-import { withFail } from '../../../../app/admin/console/utils/respond.js';
-import { logAuditEvent } from '../../../../framework/security/auth/index.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../app/admin/permission/index.js';
+import { actionMetaRegistry } from '../../../framework/security/pbac/index.js';
+import menuDao from '../../../app/admin/console/dao/menu.dao.js';
+import { getActorScope } from '../../../app/admin/console/services/access-scope.service.js';
+import { appNameOf, canConfigureApp } from '../../../app/admin/console/services/menu-scope.service.js';
+import { assertMenuDeclaresPermission } from '../../../app/admin/console/services/menu-visibility.service.js';
+import { invalidateButtonGrants } from '../../../app/admin/console/services/button-grant.service.js';
+import { withFail } from '../../../app/admin/console/utils/respond.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
 
 /** 菜单写入字段 schema（创建 / 编辑共用） */
 const menuBodySchema = {
@@ -76,6 +77,14 @@ function toModelFields(body) {
   if (payload.type === 'btn' && !payload.permission) {
     throw new Error('INVALID_PARAM:按钮类型必须填写权限码');
   }
+  /*
+   * 页面菜单必须声明权限码（自助区 `/settings/*` 例外）。
+   *
+   * 没有码的页面在 `/session/routes` 里拿不到任何授权（默认拒绝），本来就不会显示；
+   * 但它会一直躺在菜单表里，等哪天有人为了"让它先显示出来"放宽裁剪判据，就变成
+   * 全员可见。这里直接拒写，别让这种数据进库。规则与读侧同一来源。
+   */
+  assertMenuDeclaresPermission(payload);
   return payload;
 }
 
@@ -176,7 +185,7 @@ async function registerMenuRoutes(fastify) {
     name: 'adminMenu',
     alias: '管理后台菜单',
     description: '菜单树维护与导出',
-    prefix: '/console/v1',
+    prefix: '/v1',
     enabled: true,
     requireLogin: true
   });

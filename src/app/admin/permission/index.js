@@ -152,7 +152,7 @@ const ADMIN_PERMISSIONS = createPermissionRegistry('admin', '管理后台', {
  *        实际谁都点不开；
  *      • 角色授权页会把它算成"该角色拥有别的应用的能力"，审计上完全误导；
  *      • 排障时会去查那个应用的路由，而问题根本不在那里。
- *    所以写入即拒，见 `api/admin/console/v1/menus.js` 的 `assertOwnPermission`。
+ *    所以写入即拒，见 `api/admin/v1/menus.js` 的 `assertOwnPermission`。
  */
 const ADMIN_PERMISSION_CODES = new Set(Object.values(ADMIN_PERMISSIONS).flatMap(group => Object.values(group)));
 

@@ -16,7 +16,7 @@ import type {
   StepUpPayload
 } from './types';
 
-const BASE = '/admin/console/v1';
+const BASE = '/admin/v1';
 
 /** 工作台概览 */
 export function dashboardSummary(): Promise<DashboardSummary> {

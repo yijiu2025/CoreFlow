@@ -52,9 +52,7 @@ defineRoles([
     is_default: true, // 授权即送的默认角色（见下一节）
     policy: {
       Version: '2026-06-06',
-      Statement: [
-        { Effect: 'Allow', Action: [OAUTH_PERMISSIONS.CLIENT.READ, OAUTH_PERMISSIONS.TOKEN.READ] }
-      ]
+      Statement: [{ Effect: 'Allow', Action: [OAUTH_PERMISSIONS.CLIENT.READ, OAUTH_PERMISSIONS.TOKEN.READ] }]
     }
   }
 ]);
@@ -93,7 +91,7 @@ default_role: 'oauth_viewer',
 那角色怎么给：
 
 1. 管理员在「用户管理 → 分配角色」手工授予
-   （`POST /admin/console/v1/users/roles/batch`，支持追加/移除、跨应用批量）；
+   （`POST /admin/v1/users/roles/batch`，支持追加/移除、跨应用批量）；
 2. GLOBAL 的 `superadmin` 由 `permission-loader` 自动继承各应用的 `{appId}_admin`，
    不需要逐个授。
 
@@ -146,6 +144,54 @@ default_role: 'oauth_viewer',
   ]
 }
 ```
+
+## 菜单可见性（默认拒绝）
+
+`GET /admin/v1/session/routes` 决定侧栏长什么样。裁决只有三档：
+
+1. **豁免账号**：角色含 `superadmin`，或 policy 持有 `*` → 整棵树（含刚建、还没授权的新菜单，否则没有任何人能去授权）。
+2. **自助区**：`path` 以 `/settings/` 开头、且**未声明**权限码的页面（个人资料 / 通知偏好 / 外观与主题 / 账号与安全）；目录内全部子项都是自助页时整组可见。
+3. **显式授权**：`sys_role_menu` 里有「该角色 × 该菜单」这一行。
+
+除此之外**没有默认可见**。`admin:*` **不是**菜单豁免 —— 它表示"接口与按钮全放行"，菜单是导航层，两件事。
+
+> 2026-11-22：`应用管理`（menu 54）在 `sys_role_menu` 里 0 条授权，持有 `admin_admin`（policy = `admin:*`）的账号却能看到它。两个原因叠加：裁剪把 `admin:*` 当"超管，看整棵树"；另有一条"顶级 + 没写权限码 = 自助入口"的兜底。
+
+### 约定
+
+| 场景                     | 规则                                                                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 新建页面菜单 `type=menu` | **必须**填权限码，否则 `INVALID_PARAM` 拒写（`api/admin/v1/menus.js` → `assertMenuDeclaresPermission`）                                             |
+| 自助页                   | 只能放 `/settings/` 下且不填权限码；该前缀是**保留命名空间**，管理页不准挂进来                                                                      |
+| 新菜单的授权             | 默认 0 授权 → 所有人看不到 → 超管在「角色管理 → 菜单授权」勾选                                                                                      |
+| 空目录                   | 目录已授权、但子页面一个都没授 → **整组不下发**。侧栏里一个点开空白的分组只会被当成"加载失败"（2026-11-22 `admin_operator` 的「系统管理」就是这种） |
+| 下架                     | `visible=0` 优先于授权：已授权的人也不再看到，`sys_role_menu` 行保留（重新置 1 即恢复）                                                             |
+
+规则实现单一来源：`src/app/admin/console/services/menu-visibility.service.js`（读侧裁剪与写侧校验共用）。回归守卫：`src/__tests__/app/admin/console/session-routes.test.js`、`src/__tests__/app/admin/console/menu-visibility.test.js`。
+
+## 准入闸门与自助区
+
+两层，**不要混用**：
+
+| 层   | 回答的问题           | 判据                                                         | 实现                                               |
+| ---- | -------------------- | ------------------------------------------------------------ | -------------------------------------------------- |
+| 准入 | 这个账号能不能进后台 | `config.access`：`anyPermission` / `anyRole` / `selfService` | `framework/security/auth/permission/app-access.js` |
+| 能力 | 进来以后能干什么     | PBAC `allows` / `denies` + 角色→菜单授权                     | `api/guard.js` + `sys_role_menu`                   |
+
+`bind-session`（登录时）与 `GET /session/me`（每次刷新）读**同一份策略**：各写一份的下场是"能登录、一刷新 403"，或者反过来"登录被拒、页面其实还开着"。
+
+### 个人设置为什么不是一个权限码
+
+个人资料 / 通知偏好 / 外观与主题 / 账号与安全对**每个能进后台的账号**都可见。它靠的是两件事：菜单侧 `/settings/` 前缀（见上节），接口侧 `requireLogin` + 只认 `request.state.user.uid` 的自取范围。
+
+刻意**不做成**可授予的权限码（如 `admin:self`）：权限码会被角色授予与收回，某个角色少勾一项，表现就是"登录成功但侧栏空白"。而这种故障只在**没有** `admin:*` 的账号上复现 —— 测试账号通常都持有 `admin:*`，永远测不到。
+
+`access.selfService` 是**准入层**的开关，不是权限：
+
+- `false`（默认，现状）= **封闭应用**：没有 `admin:*` / `superadmin` 的账号连 `/session/me` 都进不来，个人设置四页只对"已被授予管理能力的账号"可见；
+- `true` = **半开放**：任何走完统一认证的账号都能进，但只看得见那四页，其余接口照旧的 `requirePermission` 判 403。
+
+`denies` 压过 `selfService`：封禁账号不会因为"登录了"就拿到自助入口。开关只认严格 `true`（写 `'true'`、`1` 一律当关闭），因为把它误开的后果是"任何注册用户都能进后台"。
 
 ## 权限加载流程
 

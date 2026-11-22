@@ -1,20 +1,20 @@
 /**
  * 岗位管理接口
  *
- * GET    /admin/console/v1/posts           —— 分页列表（含在岗人数）
- * POST   /admin/console/v1/posts           —— 新建岗位
- * PUT    /admin/console/v1/posts/:id       —— 编辑岗位
- * DELETE /admin/console/v1/posts/:id       —— 删除岗位（有在岗成员时拒绝）
- * GET    /admin/console/v1/posts/:id/users —— 在岗成员
+ * GET    /admin/v1/posts           —— 分页列表（含在岗人数）
+ * POST   /admin/v1/posts           —— 新建岗位
+ * PUT    /admin/v1/posts/:id       —— 编辑岗位
+ * DELETE /admin/v1/posts/:id       —— 删除岗位（有在岗成员时拒绝）
+ * GET    /admin/v1/posts/:id/users —— 在岗成员
  *
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import postDao from '../../../../app/admin/console/dao/post.dao.js';
-import { withFail } from '../../../../app/admin/console/utils/respond.js';
-import { logAuditEvent } from '../../../../framework/security/auth/index.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../app/admin/permission/index.js';
+import postDao from '../../../app/admin/console/dao/post.dao.js';
+import { withFail } from '../../../app/admin/console/utils/respond.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
 
 /** 岗位写入字段 schema */
 const postBodySchema = {
@@ -71,7 +71,7 @@ async function registerPostRoutes(fastify) {
     name: 'adminPost',
     alias: '管理后台岗位',
     description: '岗位维护与在岗成员',
-    prefix: '/console/v1',
+    prefix: '/v1',
     enabled: true,
     requireLogin: true
   });

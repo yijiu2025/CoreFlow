@@ -81,11 +81,11 @@
   @state operLogPage: object = {}
   @state detail: object = {}
 
-  @api GET /admin/console/v1/oper-logs (query: pageNum, pageSize, keyword, status, startTime, endTime) -> operLogPage
-  @api GET /admin/console/v1/oper-logs/stats (query: range) -> operStats
-  @api GET /admin/console/v1/oper-logs/timeline (query: date) -> timeline
-  @api DELETE /admin/console/v1/oper-logs/:id (bind: id)
-  @api DELETE /admin/console/v1/oper-logs
+  @api GET /admin/v1/oper-logs (query: pageNum, pageSize, keyword, status, startTime, endTime) -> operLogPage
+  @api GET /admin/v1/oper-logs/stats (query: range) -> operStats
+  @api GET /admin/v1/oper-logs/timeline (query: date) -> timeline
+  @api DELETE /admin/v1/oper-logs/:id (bind: id)
+  @api DELETE /admin/v1/oper-logs
 
   @note 整宽横带分层：概览 → 趋势或泳道 → 明细，区块标题只用中文
   @note 点泳道时间块把模块名写入关键词并滚到明细，不做二次请求

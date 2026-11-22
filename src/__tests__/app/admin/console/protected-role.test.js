@@ -7,7 +7,7 @@
  * 3. 列表上**要不要打「内置」标签**；
  * 4. 后端删角色 / 改权限码时**放不放行**。
  *
- * 🔴 这里曾经有过两套判据：路由层（`api/admin/console/v1/roles.js`）自己拼了一份
+ * 🔴 这里曾经有过两套判据：路由层（`api/admin/v1/roles.js`）自己拼了一份
  *    `BUILTIN_CODES = registry ∪ {superadmin}`，而列表返回给前端的 `builtin` 只按
  *    `roleRegistry` 算（**没有** superadmin）。后果是界面在骗人：超管那一行显示
  *    「删除」按钮、点进编辑还能勾权限码，真按下去才被后端以 `BUILTIN_PROTECTED` 拒。

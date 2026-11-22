@@ -18,7 +18,7 @@
 | --- | --- | --- | --- | --- |
 | F1 | SSO 登录（iframe） | `Login.vue`（自建账号密码 + 验证码） | oauth21 `/mini-login` + `bind-session`；firewall `LoginModal` 已有成熟协议 | **替换**：不抄账号密码页，改为 iframe 嵌 oauth21，复用 origin+source 双校验 / `SSO_READY` / `LOGIN_SUCCESS` / `adoptDeviceId` |
 | F2 | 动态路由与菜单权限 | `/auth/routes` 下发菜单 → 注册路由 | 无菜单表 | **新建** `sys_menu` + `sys_role_menu`，按角色下发菜单树 |
-| F3 | 工作台 | 主次布局 + 读数 + 趋势 + 泳道 + 最近登录 | 无聚合接口 | **新建** `GET /console/v1/dashboard/summary` |
+| F3 | 工作台 | 主次布局 + 读数 + 趋势 + 泳道 + 最近登录 | 无聚合接口 | **新建** `GET /admin/v1/dashboard/summary` |
 | F4 | 用户管理（列表 / 看板 / 状态 / 重置密码 / 导出） | `views/system/Users.vue` | `User` 模型 + `/admin/user/v1/list`（仅列表） | **扩写**：分页筛选、状态、重置密码、批量、导出 |
 | F5 | 角色管理（列表 / 权限矩阵 / 溯源图谱） | `Roles.vue` | `Role` / `UserRole` / `Permission` / `InlinePolicy`（PBAC，含 `rank_level` / `app_id`） | **改造**：PBAC 语义 → 界面语言（角色 = 编码 + 职级 + 应用 + 策略 + 菜单授权） |
 | F6 | 菜单管理（表格 / 导航星系 / 侧栏预览） | `Menus.vue` | 无 | **新建** |
@@ -123,7 +123,7 @@
 
 **风险 R3**：代码生成器在参考项目里生成 Java（Controller/Service/Mapper/XML/菜单 SQL）。本仓是 Fastify + Sequelize + Vue，模板要整套重写，且生成物必须符合本仓强制约定（export 收拢末尾、`registerSecureRoute`、DAO/Service 分层、`src/app/<A>` 禁跨模块 import）。**建议 P2，先交付其余功能。**
 
-## 5. API 接口（新增，前缀 `/admin/console/v1`）
+## 5. API 接口（新增，前缀 `/admin/v1`）
 
 响应统一 `{ code, message, data }`（`reply.result.success`）；列表统一 `{ rows, total, pageNum, pageSize }`（对齐参考前端 `PageResult`，减少前端改动）；写接口全部落 `AuditLog`。
 
@@ -268,7 +268,7 @@
 | P0-2 | 创建 KX 架构文件 | `架构文件/console.kx` |
 | P1-1 | 后端：8 张新表迁移 + 模型 + 种子数据 | `migrations/console/*`、`src/models/console/*` |
 | P1-2 | 后端：`src/app/console`（DAO / Service / 权限注册） | 服务层 |
-| P1-3 | 后端：`src/api/admin/console/v1/*` 路由 + `system.json` 分组 | 接口 |
+| P1-3 | 后端：`src/api/admin/v1/*` 路由 + `system.json` 分组 | 接口 |
 | P1-4 | **curl 验证**全部接口（状态码 + 结构 + 边界） | 验证记录 |
 | P2-1 | 前端骨架：`main.ts` 门牌 + `bootstrap.ts` 编排 + vite（主题插件/别名/设备库/端口 5175） | 可启动 |
 | P2-2 | 主题包 `pearl`（light/dark）+ 七层样式 + `ThemeRoot/ThemeView` 接线 | 视觉基线 |

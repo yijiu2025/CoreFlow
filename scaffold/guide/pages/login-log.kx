@@ -84,11 +84,11 @@
   @state heatmap: object = {}
   @state loginLogPage: object = {}
 
-  @api GET /admin/console/v1/login-logs (query: pageNum, pageSize, keyword, event, startTime, endTime) -> loginLogPage
-  @api GET /admin/console/v1/login-logs/stats (query: range) -> loginStats
-  @api GET /admin/console/v1/login-logs/heatmap (query: days) -> heatmap
-  @api DELETE /admin/console/v1/login-logs/:id (bind: id)
-  @api DELETE /admin/console/v1/login-logs
+  @api GET /admin/v1/login-logs (query: pageNum, pageSize, keyword, event, startTime, endTime) -> loginLogPage
+  @api GET /admin/v1/login-logs/stats (query: range) -> loginStats
+  @api GET /admin/v1/login-logs/heatmap (query: days) -> heatmap
+  @api DELETE /admin/v1/login-logs/:id (bind: id)
+  @api DELETE /admin/v1/login-logs
 
   @sync anomalies = heatmap.anomalies
 

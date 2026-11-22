@@ -1,29 +1,29 @@
 /**
  * 用户管理接口
  *
- * GET    /admin/console/v1/users                 —— 分页列表（含部门 / 角色 / 岗位）
- * GET    /admin/console/v1/users/options         —— 表单引用选项
- * POST   /admin/console/v1/users                 —— 新建（用户 + 凭证 + 角色 + 岗位）
- * PUT    /admin/console/v1/users/:id             —— 编辑
- * PUT    /admin/console/v1/users/:id/status      —— 启用 / 冻结
- * GET    /admin/console/v1/users/export          —— 导出 CSV（按列表当前的筛选条件）
- * POST   /admin/console/v1/users/import/challenge —— 批量导入·二次验证（绑定本批内容指纹）
- * POST   /admin/console/v1/users/import          —— 批量导入（需 stepUp；CSV 在前端解析成行）
- * GET    /admin/console/v1/users/:id/grants      —— 授权历史（授予 / 取消流水）
- * POST   /admin/console/v1/users/roles/batch     —— 批量授权（追加 / 移除）
+ * GET    /admin/v1/users                 —— 分页列表（含部门 / 角色 / 岗位）
+ * GET    /admin/v1/users/options         —— 表单引用选项
+ * POST   /admin/v1/users                 —— 新建（用户 + 凭证 + 角色 + 岗位）
+ * PUT    /admin/v1/users/:id             —— 编辑
+ * PUT    /admin/v1/users/:id/status      —— 启用 / 冻结
+ * GET    /admin/v1/users/export          —— 导出 CSV（按列表当前的筛选条件）
+ * POST   /admin/v1/users/import/challenge —— 批量导入·二次验证（绑定本批内容指纹）
+ * POST   /admin/v1/users/import          —— 批量导入（需 stepUp；CSV 在前端解析成行）
+ * GET    /admin/v1/users/:id/grants      —— 授权历史（授予 / 取消流水）
+ * POST   /admin/v1/users/roles/batch     —— 批量授权（追加 / 移除）
  *
  * 二次验证（高危写操作的前置条件）：
- * GET    /admin/console/v1/stepup/factors                  —— 我可用哪些验证方式（脱敏邮箱 / 有无密码）
- * POST   /admin/console/v1/stepup/challenge                —— 为「某动作 + 某目标」签发一次性凭据
+ * GET    /admin/v1/stepup/factors                  —— 我可用哪些验证方式（脱敏邮箱 / 有无密码）
+ * POST   /admin/v1/stepup/challenge                —— 为「某动作 + 某目标」签发一次性凭据
  *
  * 账号高危操作（请求体带 `stepUp: { challengeId, code | password }`）：
- * GET    /admin/console/v1/users/:id/deletion              —— 待执行的注销申请
- * POST   /admin/console/v1/users/:id/deletion              —— 发起删除（缓冲期，到期才清数据）
- * POST   /admin/console/v1/users/:id/deletion/:rid/cancel   —— 撤销注销
- * GET    /admin/console/v1/users/:id/apps                  —— 该用户在各应用的账号状态
- * POST   /admin/console/v1/users/:id/apps/:appId/deactivation —— 只注销该应用的账号
- * GET    /admin/console/v1/users/:id/temp-password         —— 当前有效的临时密码（无明文）
- * POST   /admin/console/v1/users/:id/temp-password         —— 签发临时密码（明文只返回一次）
+ * GET    /admin/v1/users/:id/deletion              —— 待执行的注销申请
+ * POST   /admin/v1/users/:id/deletion              —— 发起删除（缓冲期，到期才清数据）
+ * POST   /admin/v1/users/:id/deletion/:rid/cancel   —— 撤销注销
+ * GET    /admin/v1/users/:id/apps                  —— 该用户在各应用的账号状态
+ * POST   /admin/v1/users/:id/apps/:appId/deactivation —— 只注销该应用的账号
+ * GET    /admin/v1/users/:id/temp-password         —— 当前有效的临时密码（无明文）
+ * POST   /admin/v1/users/:id/temp-password         —— 签发临时密码（明文只返回一次）
  *
  * 🔴 **二次验证默认是邮箱验证码，不是密码**：本仓大量账号用邮箱验证码登录、从没设过
  *    密码，对它们密码框是死路。密码只在"绑了密码但没绑邮箱"时作为后备
@@ -43,12 +43,12 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import userDao from '../../../../app/admin/console/dao/user.dao.js';
-import roleDao from '../../../../app/admin/console/dao/role.dao.js';
-import deptDao from '../../../../app/admin/console/dao/dept.dao.js';
-import grantDao from '../../../../app/admin/console/dao/grant.dao.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../app/admin/permission/index.js';
+import userDao from '../../../app/admin/console/dao/user.dao.js';
+import roleDao from '../../../app/admin/console/dao/role.dao.js';
+import deptDao from '../../../app/admin/console/dao/dept.dao.js';
+import grantDao from '../../../app/admin/console/dao/grant.dao.js';
 import {
   appLabel,
   canWriteApp,
@@ -59,27 +59,27 @@ import {
   assertGrantable,
   assertCanSetRank,
   planRoleChange
-} from '../../../../app/admin/console/services/access-scope.service.js';
-import { describeCurrentAccess } from '../../../../app/admin/console/services/user-access.service.js';
-import userProfileService from '../../../../app/admin/console/services/user-profile.service.js';
-import { resolveDataScope, assertDeptWritable } from '../../../../app/admin/console/services/data-scope.service.js';
+} from '../../../app/admin/console/services/access-scope.service.js';
+import { describeCurrentAccess } from '../../../app/admin/console/services/user-access.service.js';
+import userProfileService from '../../../app/admin/console/services/user-profile.service.js';
+import { resolveDataScope, assertDeptWritable } from '../../../app/admin/console/services/data-scope.service.js';
 import {
   buildRoleLookup,
   resolveImportRoles,
   importFingerprint
-} from '../../../../app/admin/console/services/import-roles.service.js';
-import userDangerService from '../../../../app/admin/console/services/user-danger.service.js';
-import stepUpService from '../../../../app/admin/console/services/stepup.service.js';
-import { withFail } from '../../../../app/admin/console/utils/respond.js';
-import { logAuditEvent } from '../../../../framework/security/auth/index.js';
-import { listAppIds } from '../../../../framework/config/app-registry.js';
+} from '../../../app/admin/console/services/import-roles.service.js';
+import userDangerService from '../../../app/admin/console/services/user-danger.service.js';
+import stepUpService from '../../../app/admin/console/services/stepup.service.js';
+import { withFail } from '../../../app/admin/console/utils/respond.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
+import { listAppIds } from '../../../framework/config/app-registry.js';
 import {
   USER_EVENTS,
   auditUser,
   diffProfile,
   roleNamesOf,
   statusText
-} from '../../../../app/admin/console/services/user-audit.service.js';
+} from '../../../app/admin/console/services/user-audit.service.js';
 
 /**
  * 二次验证凭据（三个高危写接口共用）
@@ -185,7 +185,14 @@ const listQuerySchema = {
      * （2026-11-20 反馈：某账号只有超管看得见，观察者看不见）。
      * 这条筛选就是给超管"主动捞出来补授权"用的。
      */
-    noRole: { type: 'boolean', default: false }
+    noRole: { type: 'boolean', default: false },
+    /**
+     * 按相关性排序（完全相等 > 账号前缀 > 邮箱前缀 > 其它）
+     *
+     * 给"先搜后选"的场景用（负责人下拉）。用户列表页不开：
+     * 那里"最新的在前"才是预期。
+     */
+    rankByKeyword: { type: 'boolean', default: false }
   }
 };
 
@@ -220,7 +227,7 @@ async function registerUserRoutes(fastify) {
     name: 'adminUser',
     alias: '管理后台用户',
     description: '用户列表、创建、编辑、状态、重置密码、导出',
-    prefix: '/console/v1',
+    prefix: '/v1',
     enabled: true,
     requireLogin: true
   });
@@ -242,6 +249,7 @@ async function registerUserRoutes(fastify) {
         appId = null,
         status = null,
         noRole = false,
+        rankByKeyword = false,
         deviceId = ''
       } = request.query;
       const actorId = request.state.user?.userId;
@@ -268,7 +276,8 @@ async function registerUserRoutes(fastify) {
         actorRank,
         // 自己那行恒可操作（改自己的资料不该被职级挡住）
         operatorId: Number(actorId),
-        noRole
+        noRole,
+        rankByKeyword
       });
       /*
        * 附上「待执行的注销申请」：删除是缓冲期语义，列表里必须能看出
@@ -465,22 +474,45 @@ async function registerUserRoutes(fastify) {
       }
 
       /**
-       * 🔴 不能修改自己账号的角色（2026-11-21）
+       * 🔴 自己改自己的账号，能改什么（2026-11-21）
        *
-       * 角色变更等于权限变更，必须由**职级更高**的管理员操作；自己给自己加/删角色
-       * 既是自我提权的入口，也没有实际需要（超管角色固定全权限，本身就是"不用改"）。
-       * 资料、邮箱、部门、密码仍然可以自己改，这里只锁 `roleIds`。
+       * 普通用户：**角色**不可自己改（角色变更等于权限变更，必须由职级更高的人做）；
+       * 其余字段仍可维护。
        *
-       * 这条同时取代了原来「不能移除自己的全部管理权限」的自锁保护：自己已经完全
+       * 超管：**允许账号名、邮箱、部门、岗位**。超管默认拥有全部权限（policy 是 `*`），
+       * 角色对它没有意义；**状态与职级**不该由自己在用户表单里动 —— 冻结/降级自己
+       * 等于自锁，需要时由另一个超管或运维处理。
+       *
+       * 这两条同时取代了原来「不能移除自己的全部管理权限」的自锁保护：自己已经完全
        * 不能改角色，自锁风险不复存在；而旧判据在"角色没变"时也会误伤 —— 只持有
        * `admin:user:update`（policy 里没有 `admin:*`）的账号改个昵称就会被判成自锁。
        */
-      if (Array.isArray(body.roleIds) && targetId === operatorId) {
-        const before = new Set(beforeRoleIds);
-        const after = new Set(body.roleIds.map(Number));
-        const changed = before.size !== after.size || [...after].some(id => !before.has(id));
-        if (changed) {
-          throw new Error('FORBIDDEN:不能修改自己账号的角色，请让职级更高的管理员调整');
+      if (targetId === operatorId) {
+        if (actor.isSuper) {
+          const blocked = [];
+          if (body.status !== undefined && Number(body.status) !== Number(beforeRow?.status ?? 1)) {
+            blocked.push('状态');
+          }
+          if (body.rankLevel !== undefined && Number(body.rankLevel) !== Number(beforeRow?.rank_level ?? 0)) {
+            blocked.push('职级');
+          }
+          if (Array.isArray(body.roleIds)) {
+            const before = new Set(beforeRoleIds);
+            const after = new Set(body.roleIds.map(Number));
+            if (before.size !== after.size || [...after].some(id => !before.has(id))) blocked.push('角色');
+          }
+          if (blocked.length > 0) {
+            throw new Error(
+              `FORBIDDEN:超级管理员只能修改自己的账号、邮箱、部门与岗位（${blocked.join('、')}不可自行修改）`
+            );
+          }
+        } else if (Array.isArray(body.roleIds)) {
+          const before = new Set(beforeRoleIds);
+          const after = new Set(body.roleIds.map(Number));
+          const changed = before.size !== after.size || [...after].some(id => !before.has(id));
+          if (changed) {
+            throw new Error('FORBIDDEN:不能修改自己账号的角色，请让职级更高的管理员调整');
+          }
         }
       }
       const ok = await userDao.update(targetId, body, actorOf(request));
@@ -940,11 +972,12 @@ async function registerUserRoutes(fastify) {
         // 应用域外保留：批量同样不能把别人在其它应用的角色连带删掉
         const plan = await planRoleChange({ actor: scope, target, submittedRoleIds: base });
         /*
-         * 批量同样不能给自己改角色（与单条编辑同一判据）。
+         * 批量同样不能给自己改角色（与单条编辑同一判据，超管也不例外 ——
+         * 超管默认全权限，自己的角色不需要调整）。
          * 整批预检阶段就中止：逐个"改到一半才发现不能动自己"会留下半批已生效的状态。
          */
         if (userId === operatorId) {
-          throw new Error('FORBIDDEN:批量授权不能包含你自己 —— 自己的角色需由职级更高的管理员调整（未改动任何用户）');
+          throw new Error('FORBIDDEN:批量授权不能包含你自己 —— 自己的角色需由其他管理员调整（未改动任何用户）');
         }
         plans.push({ userId, next: plan.finalRoleIds });
       }

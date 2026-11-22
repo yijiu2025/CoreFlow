@@ -49,7 +49,7 @@ function normalizeScope(value) {
  * = 由代码 `defineRoles` 声明的角色 ∪ 超管。
  *
  * 🔴 **超管必须显式补进来**：它由 `scripts/setup-superadmin.js` 直接落库，
- *    *不在* `roleRegistry` 里。曾经只有路由层（`api/admin/console/v1/roles.js`
+ *    *不在* `roleRegistry` 里。曾经只有路由层（`api/admin/v1/roles.js`
  *    的 `BUILTIN_CODES`）补了这一点，而列表返回给前端的 `builtin` 却按 registry 算 ——
  *    同一个概念两套判据，结果前端把超管当普通角色：显示「删除」按钮、
  *    允许进编辑弹窗改权限码，点了才被后端以 `BUILTIN_PROTECTED` 拒掉。

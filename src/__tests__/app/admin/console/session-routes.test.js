@@ -76,7 +76,7 @@ jest.unstable_mockModule('../../../../app/admin/console/services/avatar.service.
 }));
 
 /** 进栈前收集 handler */
-const { default: registerSessionRoutes } = await import('../../../../api/admin/console/v1/session.js');
+const { default: registerSessionRoutes } = await import('../../../../api/admin/v1/session.js');
 await registerSessionRoutes({});
 
 /**
@@ -125,7 +125,7 @@ beforeEach(() => {
   getRoleMenuIds.mockReset().mockResolvedValue([]);
 });
 
-describe('角色编码 → 菜单裁剪', () => {
+describe('菜单默认拒绝：没有显式授权就没有节点', () => {
   it('只授菜单给角色真的持有的人；角色为空时不查任何菜单', async () => {
     findIdsByCodes.mockResolvedValue([]);
     menuTree.mockResolvedValue([{ id: 1, name: '工作台', visible: 1, children: [] }]);
@@ -139,7 +139,85 @@ describe('角色编码 → 菜单裁剪', () => {
     expect(reply.last().data).toEqual([]);
   });
 
-  it('命中角色时按授权集合裁剪，未授权的父节点整枝丢弃', async () => {
+  it('命中的角色没授权这个菜单 ⇒ 不下发（应用管理 0 授权却全员可见的回归）', async () => {
+    findIdsByCodes.mockResolvedValue([11]);
+    getRoleMenuIds.mockResolvedValue([2, 3]);
+    menuTree.mockResolvedValue([
+      {
+        id: 2,
+        name: '系统管理',
+        type: 'dir',
+        permission: null,
+        visible: 1,
+        children: [
+          {
+            id: 3,
+            name: '用户列表',
+            type: 'menu',
+            permission: 'admin:user:read',
+            visible: 1,
+            path: '/system/user',
+            children: []
+          },
+          {
+            id: 54,
+            name: '应用管理',
+            type: 'menu',
+            permission: 'admin:app:read',
+            visible: 1,
+            path: '/system/app',
+            children: []
+          }
+        ]
+      }
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_admin'] } } }, reply);
+
+    const names = reply.last().data[0].children.map(c => c.name);
+    expect(names).toEqual(['用户列表']);
+  });
+
+  it('🔴 `admin:*` 不再是菜单豁免：只拿角色已授权的节点', async () => {
+    findIdsByCodes.mockResolvedValue([11]);
+    // 授「系统管理 + 用户列表」。这里必须连子页面一起授：只授目录的话，空目录会被
+    // 裁掉（见下方「空目录」一组），断言就退化成"什么都没下发"，测不出本用例要守的东西。
+    getRoleMenuIds.mockResolvedValue([2, 3]);
+    menuTree.mockResolvedValue([
+      {
+        id: 2,
+        name: '系统管理',
+        type: 'dir',
+        permission: null,
+        visible: 1,
+        children: [
+          {
+            id: 3,
+            name: '用户列表',
+            type: 'menu',
+            permission: 'admin:user:read',
+            visible: 1,
+            path: '/system/user',
+            children: []
+          }
+        ]
+      },
+      { id: 10, name: '日志与审计', type: 'dir', permission: null, visible: 1, children: [] }
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes(
+      { state: { user: { roles: ['admin_admin'], permissions: { allows: ['admin:*'], denies: [] } } } },
+      reply
+    );
+
+    // 只有被授权的「系统管理」出现；未授权的「日志与审计」即使是 `admin:*` 也不下发
+    expect(reply.last().data.map(n => n.name)).toEqual(['系统管理']);
+    expect(reply.last().data[0].children.map(c => c.name)).toEqual(['用户列表']);
+  });
+
+  it('父节点未授权时整枝丢弃（子节点授权了也没用）', async () => {
     findIdsByCodes.mockResolvedValue([9]);
     getRoleMenuIds.mockResolvedValue([2]);
     menuTree.mockResolvedValue([
@@ -156,7 +234,6 @@ describe('角色编码 → 菜单裁剪', () => {
     const reply = makeReply();
     await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
 
-    // 1 未授权 ⇒ 整枝（含已授权的 2）都不出现
     expect(reply.last().data).toEqual([]);
   });
 
@@ -168,6 +245,209 @@ describe('角色编码 → 菜单裁剪', () => {
 
     expect(findIdsByCodes).not.toHaveBeenCalled();
     expect(reply.last().data).toEqual([{ id: 1, name: '工作台', visible: 1, children: [] }]);
+  });
+
+  it('持有 `*` 通配的账号同样拿整棵树（新建菜单要有唯一能授权的人）', async () => {
+    menuTree.mockResolvedValue([{ id: 54, name: '应用管理', visible: 1, children: [] }]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes(
+      { state: { user: { roles: ['ops'], permissions: { allows: ['*'], denies: [] } } } },
+      reply
+    );
+
+    expect(findIdsByCodes).not.toHaveBeenCalled();
+    expect(reply.last().data).toHaveLength(1);
+  });
+});
+
+describe('自助区：只有 /settings/* 免授权，其余一格都不放', () => {
+  /** 造一个节点 */
+  const node = (id, name, extra = {}) => ({
+    id,
+    name,
+    type: 'menu',
+    permission: null,
+    visible: 1,
+    children: [],
+    ...extra
+  });
+
+  it('顶级目录的子项全在 /settings/ 下时整组可见（含子项）', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([]); // 一个页面都没授
+    menuTree.mockResolvedValue([
+      {
+        id: 10,
+        name: '个人设置',
+        type: 'dir',
+        permission: null,
+        parent_id: 0,
+        visible: 1,
+        children: [
+          node(11, '个人资料', { path: '/settings/profile' }),
+          node(12, '通知偏好', { path: '/settings/notice' }),
+          node(13, '账号与安全', { path: '/settings/center' })
+        ]
+      }
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+
+    // 目录与三个子项都在：只放行目录、子项又被裁掉，是"点开空一半"的典型故障
+    expect(reply.last().data).toHaveLength(1);
+    expect(reply.last().data[0].children.map(c => c.name)).toEqual(['个人资料', '通知偏好', '账号与安全']);
+  });
+
+  it('🔴 顶级无权限码、但路径不在 /settings/ 下的页面不下发（旧后门）', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([]);
+    menuTree.mockResolvedValue([node(30, '应用管理', { path: '/system/app' })]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+
+    expect(reply.last().data).toEqual([]);
+  });
+
+  it('目录里只要有一个子项不是自助页，整组按授权走（未授权则整组消失）', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([]);
+    menuTree.mockResolvedValue([
+      {
+        id: 20,
+        name: '系统管理',
+        type: 'dir',
+        permission: null,
+        parent_id: 0,
+        visible: 1,
+        children: [
+          node(21, '通知中心', { permission: 'notice:config:read', path: '/system/notice' }),
+          node(22, '未写码的页面', { path: '/system/unknown' })
+        ]
+      }
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+
+    expect(reply.last().data).toEqual([]);
+  });
+
+  it('/settings/ 下但声明了权限码的页面按授权走（自助区不是管理页的后门）', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([]);
+    menuTree.mockResolvedValue([
+      {
+        id: 40,
+        name: '个人设置',
+        type: 'dir',
+        permission: null,
+        visible: 1,
+        children: [node(41, '敏感设置', { path: '/settings/danger', permission: 'admin:config:write' })]
+      }
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+
+    expect(reply.last().data).toEqual([]);
+  });
+
+  it('已授权目录下的未授权子项仍然不可见（授权不会顺延给兄弟节点）', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([20, 21]);
+    menuTree.mockResolvedValue([
+      {
+        id: 20,
+        name: '系统管理',
+        type: 'dir',
+        permission: null,
+        parent_id: 0,
+        visible: 1,
+        children: [
+          node(21, '菜单管理', { permission: 'admin:menu:read', path: '/system/menu' }),
+          node(22, '应用管理', { permission: 'admin:app:read', path: '/system/app' })
+        ]
+      }
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+
+    expect(reply.last().data[0].children.map(c => c.name)).toEqual(['菜单管理']);
+  });
+});
+
+describe('空目录：只授了目录没授子项时整组不下发', () => {
+  /*
+   * 现场还原（2026-11-22，真库）：`admin_operator` 的授权里有"系统管理"这个目录，
+   * 16 条授权却一条子页面都没有 —— 侧栏因此出现一个点开后空白的"系统管理"。
+   * 目录本身没有路由，空着只能是渲染噪音；裁掉它比让人怀疑"是不是加载失败"好。
+   */
+  const page = (id, name, extra = {}) => ({
+    id,
+    name,
+    type: 'menu',
+    permission: null,
+    visible: 1,
+    children: [],
+    ...extra
+  });
+
+  const dir = (id, name, children) => ({
+    id,
+    name,
+    type: 'dir',
+    permission: null,
+    parent_id: 0,
+    visible: 1,
+    children
+  });
+
+  it('目录在授权里、子页面一个都没授权 ⇒ 整组消失', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([40]); // 只授了目录 40
+    menuTree.mockResolvedValue([
+      dir(40, '系统管理', [
+        page(41, '菜单管理', { permission: 'admin:menu:read', path: '/system/menu' }),
+        page(42, '防火墙监控', { permission: 'admin:fw:read', path: '/system/firewall' })
+      ])
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_operator'] } } }, reply);
+
+    expect(reply.last().data).toEqual([]);
+  });
+
+  it('目录与其中一个子页面都授权 ⇒ 目录保留，另一个子页面仍不可见', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([40, 41]);
+    menuTree.mockResolvedValue([
+      dir(40, '系统管理', [
+        page(41, '菜单管理', { permission: 'admin:menu:read', path: '/system/menu' }),
+        page(42, '防火墙监控', { permission: 'admin:fw:read', path: '/system/firewall' })
+      ])
+    ]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_operator'] } } }, reply);
+
+    expect(reply.last().data.map(n => n.name)).toEqual(['系统管理']);
+    expect(reply.last().data[0].children.map(c => c.name)).toEqual(['菜单管理']);
+  });
+
+  it('自助区目录不受影响（它的子项本来就免授权）', async () => {
+    findIdsByCodes.mockResolvedValue([9]);
+    getRoleMenuIds.mockResolvedValue([]);
+    menuTree.mockResolvedValue([dir(50, '个人设置', [page(51, '个人资料', { path: '/settings/profile' })])]);
+
+    const reply = makeReply();
+    await handlers.adminRoutes({ state: { user: { roles: ['admin_viewer'] } } }, reply);
+
+    expect(reply.last().data.map(n => n.name)).toEqual(['个人设置']);
   });
 });
 

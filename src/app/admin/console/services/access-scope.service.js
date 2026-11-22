@@ -448,6 +448,8 @@ function assertGrantableRoles(actor, roles) {
  *      policy 是 `*`、菜单是整棵树，界面改出来的任何差异都会被下次启动的
  *      `defineRoles` 覆盖，或者干脆改出一个人人可提权的漏洞。
  *   ② 自己所属的角色 —— 自己改自己等于自我提权 / 自我削权，必须由职级更高的人操作。
+ *      **超管豁免**：它是最高权限，没有"更高职级的人"可以替它调整；不豁免的话，
+ *      只有一个超管时，他兼任的其它角色就永远改不了。
  *   ③ 应用域：只能管自己应用（或 GLOBAL）的角色。
  *   ④ 职级：必须**严格低于**操作者，同级也不行。
  *
@@ -461,7 +463,7 @@ function assertGrantableRoles(actor, roles) {
 function roleManageBlock(actor, role) {
   if (role.isSuper) return '超级管理员角色固定为全部权限，无需编辑';
   const selfIds = new Set((actor?.roleIds || []).map(Number));
-  if (role.id != null && selfIds.has(Number(role.id))) {
+  if (!actor?.isSuper && role.id != null && selfIds.has(Number(role.id))) {
     return '不能修改自己所属的角色，请让职级更高的管理员操作';
   }
   if (!canWriteApp(actor, role.appId)) return `不在你的应用域（${appLabel(role.appId)}）`;

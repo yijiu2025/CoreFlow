@@ -64,12 +64,15 @@ jest.unstable_mockModule('../../../../app/admin/console/dao/grant.dao.js', () =>
 /** 目标用户画像（用例可覆盖：默认"无角色、低职级"，用来测自我角色变更的拦截） */
 let targetScope = { roleIds: [], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false };
 
+/** 操作者画像（用例可改：自我角色限制只对非超管生效） */
+let actorScope = { roleIds: [], apps: new Set(), maxRank: 999, isSuper: true, crossApp: true };
+
 /** 权限作用域桩：默认「超管，什么都管得了」 */
 jest.unstable_mockModule('../../../../app/admin/console/services/access-scope.service.js', () => ({
   appLabel: id => id,
   canWriteApp: () => true,
   loadRoles: async ids => new Map(ids.map(id => [id, { id, name: `角色${id}`, appId: 'GLOBAL', rank: 1 }])),
-  getActorScope: async () => ({ roleIds: [], apps: new Set(), maxRank: 999, isSuper: true, crossApp: true }),
+  getActorScope: async () => actorScope,
   getTargetScope: async () => targetScope,
   assertCanManageUser: () => undefined,
   // 窄 mock 会炸链接期：users.js 新增了 assertCanSetRank 的导入，这里必须给全
@@ -119,7 +122,7 @@ jest.unstable_mockModule('../../../../framework/security/auth/index.js', () => (
   }
 }));
 
-const { default: registerUserRoutes } = await import('../../../../api/admin/console/v1/users.js');
+const { default: registerUserRoutes } = await import('../../../../api/admin/v1/users.js');
 
 // 一次性把路由注册进桩里，后面各用例直接按 name 取 handler
 await registerUserRoutes({});
@@ -190,6 +193,7 @@ beforeEach(async () => {
   userFindByPk.mockReset();
   roleFindAll.mockReset().mockResolvedValue([]);
   targetScope = { roleIds: [], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false };
+  actorScope = { roleIds: [], apps: new Set(), maxRank: 999, isSuper: true, crossApp: true };
 });
 
 describe('冻结 / 解冻（用户报的问题）', () => {
@@ -286,7 +290,13 @@ describe('编辑用户', () => {
 });
 
 describe('不能修改自己账号的角色（2026-11-21）', () => {
-  test('给自己加角色 → 403，且不落库', async () => {
+  /** 非超管操作者：受自我角色限制 */
+  const asNonSuper = () => {
+    actorScope = { roleIds: [9], apps: new Set(['admin']), maxRank: 80, isSuper: false, crossApp: true };
+  };
+
+  test('非超管给自己加角色 → 403，且不落库', async () => {
+    asNonSuper();
     userFindByPk.mockResolvedValue({ username: 'op', email: null, dept_id: null, status: 1 });
     const reply = await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body: { roleIds: [5] } }));
 
@@ -295,7 +305,8 @@ describe('不能修改自己账号的角色（2026-11-21）', () => {
     expect(daoUpdate).not.toHaveBeenCalled();
   });
 
-  test('给自己摘角色（含清空）同样拒绝', async () => {
+  test('非超管给自己摘角色（含清空）同样拒绝', async () => {
+    asNonSuper();
     // 目标（= 自己）当前持有角色 5，提交空数组 = 摘光
     targetScope = { roleIds: [5], apps: new Set(), maxRank: 1, isSuper: false, crossApp: false };
     const reply = await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body: { roleIds: [] } }));
@@ -305,13 +316,55 @@ describe('不能修改自己账号的角色（2026-11-21）', () => {
     expect(daoUpdate).not.toHaveBeenCalled();
   });
 
-  test('只改资料（不提交角色）仍然放行', async () => {
+  test('🔴 超管自改：角色被拒', async () => {
+    // 默认 actorScope 就是超管
+    userFindByPk.mockResolvedValue({ username: 'root', email: 'old@x.com', dept_id: null, status: 1, rank_level: 99 });
+    const reply = await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body: { roleIds: [5] } }));
+
+    expect(reply.statusCode).toBe(403);
+    expect(reply.sent.message).toMatch(/超级管理员只能修改自己的账号、邮箱、部门与岗位/);
+    expect(daoUpdate).not.toHaveBeenCalled();
+  });
+
+  test('🔴 超管自改状态 / 职级同样被拒（自冻/自降会自锁）', async () => {
+    userFindByPk.mockResolvedValue({ username: 'root', email: 'old@x.com', dept_id: null, status: 1, rank_level: 99 });
+    for (const body of [{ status: 0 }, { rankLevel: 50 }]) {
+      const reply = await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body }));
+      expect(reply.statusCode).toBe(403);
+      expect(reply.sent.message).toMatch(/超级管理员只能修改自己的账号、邮箱、部门与岗位/);
+    }
+    expect(daoUpdate).not.toHaveBeenCalled();
+  });
+
+  test('超管改自己的账号名 / 邮箱 / 部门 / 岗位放行（未变的字段照常回传）', async () => {
+    userFindByPk.mockResolvedValue({ username: 'root', email: 'old@x.com', dept_id: 2, status: 1, rank_level: 99 });
+    await call(
+      'adminUserUpdate',
+      makeRequest({
+        params: { id: '42' },
+        body: {
+          username: 'root2',
+          email: 'new@x.com',
+          deptId: 3,
+          status: 1,
+          rankLevel: 99,
+          roleIds: [],
+          postIds: [7]
+        }
+      })
+    );
+    expect(daoUpdate).toHaveBeenCalled();
+  });
+
+  test('只改资料（不提交角色）仍然放行（非超管）', async () => {
+    asNonSuper();
     userFindByPk.mockResolvedValue({ username: 'op', email: null, dept_id: null, status: 1 });
     await call('adminUserUpdate', makeRequest({ params: { id: '42' }, body: { username: 'op2' } }));
     expect(daoUpdate).toHaveBeenCalled();
   });
 
   test('改别人的角色不受影响', async () => {
+    asNonSuper();
     userFindByPk.mockResolvedValue({ username: '张三', email: null, dept_id: null, status: 1 });
     await call('adminUserUpdate', makeRequest({ params: { id: '11' }, body: { roleIds: [5] } }));
     expect(daoUpdate).toHaveBeenCalled();

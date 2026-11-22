@@ -2,34 +2,34 @@
  * 日志审计接口（操作日志 / 登录日志）
  *
  * 操作日志（数据源 audit_logs）
- *   GET    /admin/console/v1/oper-logs
- *   GET    /admin/console/v1/oper-logs/stats?range=24h|7d|30d
- *   GET    /admin/console/v1/oper-logs/timeline?date=YYYY-MM-DD
- *   GET    /admin/console/v1/oper-logs/heatmap?days=7|30
- *   GET    /admin/console/v1/oper-logs/export
- *   DELETE /admin/console/v1/oper-logs/:id
- *   POST   /admin/console/v1/oper-logs/purge/challenge    —— 按条件清除（发二次验证码）
- *   POST   /admin/console/v1/oper-logs/purge              —— 按条件清除（执行 + 留痕）
+ *   GET    /admin/v1/oper-logs
+ *   GET    /admin/v1/oper-logs/stats?range=24h|7d|30d
+ *   GET    /admin/v1/oper-logs/timeline?date=YYYY-MM-DD
+ *   GET    /admin/v1/oper-logs/heatmap?days=7|30
+ *   GET    /admin/v1/oper-logs/export
+ *   DELETE /admin/v1/oper-logs/:id
+ *   POST   /admin/v1/oper-logs/purge/challenge    —— 按条件清除（发二次验证码）
+ *   POST   /admin/v1/oper-logs/purge              —— 按条件清除（执行 + 留痕）
  *
  * 登录日志（数据源 session_logs）
- *   GET    /admin/console/v1/login-logs
- *   GET    /admin/console/v1/login-logs/stats?range=
- *   GET    /admin/console/v1/login-logs/heatmap?days=7|30
- *   GET    /admin/console/v1/login-logs/export
- *   DELETE /admin/console/v1/login-logs/:id
- *   POST   /admin/console/v1/login-logs/purge/challenge   —— 按条件清除（发二次验证码）
- *   POST   /admin/console/v1/login-logs/purge             —— 按条件清除（执行 + 留痕）
+ *   GET    /admin/v1/login-logs
+ *   GET    /admin/v1/login-logs/stats?range=
+ *   GET    /admin/v1/login-logs/heatmap?days=7|30
+ *   GET    /admin/v1/login-logs/export
+ *   DELETE /admin/v1/login-logs/:id
+ *   POST   /admin/v1/login-logs/purge/challenge   —— 按条件清除（发二次验证码）
+ *   POST   /admin/v1/login-logs/purge             —— 按条件清除（执行 + 留痕）
  *
  * @author yijiu2025
  * @since 2026-11-09
  */
 import crypto from 'node:crypto';
-import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
-import logDao from '../../../../app/admin/console/dao/log.dao.js';
-import stepUpService from '../../../../app/admin/console/services/stepup.service.js';
-import { withFail } from '../../../../app/admin/console/utils/respond.js';
-import { resolveDataScope, logScopeSql } from '../../../../app/admin/console/services/data-scope.service.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../app/admin/permission/index.js';
+import logDao from '../../../app/admin/console/dao/log.dao.js';
+import stepUpService from '../../../app/admin/console/services/stepup.service.js';
+import { withFail } from '../../../app/admin/console/utils/respond.js';
+import { resolveDataScope, logScopeSql } from '../../../app/admin/console/services/data-scope.service.js';
 
 /** 日志查询参数 schema */
 const listQuerySchema = {
@@ -176,7 +176,7 @@ async function registerLogRoutes(fastify) {
     name: 'adminLog',
     alias: '管理后台日志',
     description: '操作日志与登录日志查询、统计、导出、清理',
-    prefix: '/console/v1',
+    prefix: '/v1',
     enabled: true,
     requireLogin: true
   });

@@ -30,6 +30,8 @@ function buildRootPlugins(env = process.env) {
 const oauth21Config = {
   app_id: 'oauth21',
   name: 'OAuth 2.1 授权中心',
+  /** 平台内置：认证基础设施（客户端 / 授权码 / 令牌），不面向外部业务授权 */
+  builtin: true,
   description: 'OAuth 2.1 / OIDC 授权服务器，负责客户端管理、授权码流程、令牌签发与撤销',
 
   /**

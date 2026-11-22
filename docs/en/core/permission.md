@@ -53,9 +53,7 @@ defineRoles([
     is_default: true, // granted automatically on authorization (see below)
     policy: {
       Version: '2026-06-06',
-      Statement: [
-        { Effect: 'Allow', Action: [OAUTH_PERMISSIONS.CLIENT.READ, OAUTH_PERMISSIONS.TOKEN.READ] }
-      ]
+      Statement: [{ Effect: 'Allow', Action: [OAUTH_PERMISSIONS.CLIENT.READ, OAUTH_PERMISSIONS.TOKEN.READ] }]
     }
   }
 ]);
@@ -97,7 +95,7 @@ Such applications must use `default_role: null` **and** must not mark the role `
 How roles are granted instead:
 
 1. an administrator assigns them in "Users → Assign roles"
-   (`POST /admin/console/v1/users/roles/batch`, append/remove, cross-application);
+   (`POST /admin/v1/users/roles/batch`, append/remove, cross-application);
 2. GLOBAL `superadmin` inherits every application's `{appId}_admin` automatically via
    `permission-loader` — no per-role assignment needed.
 
@@ -105,6 +103,7 @@ The boot-time `auditDefaultRoles` reports an **error** for "gate + default role"
 `__tests__/permission/role-rank-levels.test.js` runs it against the real config.
 
 ::: warning Declaring roles means declaring the default role too
+
 - **Throws at registration** (import time = boot failure): missing `app_id` / `rank_level` /
   `policy.Statement`, two `is_default` roles for one app, or a default role above the normal tier (20).
 - **Logged at boot** (`auditDefaultRoles`): a typo in `config.default_role`, a mismatch between the
@@ -153,6 +152,54 @@ fields, and echoing the same rank is not "adjusting a rank".
 }
 ```
 
+## Menu visibility (default deny)
+
+`GET /admin/v1/session/routes` decides the sidebar. Only three cases are admitted:
+
+1. **Exempt accounts**: role includes `superadmin`, or the policy holds `*` → the whole tree (including brand-new, not-yet-granted menus — otherwise nobody could ever grant them).
+2. **Self-service area**: a page whose `path` starts with `/settings/` **and** declares no permission code (profile / notification preferences / appearance / account security). A directory is admitted only when every child is a self-service page.
+3. **Explicit grant**: a `sys_role_menu` row for that role × menu.
+
+Nothing else is visible by default. `admin:*` is **not** a menu exemption — it means "all APIs and buttons allowed"; menus are the navigation layer, a different concern.
+
+> 2026-11-22: `App management` (menu 54) had zero `sys_role_menu` rows, yet accounts holding `admin_admin` (policy = `admin:*`) could see it. Two causes stacked: pruning treated `admin:*` as "superadmin, take the whole tree", and a fallback rule treated "top-level + no permission code" as a self-service entry.
+
+### Conventions
+
+| Case                        | Rule                                                                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| New page menu (`type=menu`) | **Must** declare a permission code; otherwise rejected with `INVALID_PARAM` (`api/admin/v1/menus.js` → `assertMenuDeclaresPermission`)                                                                                   |
+| Self-service page           | Only under `/settings/` and without a code; that prefix is a **reserved namespace**, admin pages must not use it                                                                                                         |
+| Granting a new menu         | Starts with zero grants → invisible to everyone → superadmin ticks it in Roles → Menu grants                                                                                                                             |
+| Empty directory             | Directory granted but **no** child page granted → the whole group is dropped. An expandable group that opens to nothing reads as a rendering bug (that is exactly what `admin_operator` saw with `System` on 2026-11-22) |
+| Unpublish                   | `visible=0` outranks grants: even granted users stop seeing it, while `sys_role_menu` rows are kept (set back to 1 to restore)                                                                                           |
+
+Single source of truth: `src/app/admin/console/services/menu-visibility.service.js`, shared by the read-side pruning and the write-side validation. Regression guards: `src/__tests__/app/admin/console/session-routes.test.js` and `menu-visibility.test.js`.
+
+## Admission gate vs. self-service
+
+Two layers, **never mixed**:
+
+| Layer      | Question                                   | Rule                                                         | Implementation                                     |
+| ---------- | ------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------- |
+| Admission  | May this account enter the console at all? | `config.access`: `anyPermission` / `anyRole` / `selfService` | `framework/security/auth/permission/app-access.js` |
+| Capability | What may it do once inside?                | PBAC `allows` / `denies` + role→menu grants                  | `api/guard.js` + `sys_role_menu`                   |
+
+`bind-session` (at login) and `GET /session/me` (on every refresh) read the **same** policy. Writing it twice produces either "logs in, then 403 on refresh" or the reverse.
+
+### Why personal settings is not a permission code
+
+Profile / notification preferences / appearance / account security are visible to **every account that can enter the console**. That comes from two things only: the `/settings/` prefix on the menu side, and `requireLogin` plus a "read only `request.state.user.uid`" scope on the API side.
+
+It is deliberately **not** a grantable code (such as `admin:self`): codes get granted and revoked by roles, and one unticked box turns into "login succeeds, sidebar is blank". Worse, that failure only reproduces on accounts **without** `admin:*` — test accounts hold `admin:*`, so tests never catch it.
+
+`access.selfService` is an **admission** switch, not a permission:
+
+- `false` (default, current state) = **closed app**: an account without `admin:*` / `superadmin` cannot even call `/session/me`; the four personal pages are visible only to accounts already granted management capability;
+- `true` = **semi-open**: any fully authenticated account may enter, but sees only those four pages; every other endpoint still answers 403 through its own `requirePermission`.
+
+`denies` outranks `selfService`: a banned account does not gain self-service access by being logged in. The switch only accepts a strict `true` (`'true'`, `1` count as off), because flipping it by accident opens the console to every registered user.
+
 ## Loading permissions
 
 ```
@@ -179,7 +226,12 @@ function isWildcardMatch(pattern, target) {
   if (!pattern.includes('*')) return false;
   // escape all regex metacharacters first, then rejoin segments with .*
   const regex = new RegExp(
-    '^' + pattern.split('*').map(seg => seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$'
+    '^' +
+      pattern
+        .split('*')
+        .map(seg => seg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('.*') +
+      '$'
   );
   return regex.test(target);
 }
@@ -193,21 +245,21 @@ function matchSingle(perm, allows, denies) {
 
 Semantics:
 
-| Pattern | Meaning |
-| --- | --- |
-| `*` | matches everything |
-| `user:*` | anything starting with `user:` (`*` spans `:` segments) |
-| `user:*:read` | mid-segment wildcards supported |
-| otherwise | literal match — **metacharacters are not interpreted**; `user:read` never matches `userXread` (fixed 2026-11-01: the old implementation did not escape regex metacharacters) |
+| Pattern       | Meaning                                                                                                                                                                      |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `*`           | matches everything                                                                                                                                                           |
+| `user:*`      | anything starting with `user:` (`*` spans `:` segments)                                                                                                                      |
+| `user:*:read` | mid-segment wildcards supported                                                                                                                                              |
+| otherwise     | literal match — **metacharacters are not interpreted**; `user:read` never matches `userXread` (fixed 2026-11-01: the old implementation did not escape regex metacharacters) |
 
 ## Delegation tiers
 
-| Level | Rank | Scope | Authority |
-| --- | --- | --- | --- |
-| L1: super admin | 99 | GLOBAL | everything |
-| L2: global admin | 80 | GLOBAL | cross-app administration |
-| L3: app admin | 60 | specific_app | one app |
-| L4: module admin | 40 | specific_app | part of one app |
+| Level            | Rank | Scope        | Authority                |
+| ---------------- | ---- | ------------ | ------------------------ |
+| L1: super admin  | 99   | GLOBAL       | everything               |
+| L2: global admin | 80   | GLOBAL       | cross-app administration |
+| L3: app admin    | 60   | specific_app | one app                  |
+| L4: module admin | 40   | specific_app | part of one app          |
 
 ## OAuth 2.1 × PBAC
 
@@ -228,6 +280,7 @@ Sa-Token: all static methods, resolves the current request via AsyncLocalStorage
 **must be called inside an HTTP request context** (throws outside ALS).
 
 ::: warning Two meanings of loginId — passing the wrong one fails silently
+
 - **Permission / role series** operate on the current request user: no issue;
 - **Ban series (`disable` / `untieDisable` / `isDisable` / `checkDisable` / `getDisableTime`)**:
   `loginId` must be the **numeric primary key** (the ban store keys by numeric `userId:service`)
@@ -235,15 +288,15 @@ Sa-Token: all static methods, resolves the current request via AsyncLocalStorage
   resolve `user.id` from uid in the admin DAO first;
 - **Second-auth series (`openSafe` etc.)** already uses `state.user.userId` (numeric) internally;
   just pass `service`.
-:::
+  :::
 
 ### Authentication & identity
 
-| Method | Purpose | On failure |
-| --- | --- | --- |
-| `getLoginId()` | current user identifier (**uid UUID**; client token context returns the client name) | — |
-| `check()` | enforce login | throws 401 when not logged in |
-| `checkRole(role)` | role check (**exact match**, no wildcards; roles have no deny dimension) | throws 403 |
+| Method            | Purpose                                                                              | On failure                    |
+| ----------------- | ------------------------------------------------------------------------------------ | ----------------------------- |
+| `getLoginId()`    | current user identifier (**uid UUID**; client token context returns the client name) | —                             |
+| `check()`         | enforce login                                                                        | throws 401 when not logged in |
+| `checkRole(role)` | role check (**exact match**, no wildcards; roles have no deny dimension)             | throws 403                    |
 
 ### Permission checks (deny-first + wildcards)
 
@@ -252,21 +305,21 @@ createSession; JWT path reads a real-time snapshot via perm-cache (numeric key +
 check) — **JWTs never embed permissions**, so permission changes take effect immediately.
 Incomplete shapes are treated as empty sets (fail-closed); auth failures never masquerade as 500.
 
-| Method | Purpose | On failure |
-| --- | --- | --- |
-| `getPermissionList()` | returns `{ allows, denies }` (**read-only reference**, do not mutate) | — |
-| `hasPermission(perm)` | boolean test | — |
-| `checkPermission(perm)` | enforce one | throws `NotPermissionException` (403) |
-| `checkPermissionAnd(...perms)` | AND: all must pass | throws 403 on first failure; **zero args throws explicitly** (vacuous truth = no guard, likely a typo) |
-| `checkPermissionOr(...perms)` | OR: any must pass | throws 403 when none pass; **zero args throws explicitly** |
+| Method                         | Purpose                                                               | On failure                                                                                             |
+| ------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `getPermissionList()`          | returns `{ allows, denies }` (**read-only reference**, do not mutate) | —                                                                                                      |
+| `hasPermission(perm)`          | boolean test                                                          | —                                                                                                      |
+| `checkPermission(perm)`        | enforce one                                                           | throws `NotPermissionException` (403)                                                                  |
+| `checkPermissionAnd(...perms)` | AND: all must pass                                                    | throws 403 on first failure; **zero args throws explicitly** (vacuous truth = no guard, likely a typo) |
+| `checkPermissionOr(...perms)`  | OR: any must pass                                                     | throws 403 when none pass; **zero args throws explicitly**                                             |
 
 ```js
 import { StpUtil } from '../../src/framework/security/auth/index.js';
 
-StpUtil.hasPermission('user:admin:*');   // test: true / false
-StpUtil.checkPermission('user:write');   // enforce: throws 403
-StpUtil.checkPermissionAnd('a', 'b');    // AND: all must pass
-StpUtil.checkPermissionOr('a', 'b');     // OR: any must pass
+StpUtil.hasPermission('user:admin:*'); // test: true / false
+StpUtil.checkPermission('user:write'); // enforce: throws 403
+StpUtil.checkPermissionAnd('a', 'b'); // AND: all must pass
+StpUtil.checkPermissionOr('a', 'b'); // OR: any must pass
 ```
 
 ### Account bans (disable series, async)
@@ -275,14 +328,14 @@ Stored in Redis keyed by numeric `userId:service`, auto-unbanned at TTL expiry;
 `service='login'` blocks new logins, `'access'` blocks requests, custom dimensions allowed.
 See the header of `src/framework/security/auth/security/ban.js`.
 
-| Method | Purpose |
-| --- | --- |
-| `disable(loginId, service, time, opts?)` | ban (seconds; `-1` = permanent), opts: `{ reason, level, operator }` |
-| `disableLevel(loginId, service, level, time, opts?)` | tiered ban by punishment level (level ≥ 1, business-defined) |
-| `untieDisable(loginId, ...services)` | unban, returns number of services actually untied |
-| `isDisable(loginId, service)` | banned? (ignores level) |
-| `checkDisable(loginId, ...services)` | enforce not banned; throws 403 (code=`ACCOUNT_BANNED`) |
-| `getDisableTime(loginId, service)` | remaining seconds: `-2` = not banned, `-1` = permanent |
+| Method                                               | Purpose                                                              |
+| ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `disable(loginId, service, time, opts?)`             | ban (seconds; `-1` = permanent), opts: `{ reason, level, operator }` |
+| `disableLevel(loginId, service, level, time, opts?)` | tiered ban by punishment level (level ≥ 1, business-defined)         |
+| `untieDisable(loginId, ...services)`                 | unban, returns number of services actually untied                    |
+| `isDisable(loginId, service)`                        | banned? (ignores level)                                              |
+| `checkDisable(loginId, ...services)`                 | enforce not banned; throws 403 (code=`ACCOUNT_BANNED`)               |
+| `getDisableTime(loginId, service)`                   | remaining seconds: `-2` = not banned, `-1` = permanent               |
 
 ### Second authentication (openSafe series, async)
 
@@ -291,13 +344,13 @@ See the header of `src/framework/security/auth/security/ban.js`.
 `checkSafe` throws 403 (code=`SECOND_AUTH_REQUIRED`) outside. Operates on the **current request
 user**; Redis failures fail closed (treated as not opened). See `src/framework/security/auth/security/safe.js`.
 
-| Method | Purpose |
-| --- | --- |
-| `openSafe(service, safeTime?)` | open the window (default 1800s), returns `{ openedAt, expireAt }` |
-| `isSafe(service)` | inside the window? |
-| `checkSafe(service)` | enforce; throws 403 when not opened/expired (`details.service` for the frontend) |
-| `closeSafe(service)` | close proactively (after the sensitive operation, to shrink exposure) |
-| `getSafeTime(service)` | remaining seconds: `-1` = not opened |
+| Method                         | Purpose                                                                          |
+| ------------------------------ | -------------------------------------------------------------------------------- |
+| `openSafe(service, safeTime?)` | open the window (default 1800s), returns `{ openedAt, expireAt }`                |
+| `isSafe(service)`              | inside the window?                                                               |
+| `checkSafe(service)`           | enforce; throws 403 when not opened/expired (`details.service` for the frontend) |
+| `closeSafe(service)`           | close proactively (after the sensitive operation, to shrink exposure)            |
+| `getSafeTime(service)`         | remaining seconds: `-1` = not opened                                             |
 
 ::: tip Why there is no `StpUtil.login()`
 The login entry point is oauth21's `login.service` (full orchestration of password verification +

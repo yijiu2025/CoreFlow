@@ -1,14 +1,14 @@
 /**
  * 角色与权限接口
  *
- * GET    /admin/console/v1/roles                 —— 角色分页（含成员数 / 已授权菜单）
- * POST   /admin/console/v1/roles                 —— 新建角色（编码 + 职级 + 权限码）
- * PUT    /admin/console/v1/roles/:id             —— 编辑角色
- * DELETE /admin/console/v1/roles/:id             —— 删除角色（内置角色拒绝）
- * GET    /admin/console/v1/roles/:id/menus       —— 角色已授权菜单
- * PUT    /admin/console/v1/roles/:id/menus       —— 覆盖式保存菜单授权
- * GET    /admin/console/v1/permissions/graph     —— 用户 → 角色 → 菜单关系图
- * GET    /admin/console/v1/permissions/catalog   —— 权限码目录（角色表单勾选）
+ * GET    /admin/v1/roles                 —— 角色分页（含成员数 / 已授权菜单）
+ * POST   /admin/v1/roles                 —— 新建角色（编码 + 职级 + 权限码）
+ * PUT    /admin/v1/roles/:id             —— 编辑角色
+ * DELETE /admin/v1/roles/:id             —— 删除角色（内置角色拒绝）
+ * GET    /admin/v1/roles/:id/menus       —— 角色已授权菜单
+ * PUT    /admin/v1/roles/:id/menus       —— 覆盖式保存菜单授权
+ * GET    /admin/v1/permissions/graph     —— 用户 → 角色 → 菜单关系图
+ * GET    /admin/v1/permissions/catalog   —— 权限码目录（角色表单勾选）
  *
  * 🔴 职级压制：不能创建 / 提升到高于自己的职级，否则可自我提权。
  *
@@ -22,19 +22,19 @@
  * @author yijiu2025
  * @since 2026-11-09
  */
-import { registerGroupMetadata, registerSecureRoute } from '../../../guard.js';
-import { ADMIN_PERMISSIONS } from '../../../../app/admin/permission/index.js';
+import { registerGroupMetadata, registerSecureRoute } from '../../guard.js';
+import { ADMIN_PERMISSIONS } from '../../../app/admin/permission/index.js';
 import roleDao, {
   MENU_LOCKED_CODE,
   isProtectedRoleCode,
   isRankLockedRole,
   extractPermissions
-} from '../../../../app/admin/console/dao/role.dao.js';
-import menuDao from '../../../../app/admin/console/dao/menu.dao.js';
-import { logAuditEvent } from '../../../../framework/security/auth/index.js';
-import { withFail } from '../../../../app/admin/console/utils/respond.js';
-import { hasPermissionLike } from '../../../../app/admin/console/utils/permissions.js';
-import { assertScopeConfigurable } from '../../../../app/admin/console/services/data-scope.service.js';
+} from '../../../app/admin/console/dao/role.dao.js';
+import menuDao from '../../../app/admin/console/dao/menu.dao.js';
+import { logAuditEvent } from '../../../framework/security/auth/index.js';
+import { withFail } from '../../../app/admin/console/utils/respond.js';
+import { hasPermissionLike } from '../../../app/admin/console/utils/permissions.js';
+import { assertScopeConfigurable } from '../../../app/admin/console/services/data-scope.service.js';
 import {
   appLabel,
   canWriteApp,
@@ -44,9 +44,9 @@ import {
   assertRankBelowActor,
   assertRankChangeAllowed,
   assertCanGrantCodes
-} from '../../../../app/admin/console/services/access-scope.service.js';
-import { invalidateButtonGrants } from '../../../../app/admin/console/services/button-grant.service.js';
-import { listAppIds } from '../../../../framework/config/app-registry.js';
+} from '../../../app/admin/console/services/access-scope.service.js';
+import { invalidateButtonGrants } from '../../../app/admin/console/services/button-grant.service.js';
+import { listAppIds } from '../../../framework/config/app-registry.js';
 
 /*
  * 「受保护角色」的判据在 `role.dao.js` 的 `isProtectedRoleCode`（单一来源）。
@@ -81,7 +81,7 @@ async function registerRoleRoutes(fastify) {
     name: 'adminRole',
     alias: '管理后台角色',
     description: '角色维护、菜单授权、权限关系图',
-    prefix: '/console/v1',
+    prefix: '/v1',
     enabled: true,
     requireLogin: true
   });

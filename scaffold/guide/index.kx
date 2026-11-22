@@ -1,7 +1,7 @@
 // Console 管理后台 —— 架构入口
 //
 // 定位：把 nodeServers 后端包装成通用后台脚手架。前端独立目录 scaffold/（端口 5175，可配置），
-// 后端新增 console 域（src/app/console + /admin/console/v1），登录走 oauth21 iframe SSO。
+// 后端新增 console 域（src/app/console + /admin/v1），登录走 oauth21 iframe SSO。
 //
 // 技术栈（前端）
 //   Vue 3.5 + TypeScript + Vite 8 + Pinia + vue-router 4
@@ -35,7 +35,7 @@
 //   /login 页嵌 oauth21 /mini-login iframe
 //   → 校验 origin + event.source → 收 SSO_READY 关 loading
 //   → 收 LOGIN_SUCCESS → adoptDeviceId(deviceId) → POST /auth/v1/bind-session
-//   → 拿 sid/sid_r HttpOnly Cookie → GET /admin/console/v1/session/me
+//   → 拿 sid/sid_r HttpOnly Cookie → GET /admin/v1/session/me
 //
 // 权限模型（两套语义不混用）
 //   菜单侧：sys_role_menu 只决定侧栏看得见什么
@@ -43,5 +43,5 @@
 //   前端 PermissionButton / v-permission 只做隐藏，不作为安全边界
 //
 // 数据流
-//   页面 @api 取数 → api 层 axios（withCredentials + x-device-id）→ /admin/console/v1/*
+//   页面 @api 取数 → api 层 axios（withCredentials + x-device-id）→ /admin/v1/*
 //   → app/console 的 DAO/Service → Sequelize 模型 → MySQL

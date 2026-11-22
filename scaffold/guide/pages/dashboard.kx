@@ -61,9 +61,9 @@
   @state recentLogins: object[] = []
   @state timeline: object = {}
 
-  @api GET /admin/console/v1/dashboard/summary -> summary
-  @api GET /admin/console/v1/login-logs (query: pageNum=1, pageSize=5) -> recentLogins
-  @api GET /admin/console/v1/oper-logs/timeline -> timeline
+  @api GET /admin/v1/dashboard/summary -> summary
+  @api GET /admin/v1/login-logs (query: pageNum=1, pageSize=5) -> recentLogins
+  @api GET /admin/v1/oper-logs/timeline -> timeline
 
   @render when: loading
   @skeleton 工作台骨架 (count: 8)

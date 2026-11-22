@@ -36,7 +36,7 @@ npm run dev          # http://localhost:5175（端口由 .env.development 的 VI
   → SSO_READY（关加载态）
   → LOGIN_SUCCESS → adoptDeviceId(deviceId)
   → POST /auth/v1/bind-session（换 sid/sid_r Cookie）
-  → GET /admin/console/v1/session/me + /session/routes
+  → GET /admin/v1/session/me + /session/routes
   → 跳转 redirect 或 /dashboard
 ```
 

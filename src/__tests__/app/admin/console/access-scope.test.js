@@ -257,6 +257,10 @@ describe('assertCanManageRole / canWriteApp —— 角色本身的维护边界',
     expect(() => assertCanManageRole(persona([adminOperator]), adminOperator)).toThrow(/自己所属/);
   });
 
+  test('🔴 超管不受「自己所属」限制：可维护自己兼任的其它角色', () => {
+    expect(() => assertCanManageRole(persona([superRole, adminAdmin]), adminAdmin)).not.toThrow();
+  });
+
   test('超管仍可编辑别人的角色（只锁自己那一行）', () => {
     expect(() => assertCanManageRole(persona([superRole]), adminAdmin)).not.toThrow();
     expect(() => assertCanManageRole(persona([superRole]), fwAdmin)).not.toThrow();

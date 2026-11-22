@@ -15,7 +15,12 @@
  */
 
 import { describe, test, expect, beforeEach } from '@jest/globals';
-import { permissionCovers, checkAppAccess } from '../../../../framework/security/auth/permission/app-access.js';
+import {
+  permissionCovers,
+  checkAppAccess,
+  getAccessPolicy,
+  matchesAccessPolicy
+} from '../../../../framework/security/auth/permission/app-access.js';
 import { registerAppConfig, resolvePermissionAppId } from '../../../../framework/config/app-registry.js';
 
 describe('应用准入：权限模式匹配', () => {
@@ -81,5 +86,63 @@ describe('应用准入：策略解析', () => {
     // 没声明的应用必须原样返回：否则 firewall / posecraft 会查到别人的角色
     expect(resolvePermissionAppId('fw-test')).toBe('fw-test');
     expect(resolvePermissionAppId('never-registered')).toBe('never-registered');
+  });
+});
+
+describe('应用准入：自助区（selfService）', () => {
+  /*
+   * 这组用例守的是「个人设置对每个登录用户都成立，但不顺带把后台敞开」。
+   * 判据是两条的**组合**：`selfService === true` 且 `authenticated`。
+   * 任一条写漏都不是小问题：
+   *   · 漏 `authenticated` → 匿名请求也能过闸（闸门等于没有）；
+   *   · 漏 `selfService` 闭 → 配置开了也不生效，只在"没有管理角色的账号"上复现。
+   */
+  const policy = extra => ({ anyPermission: ['admin:*'], anyRole: ['superadmin'], denyMessage: '无权限', ...extra });
+
+  test('默认（未声明 selfService）：没有管理能力就拒绝', () => {
+    const res = matchesAccessPolicy(policy(), { codes: [], roles: [], authenticated: true });
+    expect(res).toEqual({ allowed: false, reason: 'NO_CAPABILITY' });
+  });
+
+  test('selfService 开启 + 已登录：放行，且标明是靠自助区进来的', () => {
+    const res = matchesAccessPolicy(policy({ selfService: true }), { codes: [], roles: [], authenticated: true });
+    expect(res).toEqual({ allowed: true, reason: 'SELF_SERVICE' });
+  });
+
+  test('selfService 开启但未登录：仍然拒绝（闸门不能对匿名打开）', () => {
+    const res = matchesAccessPolicy(policy({ selfService: true }), { codes: [], roles: [], authenticated: false });
+    expect(res).toEqual({ allowed: false, reason: 'NO_CAPABILITY' });
+  });
+
+  test('显式拒绝压过自助区：封禁账号登录了也进不来', () => {
+    const res = matchesAccessPolicy(policy({ selfService: true }), {
+      codes: [],
+      roles: [],
+      denies: ['admin:*'],
+      authenticated: true
+    });
+    expect(res).toEqual({ allowed: false, reason: 'DENIED_BY_POLICY' });
+  });
+
+  test('有管理能力时不给自助区理由（排查时能区分两种来路）', () => {
+    const res = matchesAccessPolicy(policy({ selfService: true }), { codes: ['admin:user:read'], authenticated: true });
+    expect(res).toEqual({ allowed: true });
+  });
+
+  test('`selfService` 只认严格 true：字符串 / 数字一律当关闭', () => {
+    for (const bad of ['true', 1, 'yes', {}]) {
+      registerAppConfig({ app_id: 'lenient-test', access: { anyPermission: ['admin:*'], selfService: bad } });
+      // 若这里按真值判断，下面的判定会变成 allowed —— 配置写错一个引号就敞开后台
+      expect(getAccessPolicy('lenient-test').selfService).toBe(false);
+      expect(matchesAccessPolicy(getAccessPolicy('lenient-test'), { authenticated: true }).allowed).toBe(false);
+    }
+  });
+
+  test('策略透出 selfService（会话接口与登录闸门读同一份）', () => {
+    registerAppConfig({ app_id: 'self-test', access: { anyPermission: ['admin:*'], selfService: true } });
+    const parsed = getAccessPolicy('self-test');
+    expect(parsed.selfService).toBe(true);
+    expect(parsed.anyPermission).toEqual(['admin:*']);
+    expect(parsed.denyMessage).toBeTruthy();
   });
 });

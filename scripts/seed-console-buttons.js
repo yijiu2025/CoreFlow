@@ -3,7 +3,7 @@
  *
  * 为什么需要它们：
  * 本仓按钮显隐是**两段判定** —— 角色 policy 里有该权限码，**并且**该码对应的按钮菜单
- * 已授权给角色（见 `api/admin/console/v1/session.js` 的 `buttonCodes` / `menuPerms`
+ * 已授权给角色（见 `api/admin/v1/session.js` 的 `buttonCodes` / `menuPerms`
  * 与 `stores/auth.ts` 的 `hasPermission`）。菜单表里一个 btn 节点都没有时
  * `buttonCodes` 为空，前端退化成"只看 policy"：看着能用，但按钮级授权实际是关着的，
  * 权限矩阵里也没法按按钮细化。

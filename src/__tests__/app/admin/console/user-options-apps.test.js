@@ -105,7 +105,7 @@ jest.unstable_mockModule('../../../../framework/security/auth/index.js', () => (
   logAuditEvent: async () => undefined
 }));
 
-const { default: registerUserRoutes } = await import('../../../../api/admin/console/v1/users.js');
+const { default: registerUserRoutes } = await import('../../../../api/admin/v1/users.js');
 await registerUserRoutes({});
 
 /** 极简 reply */

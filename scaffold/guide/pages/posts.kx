@@ -66,11 +66,11 @@
   @state selectedPostId: number = 0
   @state form: object = {}
 
-  @api GET /admin/console/v1/posts (query: pageNum, pageSize, keyword, status) -> postPage
-  @api POST /admin/console/v1/posts (body: { postCode, postName, sort, status, remark })
-  @api PUT /admin/console/v1/posts/:id (bind: id, body: { postCode, postName, sort, status, remark })
-  @api DELETE /admin/console/v1/posts/:id (bind: id)
-  @api GET /admin/console/v1/posts/:id/users (bind: id) -> postUsers
+  @api GET /admin/v1/posts (query: pageNum, pageSize, keyword, status) -> postPage
+  @api POST /admin/v1/posts (body: { postCode, postName, sort, status, remark })
+  @api PUT /admin/v1/posts/:id (bind: id, body: { postCode, postName, sort, status, remark })
+  @api DELETE /admin/v1/posts/:id (bind: id)
+  @api GET /admin/v1/posts/:id/users (bind: id) -> postUsers
 
   @sync sortedPosts = postPage.rows.sort((a, b) => a.sort - b.sort)
 

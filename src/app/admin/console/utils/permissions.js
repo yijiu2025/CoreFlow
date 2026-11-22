@@ -32,6 +32,18 @@ function toPermissionList(permissions) {
  * @returns {boolean} 是否命中
  */
 function hasPermissionLike(permissions, code) {
+  /*
+   * 🔴 非字符串的 `code` 一律判「不通过」，**绝不能**继续走到 `code.startsWith`。
+   *
+   * 真实事故（2026-11-22）：`dashboard.js` 把 `ADMIN_PERMISSIONS.LOG.READ.code` 传进来，
+   * 而注册表产出的 `READ` 本身就是字符串 —— `.code` 是 `undefined`。持有 `admin:*`
+   * 的账号走进通配分支后 `undefined.startsWith(...)` 直接抛 TypeError，工作台整体 500，
+   * 响应里只有一句 "Cannot read properties of undefined (reading 'startsWith')"，
+   * 完全看不出是哪条权限码。判定函数是全局热点，必须自己吞掉坏入参。
+   *
+   * 与前端的 `src/utils/permission.ts` 同一判据：没有码 = 不通过（不是"默认放行"）。
+   */
+  if (typeof code !== 'string' || code === '') return false;
   const list = toPermissionList(permissions);
   return list.some(pattern => {
     if (pattern === '*' || pattern === code) return true;

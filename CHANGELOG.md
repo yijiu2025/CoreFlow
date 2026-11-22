@@ -7,8 +7,39 @@
 
 ## 未发布（Unreleased）
 
+### 新增
+
+- **部门负责人与用户一对一绑定**：新增 `sys_dept.leader_user_id`（迁移
+  `20261122000001-add-dept-leader-user`），`leader` 降级为**显示快照**（保存时按所选用户的
+  `username` 回写）。部门弹窗的选人组件同时回传主键（`v-model:id`），手输文字即解绑 ——
+  根治"用户改名/重名后部门上挂着旧名"与"无法反查某人负责哪些部门"。
+  只传文本（历史数据、还没建账号的人）仍可保存：`leader_user_id` 留空，不会出现
+  "显示 A 却绑定 B"。后端传了 id 会校验用户存在，不存在直接报错，不静默降级。
+
+### 修复
+
+- **清理已作废的应用名 `console`**：管理后台的登录应用早已改为 `admin`（`oauth_clients`
+  与 `app/admin/config.js` 都已合并），但 `session_tokens` 里还留着改名前的行，导致
+  用户详情→应用 里多出一条查不到名字的「console」。新增迁移
+  `20261122000002-session-app-console-to-admin` 把历史会话的 `app_id` 归并到 `admin`
+  （改 id 而非撤销：会话本身合法，用户不该因为改名被踢下线）；另修了
+  `user-danger.service.js` 里两处硬编码 `appId: 'console'`，并给用户所属应用的合并逻辑
+  加了 `console → admin` 的兜底归并（以后再漏也不会渲染出作废名）。
+  ⚠️ 前端主题里的 `page: 'console'` / `author: 'console'` 是**主题版式页名与署名**，
+  与登录应用 id 无关，**不动**（改了会破主题包契约）。
+
 ### 变更
 
+- **管理后台 API 前缀 `/admin/console/v1` → `/admin/v1`**（对外路径变更，破坏性）：
+  分组 `prefix` 从 `/console/v1` 改成 `/v1`，系统前缀 `/admin` 保留，最终与
+  `iam` / `oauth21` / `user` 三个同级分组的写法一致（`/admin/iam/v1` …）。
+  同步更新了前端 `BASE`、单测与脚本里的 URL、文档与 `.kx` 页面规格共 30 余处。
+  **守卫键不受影响**：`groupKey` 取的是 `registerGroupMetadata({ name })`（已是 `adminApp`
+  这类名字），不是目录名 —— 所以 `systemKey/groupKey/apiKey`（DB 里接口开关配置的主键）不变。
+  目录 `src/api/admin/console/v1/` 也一并改名为 `src/api/admin/v1/`（少一层，相关文件的
+  相对导入统一减一层 `../`），loader 启动日志里显示的路径随之变成 `/admin/v1/*.js`。
+  运行时已验证：`GET /admin/v1/apps` → 401（路由在），`GET /admin/console/v1/apps` → 404（旧路径已摘）。
+  ⚠️ 已部署的前端 / 第三方调用方必须同步改基址，否则会 404。
 - **应用接口开关从抽屉改成整页表格**：一个应用的接口数到三位数时（管理后台 101 个），
   680px 的抽屉只能把路径截成 `console:app:listP...`。新页面 `/system/app/:appId/apis`
   （路由 `system-app-apis`，可深链、`meta.stack` 显示返回箭头）把它摊成一页表：表头吸顶、
