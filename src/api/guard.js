@@ -355,10 +355,14 @@ async function applyGuardLogic(opts = {}, request, reply) {
        * 🔴 必须沿用凭证类型：token 是受限凭证（GLOBAL 的 `*` 不生效）。
        *    这里若不传，超管用 posecraft token 打敏感接口时，回源会把 `*` 重新读回来 ——
        *    等于在最该收紧的第 4 层上把门重新打开。
+       *
+       *    两种令牌都要认：`bearer` = OAuth 短期 JWT，`api_token` = 个人访问令牌
+       *    （用户中心签发）。只认前者的表现是"个人令牌能调普通接口、一碰敏感操作就
+       *    403"，而且只在超管账号上复现 —— 因为普通账号本来就没有 `*` 可被读回来。
        */
       fresh = await getPermissions(user.userId, permAppId, {
         fresh: true,
-        scopedCredential: user.tokenType === 'bearer'
+        scopedCredential: user.tokenType === 'bearer' || user.tokenType === 'api_token'
       });
     } catch (err) {
       // 回源失败 → **拒绝**（fail-closed）。这与"权限读取失败降级放行"不同：

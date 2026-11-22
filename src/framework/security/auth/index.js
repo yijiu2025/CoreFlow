@@ -94,6 +94,13 @@ export {
 } from './session/session-api.service.js';
 export { resolveSessionPermissions } from './session/session-perm.js';
 
+// 3.1 个人访问令牌通道（用户中心注册解析器；未注册时只认 JWT，行为与以前一致）
+export {
+  registerApiTokenAuthenticator,
+  hasApiTokenAuthenticator,
+  resetApiTokenAuthenticatorForTesting
+} from './bearer-auth.js';
+
 // 4. 权限（PBAC）——缓存+指纹快照 与 逐请求加载 两条路
 export {
   PERM_NAMESPACE,

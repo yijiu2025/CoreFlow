@@ -277,6 +277,36 @@ class UserDao {
   }
 
   /**
+   * 按数字主键查找认证所需的账号快照
+   *
+   * 与 `findById(uid)` 的区别：那个按 UUID 查（对外入口都拿 uid），本方法按主键查 ——
+   * 个人访问令牌表里存的是数字 `user_id`，再绕一层 uid 只是多一次转换的机会。
+   *
+   * 只取认证要用的列：密码哈希、手机号之类的字段不该出现在"每个请求都会走"的路径上。
+   *
+   * @param {number} id 用户数字主键
+   * @returns {Promise<object|null>} `{ id, uid, username, email, avatar, status }`
+   */
+  async findAuthById(id) {
+    const userId = Number(id);
+    if (!Number.isInteger(userId) || userId <= 0) return null;
+    const User = getModel('User');
+    if (!User) return null;
+    const user = await User.findByPk(userId, { attributes: ['id', 'uid', 'username', 'email', 'avatar', 'status'] });
+    return user
+      ? {
+          id: Number(user.id),
+          uid: user.uid,
+          username: user.username,
+          email: user.email,
+          name: user.username,
+          avatar: user.avatar,
+          status: user.status
+        }
+      : null;
+  }
+
+  /**
    * 生成唯一的 personal_id（格式 pose_craft_ + 8位字母数字）
    *
    * 碰撞时递归重试，最多 10 次，极端情况用时间戳后缀兜底。

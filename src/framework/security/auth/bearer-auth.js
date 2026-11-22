@@ -22,6 +22,46 @@ import { authJwtEnabled } from './session/session-config.js';
 
 const log = createLogger('framework.auth.bearer-auth');
 
+/**
+ * 个人访问令牌（API Token）的解析器
+ *
+ * 与「按钮授权闸」同一套做法：令牌表（`user_api_tokens`）是**业务表**，而这里是框架层，
+ * 不能反向依赖某个应用。未注册时（其它部署形态 / 单测）行为与以前完全一致 ——
+ * 只认 JWT。
+ *
+ * 签名：`(plainToken) => Promise<user|null>`，null 表示「这不是有效令牌」，
+ * 随后按认证失败处理。解析器自己负责写 `last_used_at`、查账号状态、装权限。
+ */
+let apiTokenAuth = null;
+
+/**
+ * 注册个人令牌解析器
+ *
+ * @param {((plain: string) => Promise<object|null>)|null} fn 解析函数
+ * @returns {void}
+ */
+function registerApiTokenAuthenticator(fn) {
+  apiTokenAuth = typeof fn === 'function' ? fn : null;
+}
+
+/**
+ * 是否已注册个人令牌解析器
+ *
+ * @returns {boolean} 是否已注册
+ */
+function hasApiTokenAuthenticator() {
+  return apiTokenAuth !== null;
+}
+
+/**
+ * 清空解析器（**仅供测试**）
+ *
+ * @returns {void}
+ */
+function resetApiTokenAuthenticatorForTesting() {
+  apiTokenAuth = null;
+}
+
 /** JWT 认证开关（唯一来源：src/config/auth_config.js 覆盖 → core 保底 false；不依赖 oauth21 应用层） */
 const jwtEnabled = authJwtEnabled();
 
@@ -140,31 +180,62 @@ async function getUserFromToken(token) {
 }
 
 /**
- * JWT 认证（Bearer Token + access_token Cookie）
+ * Bearer 认证（Bearer Token + access_token Cookie）
+ *
+ * 两种凭证共用 `Authorization: Bearer`：
+ *   · OAuth 的短期 JWT（`access_token` / `client_token`）—— 受 `jwtEnabled` 开关控制；
+ *   · 个人访问令牌（用户中心签发）—— **不受** `jwtEnabled` 控制。
+ *
+ * 为什么个人令牌要独立于 `jwtEnabled`：那个开关表达的是"本部署是否接受 OAuth
+ * 签发的 JWT"，与"用户能不能用自己签的令牌调接口"是两件事。捆在一起的表现是
+ * 关掉 OAuth 的部署里个人令牌静默失效，而页面上还写着"可用"。
  *
  * @param {object} cookies 解析后的 cookies
  * @param {object} headers 请求头
- * @returns {Promise<object|null>} 认证成功的用户对象，或 null（未走 JWT / 失败）
+ * @returns {Promise<object|null>} 认证成功的用户对象，或 null（未走 Bearer / 失败）
  */
 async function authenticateByJwt(cookies, headers) {
-  if (!jwtEnabled) return null;
-  log.debug('📋 JWT 模式已启用');
-
   // 2a. Bearer Token（Header）
   const authHeader = headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7);
     log.debug('🔑 检测到 Bearer Token: %s...', token.slice(0, 20));
-    const tokenUser = await getUserFromToken(token);
-    if (tokenUser) {
-      log.debug('✅ JWT 认证成功: userId=%s, username=%s', tokenUser.userId, tokenUser.username);
-      return tokenUser;
+
+    if (jwtEnabled) {
+      const tokenUser = await getUserFromToken(token);
+      if (tokenUser) {
+        log.debug('✅ JWT 认证成功: userId=%s, username=%s', tokenUser.userId, tokenUser.username);
+        return tokenUser;
+      }
     }
+
+    /*
+     * 个人访问令牌（如 `nsk_...`）不是 JWT。对 JWT 通道而言它是"解析失败"，
+     * 但那是**正常用法**，不能因此打"Token 无效"的告警 —— 否则审计日志里全是
+     * 假告警，真爆破反而被淹掉。所以顺序是：先 JWT，再令牌，两次都落空才告警。
+     *
+     * 先判 JWT 的理由：它是短期的、带 `aud` 的会话凭证；顺序写死在代码里才可靠，
+     * 不靠"两者不可能同时成立"这种推理。
+     */
+    if (apiTokenAuth) {
+      try {
+        const viaApiToken = await apiTokenAuth(token);
+        if (viaApiToken) {
+          log.debug('✅ 个人令牌认证成功: userId=%s', viaApiToken.userId);
+          return viaApiToken;
+        }
+      } catch (err) {
+        // 令牌解析出错（库抖动）按未认证处理：闸门的职责是"默认关"
+        log.warn('[Auth] 个人令牌解析异常:', err);
+      }
+    }
+
     // warn：认证失败是安全审计事件（爆破/伪造 token 探测），生产环境需要可见
-    log.warn('❌ JWT 认证失败（Token 无效或用户不存在）');
+    log.warn('❌ Bearer 凭证无效（JWT 与个人令牌均未命中）');
   }
 
-  // 2b. access_token Cookie
+  // 2b. access_token Cookie —— 这条通道只承载 JWT，`jwtEnabled` 关掉时整段跳过
+  if (!jwtEnabled) return null;
   if (cookies['access_token']) {
     const tokenUser = await getUserFromToken(cookies['access_token']);
     if (tokenUser) return tokenUser;
@@ -172,4 +243,9 @@ async function authenticateByJwt(cookies, headers) {
   return null;
 }
 
-export { authenticateByJwt };
+export {
+  authenticateByJwt,
+  registerApiTokenAuthenticator,
+  hasApiTokenAuthenticator,
+  resetApiTokenAuthenticatorForTesting
+};

@@ -16,10 +16,22 @@
  * @author yijiu2025
  * @since 2026-07-13
  */
+import { userAppInit } from './init.js';
+
 const userConfig = {
   app_id: 'user',
   name: '用户中心',
-  description: '用户注册、登录、信息管理'
+  /** 平台内置：所有业务应用共用（注册 / 找回密码 / 会话设备），不面向外部授权 */
+  builtin: true,
+  description: '用户注册、登录、信息管理',
+
+  /**
+   * 启动钩子：注册「个人访问令牌」的认证解析器
+   *
+   * 令牌表属于本应用，认证层是框架层 —— 走注册位而不是让框架反向 import，
+   * 与 `app/admin/init.js` 注册按钮授权闸同一套做法。
+   */
+  init: userAppInit
 };
 
 export default userConfig;
