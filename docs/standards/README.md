@@ -1,9 +1,10 @@
 # 规范（standards）
 
-本目录只放**后端相关**规范。2026-10-31 起，本仓不再包含任何前端工程
-（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy` 均已迁出、
-独立维护），因此原先前端与主题类规范已整体移入
+本目录以**后端**规范为主。2026-10-31 起，多数前端工程已迁出
+（`oauth21` / `posecraft` / `admin` / `poseadmin` / `firewall` / `phonecopy` 各自独立维护），
+原先前端与主题类规范已整体移入
 [archive/legacy-frontend/](../archive/legacy-frontend/)。
+**`scaffold/`（管理后台前端）是留在本仓的例外**，它的主题规范收录在下方「前端（scaffold）」一节。
 
 ## 规范文档
 
@@ -11,6 +12,12 @@
 | --- | --- |
 | [git-release-rules.md](./git-release-rules.md) | **Git 提交 / 版本号 / 分支 / 发版统一规则**（`npm run` 脚本、tag 与 Release 的判定依据） |
 | [auth-integration.md](./auth-integration.md) | 认证集成：`/oauth2.1` 作用域、CSRF 与签名契约、接口清单、限频阈值（前后端共同遵守的线协议） |
+
+## 前端（scaffold）
+
+| 文档 | 内容 |
+| --- | --- |
+| [theme-quiet.md](./theme-quiet.md) | 管理后台的视觉风格「**静默控制台（`quiet`）**」：命名、R1–R8 视觉规则、`--mauth-*` 令牌取值、落地文件与验收清单 |
 
 ## 最佳实践（best-practices）
 
