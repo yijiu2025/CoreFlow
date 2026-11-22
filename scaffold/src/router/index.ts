@@ -204,6 +204,16 @@ const routes: RouteRecordRaw[] = [
       },
       {
         /*
+         * 我的操作日志：只显示本人记录（后端把用户范围钉在会话里的 userId 上）。
+         * 与「日志系统 → 操作日志」不是同一页：那条要 `admin:log:read` 且能看全站。
+         */
+        path: 'settings/logs',
+        name: 'settings-logs',
+        component: () => import('@/views/settings/MyLogs.vue'),
+        meta: { title: '我的操作日志' }
+      },
+      {
+        /*
          * 通知偏好：事件 × 渠道的开关与免打扰时段。
          *
          * 与「通知配置」是两条链路：那条是管理员配渠道与模板（notice:config:*），
