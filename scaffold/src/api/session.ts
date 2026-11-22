@@ -196,5 +196,16 @@ export function myLogs(params: MyLogQuery = {}): Promise<{
   pageNum: number;
   pageSize: number;
 }> {
-  return get('/admin/v1/my-logs', params);
+  /*
+   * 逐字段列出来而不是整个 `params` 传进去：`get()` 的参数是
+   * `Record<string, unknown>`，接口类型没有索引签名，直接传会被 TS 拒。
+   * 顺带也把"能传哪些筛选项"钉在调用点上 —— 后端本来就只认这几个键。
+   */
+  return get('/admin/v1/my-logs', {
+    pageNum: params.pageNum,
+    pageSize: params.pageSize,
+    keyword: params.keyword,
+    startTime: params.startTime,
+    endTime: params.endTime
+  });
 }
