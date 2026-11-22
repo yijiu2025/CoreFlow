@@ -219,7 +219,16 @@ export const useAuthStore = defineStore('auth', () => {
    * @param code 权限码，如 `admin:user:create`
    * @returns 是否拥有
    */
-  function hasPermission(code: string): boolean {
+  /**
+   * 是否拥有某个权限码
+   *
+   * 入参放宽到 `null | undefined`：路由 meta、菜单行、数据库里的 `permission` 都可能是空，
+   * 调用方不该为了"顺手传一个可能为空的字段"而崩掉整个页面（见 `utils/permission.ts`）。
+   *
+   * @param code 权限码
+   * @returns 是否命中
+   */
+  function hasPermission(code: string | null | undefined): boolean {
     return matchPermission(me.value?.permissions || [], code);
   }
 

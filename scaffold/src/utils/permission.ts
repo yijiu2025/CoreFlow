@@ -11,8 +11,20 @@ import type { Router } from 'vue-router';
  * @param code 目标权限码
  * @returns 是否命中
  */
-function matchPermission(patterns: string[], code: string): boolean {
+function matchPermission(patterns: readonly string[] | null | undefined, code: string | null | undefined): boolean {
+  /*
+   * 🔴 空值一律判「不通过」，并且**不能**让它走到 `code.startsWith`。
+   *
+   * 真实事故：某处把 `menu.permission`（可能是 null）直接丢进权限判定，于是
+   * `undefined.startsWith` 抛 TypeError —— 一个空字段把整个页面炸成白屏，
+   * 而控制台只有一句 "Cannot read properties of undefined (reading 'startsWith')"，
+   * 完全看不出是哪条权限码。判定函数是全局热点，必须自己吞掉空值。
+   *
+   * 判据与后端 `wildcard-match.js` 一致：没有码 = 不通过（不是"默认放行"）。
+   */
+  if (!code || !Array.isArray(patterns)) return false;
   return patterns.some(pattern => {
+    if (typeof pattern !== 'string') return false;
     if (pattern === '*' || pattern === code) return true;
     if (pattern.endsWith('*')) return code.startsWith(pattern.slice(0, -1));
     return false;

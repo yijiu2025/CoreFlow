@@ -28,9 +28,18 @@ initDeviceSync();
 const app = createApp(App);
 const pinia = createPinia();
 
-// 1. 全局错误处理：控制台留痕，不白屏
-app.config.errorHandler = (err, _instance, info) => {
-  console.error('[Console] 未捕获异常:', err, info);
+/*
+ * 1. 全局错误处理：控制台留痕，不白屏
+ *
+ * 🔴 必须打出**组件名 + 路由**：Vue 的 `info` 只说"发生在渲染函数里"，
+ *    而真实故障信息（`Cannot read properties of undefined (reading 'startsWith')`）
+ *    若没有组件名，等于让人在一百多个页面里猜 —— 上一次排这个错就卡在这里。
+ */
+app.config.errorHandler = (err, instance, info) => {
+  const type = (instance as { type?: { name?: string; __name?: string } } | null)?.type;
+  const name = type?.name || type?.__name || '(匿名组件)';
+  const route = router.currentRoute.value;
+  console.error(`[Console] 未捕获异常 · 组件=${name} · 路由=${route.fullPath} · 阶段=${info}`, err);
 };
 
 // 2. 插件注册（顺序：pinia → router → theme）
